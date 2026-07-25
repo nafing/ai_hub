@@ -18,6 +18,12 @@ async function bootstrap() {
   const globalPrefix = process.env.SERVER_GLOBAL_PREFIX ?? "/api";
   app.setGlobalPrefix(globalPrefix);
 
+  // Capacitor WebView origins (https://localhost / capacitor://localhost) + local web
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -32,7 +38,8 @@ async function bootstrap() {
 
   await app.listen(
     {
-      host: process.env.SERVER_HOST,
+      // 0.0.0.0 so phones on LAN can reach the API (127.0.0.1 is PC-only)
+      host: process.env.SERVER_HOST || "0.0.0.0",
       port: Number(process.env.SERVER_PORT) || 5174,
     },
     (err, address) => {

@@ -364,7 +364,6 @@ export function PersonaGeneratePanel({
             ? "Loading characters…"
             : "Select characters"
         }
-        searchable
         clearable
         data={characterOptions}
         value={characterIds}

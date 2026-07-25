@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
+import { Capacitor } from "@capacitor/core";
+import { StatusBar } from "@capacitor/status-bar";
 
 import "./index.css";
 import "@mantine/core/styles.css";
@@ -25,6 +27,13 @@ declare module "@tanstack/react-router" {
   }
 }
 const queryClient = new QueryClient();
+
+async function hideNativeChrome() {
+  if (!Capacitor.isNativePlatform()) return;
+  await StatusBar.hide();
+}
+
+void hideNativeChrome();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

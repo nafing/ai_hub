@@ -11,9 +11,6 @@ const envDir = path.resolve(__dirname, "../..");
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, envDir, "");
 
-  const serverUrl = `${env.SERVER_HOST}:${env.SERVER_PORT}`;
-  console.log(serverUrl);
-
   return {
     envDir,
     envPrefix: ["VITE_", "SERVER_"],

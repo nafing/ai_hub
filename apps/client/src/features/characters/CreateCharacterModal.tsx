@@ -479,7 +479,6 @@ export function CreateCharacterModal({
                       ? "Loading characters…"
                       : "Select characters"
                   }
-                  searchable
                   clearable
                   data={characterOptions}
                   value={referenceCharacterIds}

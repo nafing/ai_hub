@@ -467,7 +467,6 @@ export function PresetTestPanel({
                 ? "Loading characters…"
                 : "Select characters"
             }
-            searchable
             clearable
             data={characterOptions}
             value={referenceCharacterIds}

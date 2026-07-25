@@ -220,7 +220,6 @@ export function AgentForm({
             description="Optional — run every N messages (null = every turn)."
             min={1}
             allowDecimal={false}
-            clearable
             key={form.key("run_interval")}
             {...form.getInputProps("run_interval")}
           />

@@ -613,7 +613,6 @@ export function ImportCharacterModal({
                       ? "Loading characters…"
                       : "Select characters"
                   }
-                  searchable
                   clearable
                   data={characterOptions}
                   value={referenceCharacterIds}
