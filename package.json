@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "git pull --ff-only && turbo run dev",
+    "dev": "git fetch origin && git reset --hard @{u} && turbo run dev",
     "dev:local": "turbo run dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
