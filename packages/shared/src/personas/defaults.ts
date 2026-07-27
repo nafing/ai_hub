@@ -28,3 +28,16 @@ export function normalizePersona(
     is_default: Boolean(input.is_default),
   });
 }
+
+/** Portable persona JSON (no hub id / avatar). */
+export function toPersonaExport(
+  persona: CreatePersonaInput | Persona,
+): CreatePersonaInput {
+  return {
+    name: persona.name,
+    description: persona.description,
+    personality: persona.personality,
+    notes: persona.notes,
+    is_default: false,
+  };
+}

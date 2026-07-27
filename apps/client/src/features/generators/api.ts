@@ -4,6 +4,8 @@ import type {
   PresetMarkerContent,
   PresetVariableValues,
 } from "@ai-hub/shared";
+import { promptPresetVariables } from "@/features/presets/PresetCommandBridge";
+import { extractNeedsPresetVariables } from "@/features/presets/needsPresetVariables";
 import { api } from "@/lib/api";
 
 export type RunGeneratorInput = {
@@ -29,6 +31,27 @@ export type RunGeneratorResult = {
 export async function runGenerator(
   input: RunGeneratorInput,
 ): Promise<RunGeneratorResult> {
-  const { data } = await api.post<RunGeneratorResult>("/generators/run", input);
-  return data;
+  let variables = { ...(input.variables ?? {}) };
+
+  for (;;) {
+    try {
+      const { data } = await api.post<RunGeneratorResult>("/generators/run", {
+        ...input,
+        variables,
+      });
+      return data;
+    } catch (error) {
+      const command = extractNeedsPresetVariables(error);
+      if (!command) throw error;
+
+      const chosen = await promptPresetVariables(
+        command.presetId,
+        command.variables,
+      );
+      if (!chosen) {
+        throw new Error("Preset variables setup cancelled");
+      }
+      variables = { ...variables, ...chosen };
+    }
+  }
 }

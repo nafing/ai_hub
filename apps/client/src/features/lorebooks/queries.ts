@@ -5,7 +5,10 @@ import {
   deleteLorebook,
   duplicateLorebook,
   getLorebook,
+  getLoreIndexStatus,
   listLorebooks,
+  reindexLorebook,
+  reindexLorebooks,
   updateLorebook,
 } from "./api";
 
@@ -13,6 +16,7 @@ export const lorebookKeys = {
   all: ["lorebooks"] as const,
   list: () => [...lorebookKeys.all, "list"] as const,
   detail: (id: string) => [...lorebookKeys.all, "detail", id] as const,
+  indexStatus: () => [...lorebookKeys.all, "index-status"] as const,
 };
 
 export function useLorebooks() {
@@ -30,12 +34,23 @@ export function useLorebook(id: string | undefined) {
   });
 }
 
+export function useLoreIndexStatus() {
+  return useQuery({
+    queryKey: lorebookKeys.indexStatus(),
+    queryFn: getLoreIndexStatus,
+    refetchInterval: 15_000,
+  });
+}
+
 export function useCreateLorebook() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateLorebookInput) => createLorebook(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: lorebookKeys.list() });
+      void queryClient.invalidateQueries({
+        queryKey: lorebookKeys.indexStatus(),
+      });
     },
   });
 }
@@ -50,6 +65,9 @@ export function useUpdateLorebook() {
       void queryClient.invalidateQueries({
         queryKey: lorebookKeys.detail(lorebook.id),
       });
+      void queryClient.invalidateQueries({
+        queryKey: lorebookKeys.indexStatus(),
+      });
     },
   });
 }
@@ -60,6 +78,9 @@ export function useDeleteLorebook() {
     mutationFn: (id: string) => deleteLorebook(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: lorebookKeys.list() });
+      void queryClient.invalidateQueries({
+        queryKey: lorebookKeys.indexStatus(),
+      });
     },
   });
 }
@@ -70,6 +91,35 @@ export function useDuplicateLorebook() {
     mutationFn: (id: string) => duplicateLorebook(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: lorebookKeys.list() });
+      void queryClient.invalidateQueries({
+        queryKey: lorebookKeys.indexStatus(),
+      });
+    },
+  });
+}
+
+export function useReindexLorebooks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => reindexLorebooks(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: lorebookKeys.all });
+    },
+  });
+}
+
+export function useReindexLorebook() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => reindexLorebook(id),
+    onSuccess: (_result, id) => {
+      void queryClient.invalidateQueries({ queryKey: lorebookKeys.list() });
+      void queryClient.invalidateQueries({
+        queryKey: lorebookKeys.detail(id),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: lorebookKeys.indexStatus(),
+      });
     },
   });
 }

@@ -9,7 +9,11 @@ export type OpenRouterChatMessage = {
         type: "text";
         text: string;
         cache_control?: { type: "ephemeral" };
-      }>;
+      }>
+    | null;
+  tool_calls?: unknown;
+  tool_call_id?: string;
+  name?: string;
 };
 
 export type OpenRouterChatBody = Record<string, unknown> & {
@@ -21,6 +25,9 @@ export type BuildOpenRouterBodyOptions = {
   stream?: boolean;
   /** Extra fields merged last (after connection.custom_parameters). */
   overrides?: Record<string, unknown>;
+  /** OpenAI-compatible tools array. */
+  tools?: unknown[];
+  tool_choice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } };
 };
 
 /** Append connection assistant_prefill as a trailing assistant message when set. */
@@ -50,7 +57,9 @@ export function withPromptCaching(
   const text =
     typeof target.content === "string"
       ? target.content
-      : target.content.map((part) => part.text).join("\n");
+      : Array.isArray(target.content)
+        ? target.content.map((part) => part.text).join("\n")
+        : "";
 
   cloned[index] = {
     ...target,
@@ -89,10 +98,22 @@ export function buildOpenRouterBody(
 ): OpenRouterChatBody {
   const withPrefill = applyAssistantPrefill(messages, connection.assistant_prefill);
   const openRouterMessages: OpenRouterChatMessage[] = withPrefill.map(
-    (message) => ({
-      role: message.role,
-      content: message.content,
-    }),
+    (message) => {
+      const mapped: OpenRouterChatMessage = {
+        role: message.role,
+        content: message.content,
+      };
+      if (message.tool_calls?.length) {
+        (mapped as Record<string, unknown>).tool_calls = message.tool_calls;
+      }
+      if (message.tool_call_id) {
+        (mapped as Record<string, unknown>).tool_call_id = message.tool_call_id;
+      }
+      if (message.name) {
+        (mapped as Record<string, unknown>).name = message.name;
+      }
+      return mapped;
+    },
   );
 
   const body: OpenRouterChatBody = {
@@ -103,6 +124,11 @@ export function buildOpenRouterBody(
     max_tokens: connection.max_completion_tokens,
     stream: options.stream !== false,
   };
+
+  if (options.tools?.length) {
+    body.tools = options.tools;
+    body.tool_choice = options.tool_choice ?? "auto";
+  }
 
   if (connection.frequency_penalty !== 0) {
     body.frequency_penalty = connection.frequency_penalty;

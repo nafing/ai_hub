@@ -104,7 +104,7 @@ function languageVariable(presetKey: string): Variable {
     multi_select: false,
     presentation: "dropdown",
     alphabetical: false,
-    selected: ["english"],
+    selected: [],
     options: [...LANGUAGE_OPTIONS],
   });
 }
@@ -132,7 +132,7 @@ export const DEFAULT_PRESETS: DefaultPresetDefinition[] = [
         multi_select: false,
         presentation: "radios",
         alphabetical: false,
-        selected: ["medium"],
+        selected: [],
         options: [
           {
             part: "short",
@@ -160,7 +160,7 @@ export const DEFAULT_PRESETS: DefaultPresetDefinition[] = [
         multi_select: false,
         presentation: "radios",
         alphabetical: false,
-        selected: ["third_limited"],
+        selected: [],
         options: [
           {
             part: "third_limited",
@@ -281,7 +281,7 @@ Core rules:
         multi_select: false,
         presentation: "radios",
         alphabetical: false,
-        selected: ["warm"],
+        selected: [],
         options: [
           {
             part: "warm",
@@ -363,7 +363,7 @@ Do not roleplay multi-paragraph scenes unless {{user}} clearly asks for that.`,
     key: "character_generator",
     name: "Default Character Generator",
     description:
-      "Creates SillyTavern-compatible character card(s) from a concept brief. Detects multiple characters in the brief and returns one card per character.",
+      "Creates SillyTavern-compatible character card(s). Modes via generation_mode: create, import, regenerate, rebuild, or field generate (default).",
     wrap_format: "xml",
     category: "character_generator" satisfies PresetCategory,
     is_default: true,
@@ -377,7 +377,7 @@ Do not roleplay multi-paragraph scenes unless {{user}} clearly asks for that.`,
         multi_select: false,
         presentation: "dropdown",
         alphabetical: false,
-        selected: ["fantasy"],
+        selected: [],
         options: [
           {
             part: "fantasy",
@@ -417,7 +417,7 @@ Do not roleplay multi-paragraph scenes unless {{user}} clearly asks for that.`,
         multi_select: false,
         presentation: "radios",
         alphabetical: false,
-        selected: ["rich"],
+        selected: [],
         options: [
           {
             part: "compact",
@@ -486,17 +486,54 @@ Rules:
 - Keep each card consistent: personality must match first_mes and mes_example voice.
 - Use the Generator Brief as the primary concept; Persona is the player; Reference Characters are existing cards the new one(s) should fit with.
 - Generate exactly what {{target_field}} asks for.
-- Keep consistency with existing card fields that are not empty / not "(none yet)" when editing a single character.
+- Keep consistency with existing card fields that are not empty when editing a single character.
+
+{{if generation_mode == create}}
+Create mode:
+- There is no imported source card — invent the cast from the Generator Brief.
+- Reference Characters (if any) are existing library cards the new one(s) should fit with — do not copy them wholesale.
+{{if name_seed}}
+- Optional name seed for the primary / first character: "{{name_seed}}" (you may refine or rename if the brief implies otherwise).
+{{/if}}
+{{/if}}
+
+{{if generation_mode == import}}
+Import mode:
+- The Reference Characters section lists the imported source card first, then any selected library characters as context.
+- Output ONLY new card(s) for the imported source (characters being imported).
+- Do NOT output copies or “updated” cards of the selected library references — they are context only and must not become extra new characters.
+- Split or refine using the imported source (and brief). If TWO OR MORE distinct characters are present in the import, return one card each; if only one, return a one-item characters array.
+{{/if}}
+
+{{if generation_mode == regenerate}}
+Regenerate mode (scope={{regenerate_scope}}):
+- Targets are listed in Reference Characters and in the cast roster.
+- Preserve distinct identities and relationships; keep the same cast size and order.
+{{if regenerate_scope == concept}}
+- Regenerate name, description, personality, and scenario for each.
+- Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.
+{{else}}
+- Rebuild each character card from scratch using the Generator Brief and reference cards.
+{{/if}}
+{{/if}}
+
+{{if generation_mode == rebuild}}
+Rebuild mode (scope={{rebuild_scope}}):
+- Use Reference Characters / current card fields as the base to revise.
+{{if rebuild_notes}}
+- Extra direction: {{rebuild_notes}}
+{{/if}}
+{{/if}}
 
 Runtime variables:
-- Character name ({{char}}): {{char}}
+- Character name ({{char}}): {{char || (unnamed)}}
 - Target: {{target_field}}
-- Existing description: {{existing_description}}
-- Existing personality: {{existing_personality}}
-- Existing scenario: {{existing_scenario}}
-- Existing first_mes: {{existing_first_mes}}
-- Existing mes_example: {{existing_mes_example}}
-- Existing alternate_greetings: {{existing_alternate_greetings}}`,
+- Existing description: {{existing_description || (empty)}}
+- Existing personality: {{existing_personality || (empty)}}
+- Existing scenario: {{existing_scenario || (empty)}}
+- Existing first_mes: {{existing_first_mes || (empty)}}
+- Existing mes_example: {{existing_mes_example || (empty)}}
+- Existing alternate_greetings: {{existing_alternate_greetings || (empty)}}`,
       }),
       section("character_generator", "generator_brief", {
         kind: "generator_brief",
@@ -504,7 +541,8 @@ Runtime variables:
         role: "system",
         group: "instructions",
         position: "ordered",
-        content: "",
+        content:
+          "(No Generator Brief was provided — invent a coherent character consistent with existing card fields, persona, and Reference Characters.)",
       }),
       section("character_generator", "persona", {
         kind: "persona",
@@ -530,6 +568,82 @@ Runtime variables:
         position: "ordered",
         content: `Generate "{{target_field}}".
 
+{{if generation_mode == import}}
+IMPORT WITH AI.
+
+The Reference Characters section lists the imported source card first, then any selected library characters as context only.
+
+Return only NEW card(s) for the imported source in {"characters":[...]}.
+Do NOT return separate cards that duplicate or “update” the library reference characters.
+
+If the imported source or Generator Brief describes TWO OR MORE distinct characters (separate names/identities), return multiple objects — one card each.
+Do not collapse a duo/group into a single card.
+If only one distinct character is present, return a one-item characters array.
+
+Working name hint (may be one of several): {{char || (unnamed — may be one of several)}}
+Each array item must be a complete card:
+{ "name":"...", "description":"...", "personality":"...", "scenario":"...", "first_mes":"...", "mes_example":"...", "creator_notes":"...", "system_prompt":"", "post_history_instructions":"", "tags":[], "alternate_greetings":[] }
+{{else}}
+{{if generation_mode == create}}
+CREATE WITH AI.
+
+Build one or more new character cards from the Generator Brief (and optional Name seed).
+There is no imported source card — invent the cast from the brief.
+Reference Characters (if any) are existing library cards the new one(s) should fit with — do not copy them wholesale.
+
+If the brief describes TWO OR MORE distinct characters (separate names/identities), you MUST return multiple objects in {"characters":[...]} — one card each.
+Do not collapse a duo/group into a single card.
+If only one distinct character is requested, return a one-item characters array.
+
+{{if name_seed}}
+Optional name seed for the primary / first character: "{{name_seed}}" (you may refine or rename if the brief implies otherwise).
+{{/if}}
+
+Working name hint (may be one of several): {{char || (unnamed — invent from brief; may be one of several)}}
+Each array item must be a complete card:
+{ "name":"...", "description":"...", "personality":"...", "scenario":"...", "first_mes":"...", "mes_example":"...", "creator_notes":"...", "system_prompt":"", "post_history_instructions":"", "tags":[], "alternate_greetings":[] }
+{{else}}
+{{if generation_mode == regenerate}}
+{{if regenerate_scope == concept}}
+REGENERATE CONCEPT for ALL {{cast_size}} selected characters in one pass.
+Regenerate name, description, personality, and scenario for each.
+Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.
+{{else}}
+REGENERATE FULL CARD for ALL {{cast_size}} selected characters in one pass.
+Rebuild each character card from scratch using the Generator Brief and reference cards.
+{{/if}}
+Preserve distinct identities and relationships; keep the same cast size and order.
+Current roster (same order expected in output):
+{{cast_roster}}
+Return exactly {{cast_size}} objects in {"characters":[...]} — one per character, same order.
+{{else}}
+{{if generation_mode == rebuild}}
+{{if rebuild_scope == concept_batch}}
+REBUILD CONCEPT for ALL {{cast_size}} characters in one pass.
+Regenerate name, description, personality, and scenario for each.
+Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.
+Preserve distinct identities and relationships between characters; keep the same cast size and order.
+Current roster (same order expected in output):
+{{cast_roster}}
+Return exactly {{cast_size}} objects in {"characters":[...]} — one per character, same order.
+{{else}}
+{{if rebuild_scope == concept}}
+REBUILD CONCEPT only for this character: regenerate name, description, personality, and scenario.
+Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concept.
+Return a one-item {"characters":[...]} array.
+{{else}}
+{{if rebuild_scope == all}}
+REBUILD this entire character card from scratch using the reference card(s) and brief.
+Return a one-item {"characters":[...]} array.
+{{else}}
+Rebuild only the "{{target_field}}" field for this character.
+{{/if}}
+{{/if}}
+{{/if}}
+{{if rebuild_notes}}
+Extra direction: {{rebuild_notes}}
+{{/if}}
+{{else}}
 {{if target_field == all card fields}}
 Inspect the Generator Brief and Reference Characters for how many distinct characters to create.
 
@@ -539,15 +653,19 @@ If ONE character: return
 If TWO OR MORE distinct characters (named separately in the brief or reference card): return one full card object per character — never merge them into one:
 {"characters":[ { /* character 1 */ }, { /* character 2 */ } ]}
 
-Working name hint (may be one of several): {{char}}
+Working name hint (may be one of several): {{char || (unnamed)}}
 Each array item must be a complete card with all keys listed above.
 {{else}}
 {{if target_field == alternate_greetings}}
-Return JSON for the single character "{{char}}" only:
+Return JSON for the single character "{{char || (unnamed)}}" only:
 {"alternate_greetings":["greeting 1","greeting 2"]}
 {{else}}
-Return JSON for the single character "{{char}}" only (one key):
+Return JSON for the single character "{{char || (unnamed)}}" only (one key):
 { "{{target_field}}": "..." }
+{{/if}}
+{{/if}}
+{{/if}}
+{{/if}}
 {{/if}}
 {{/if}}`,
       }),
@@ -572,9 +690,7 @@ Return JSON for the single character "{{char}}" only (one key):
         multi_select: false,
         presentation: "radios",
         alphabetical: false,
-        selected: [
-          "Balance appearance, background, and personality evenly.",
-        ],
+        selected: [],
         options: [
           {
             part: "balanced",
@@ -612,10 +728,10 @@ Return JSON for the single character "{{char}}" only (one key):
 {{language}}
 
 Runtime variables (filled by the hub when generating):
-- Persona name: {{user}}
+- Persona name: {{user || (unnamed)}}
 - Target field to write: {{target_field}}
-- Existing description: {{existing_description}}
-- Existing personality: {{existing_personality}}
+- Existing description: {{existing_description || (empty)}}
+- Existing personality: {{existing_personality || (empty)}}
 
 Use the Generator Brief and Reference Characters marker sections below as primary context.
 
@@ -625,7 +741,7 @@ Field meanings:
 
 Rules:
 - Generate exactly what {{target_field}} asks for (one field, or both when it is "description and personality").
-- Keep consistency with any existing field that is not empty / not "(none yet)" (overwrite only what was requested).
+- Keep consistency with any existing field that is not empty (overwrite only what was requested).
 - Write in second or third person about the player character, never as an AI assistant.
 - Do not invent NSFW content the brief did not imply.
 - Keep the persona playable: clear hooks, not a novel.
@@ -637,7 +753,8 @@ Rules:
         role: "system",
         group: "instructions",
         position: "ordered",
-        content: "",
+        content:
+          "(No Generator Brief was provided — invent a coherent persona that complements the Reference Characters.)",
       }),
       section("persona_generator", "reference_characters", {
         kind: "reference_characters",
@@ -653,7 +770,7 @@ Rules:
         role: "user",
         group: "request",
         position: "ordered",
-        content: `Generate "{{target_field}}" for persona "{{user}}".
+        content: `Generate "{{target_field}}" for persona "{{user || (unnamed)}}".
 
 {{if target_field == description and personality}}
 Return JSON with both keys:
@@ -684,7 +801,7 @@ Return JSON with only that key:
         multi_select: false,
         presentation: "radios",
         alphabetical: false,
-        selected: ["standard"],
+        selected: [],
         options: [
           {
             part: "few",
@@ -709,7 +826,7 @@ Return JSON with only that key:
         multi_select: false,
         presentation: "radios",
         alphabetical: false,
-        selected: ["playable"],
+        selected: [],
         options: [
           {
             part: "brief",

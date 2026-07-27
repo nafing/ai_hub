@@ -1,5 +1,6 @@
 import type {
   CreateLorebookInput,
+  LoreIndexStatus,
   Lorebook,
   LorebookListItem,
   UpdateLorebookInput,
@@ -13,6 +14,26 @@ export async function listLorebooks(): Promise<LorebookListItem[]> {
 
 export async function getLorebook(id: string): Promise<Lorebook> {
   const { data } = await api.get<Lorebook>(`/lorebooks/${id}`);
+  return data;
+}
+
+export async function getLoreIndexStatus(): Promise<LoreIndexStatus> {
+  const { data } = await api.get<LoreIndexStatus>("/lorebooks/index-status");
+  return data;
+}
+
+export async function reindexLorebooks(): Promise<{
+  lorebooks: number;
+  entries: number;
+}> {
+  const { data } = await api.post<{ lorebooks: number; entries: number }>(
+    "/lorebooks/reindex",
+  );
+  return data;
+}
+
+export async function reindexLorebook(id: string): Promise<{ ok: boolean }> {
+  const { data } = await api.post<{ ok: boolean }>(`/lorebooks/${id}/reindex`);
   return data;
 }
 

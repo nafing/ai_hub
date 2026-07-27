@@ -1,15 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  Button,
-  Group,
-  MultiSelect,
-  Select,
-  SimpleGrid,
-  Stack,
-  Text,
-  Textarea,
-} from "@mantine/core";
-import { notifications } from "@mantine/notifications";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { IconSparkles } from "@tabler/icons-react";
 import {
   buildPresetPromptContext,
@@ -18,6 +7,14 @@ import {
   type Variable,
 } from "@ai-hub/shared";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  Button,
+  Textarea,
+  MultiSelect,
+  Select,
+  notifications,
+  RuntimeText,
+} from "@/components/ui";
 import { useConnections } from "@/features/connections/queries";
 import { createCharacter, getCharacter } from "@/features/characters/api";
 import { characterKeys, useCharacters } from "@/features/characters/queries";
@@ -37,6 +34,7 @@ import {
   usePreset,
   usePresets,
 } from "@/features/presets/queries";
+import classes from "./CharacterGeneratePanel.module.css";
 
 export type CharacterCardGenerateField =
   | "description"
@@ -75,6 +73,27 @@ type CharacterGeneratePanelProps = {
   onMesExampleChange: (value: string) => void;
   onAlternateGreetingsChange: (value: string[]) => void;
 };
+
+function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.field}>
+      <span className={classes.fieldLabel}>{label}</span>
+      {hint ? <p className={classes.fieldHint}>{hint}</p> : null}
+      {children}
+      {error ? <p className={classes.fieldError}>{error}</p> : null}
+    </div>
+  );
+}
 
 function targetFieldValue(field: CharacterCardGenerateField): string {
   return field === "all" ? TARGET_FIELD_ALL : field;
@@ -139,13 +158,13 @@ function buildGeneratorVariables(options: {
 }): PresetVariableValues {
   return {
     ...resolvePresetVariables(options.presetVariables),
-    char: options.characterName.trim() || "(unnamed)",
+    char: options.characterName.trim(),
     target_field: targetFieldValue(options.field),
-    existing_description: options.description.trim() || "(none yet)",
-    existing_personality: options.personality.trim() || "(none yet)",
-    existing_scenario: options.scenario.trim() || "(none yet)",
-    existing_first_mes: options.first_mes.trim() || "(none yet)",
-    existing_mes_example: options.mes_example.trim() || "(none yet)",
+    existing_description: options.description.trim(),
+    existing_personality: options.personality.trim(),
+    existing_scenario: options.scenario.trim(),
+    existing_first_mes: options.first_mes.trim(),
+    existing_mes_example: options.mes_example.trim(),
     existing_alternate_greetings: formatAlternateGreetingsForPrompt(
       options.alternateGreetings,
     ),
@@ -322,9 +341,7 @@ export function CharacterGeneratePanel({
         Promise.all(referenceCharacterIds.map((id) => getCharacter(id))),
       ]);
       const promptContext = buildPresetPromptContext({
-        generatorBrief:
-          brief.trim() ||
-          "(no brief — invent a coherent character consistent with existing card fields, persona, and reference characters)",
+        generatorBrief: brief.trim() || null,
         persona,
         referenceCharacterList: referenceCharacters,
         variables: buildGeneratorVariables({
@@ -422,13 +439,26 @@ export function CharacterGeneratePanel({
     !presetId ||
     presetDetailQuery.isLoading;
 
+  const connectionError = connectionsQuery.isError
+    ? "Failed to load connections"
+    : !connectionsQuery.isLoading && !connectionsQuery.data?.length
+      ? "Create a connection first"
+      : undefined;
+
+  const presetError = presetsQuery.isError
+    ? "Failed to load presets"
+    : presetDetailQuery.isError
+      ? "Failed to load preset details"
+      : !presetsQuery.isLoading && !presetOptions.length
+        ? "No presets available"
+        : undefined;
+
   const fieldRows: Array<{
     field: StringCardField;
     label: string;
     description: string;
     value: string;
     onChange: (value: string) => void;
-    minRows: number;
   }> = [
     {
       field: "description",
@@ -436,7 +466,6 @@ export function CharacterGeneratePanel({
       description: "Main character definition / appearance / lore.",
       value: description,
       onChange: onDescriptionChange,
-      minRows: 4,
     },
     {
       field: "personality",
@@ -444,7 +473,6 @@ export function CharacterGeneratePanel({
       description: "Traits / voice — same field as Card.",
       value: personality,
       onChange: onPersonalityChange,
-      minRows: 3,
     },
     {
       field: "scenario",
@@ -452,7 +480,6 @@ export function CharacterGeneratePanel({
       description: "Default scene setup — same field as Card.",
       value: scenario,
       onChange: onScenarioChange,
-      minRows: 3,
     },
     {
       field: "first_mes",
@@ -460,7 +487,6 @@ export function CharacterGeneratePanel({
       description: "Opening greeting (first_mes).",
       value: first_mes,
       onChange: onFirstMesChange,
-      minRows: 4,
     },
     {
       field: "mes_example",
@@ -468,173 +494,174 @@ export function CharacterGeneratePanel({
       description: "Dialogue examples (mes_example).",
       value: mes_example,
       onChange: onMesExampleChange,
-      minRows: 4,
     },
   ];
 
   return (
-    <Stack gap="md">
-      <Text size="sm" c="dimmed">
+    <div className={classes.stack}>
+      <p className={classes.muted}>
         Uses the selected Character Generator preset. If the brief describes
         multiple distinct characters, Generate all card fields applies the first
         to this form and creates the rest as new characters. Remember to Save
         the current form after generating.
-      </Text>
+      </p>
 
-      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-        <Select
+      <div className={`${classes.grid} ${classes.grid2}`}>
+        <Field
           label="Connection"
-          description="Defaults to the active connection."
-          placeholder={
-            connectionsQuery.isLoading
-              ? "Loading connections…"
-              : "Select connection"
-          }
-          data={(connectionsQuery.data ?? []).map((connection) => ({
-            value: connection.id,
-            label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
-          }))}
-          value={resolvedConnectionId}
-          onChange={setConnectionId}
-          searchable
-          clearable={false}
-          allowDeselect={false}
-          disabled={!connectionsQuery.data?.length}
-          error={
-            connectionsQuery.isError
-              ? "Failed to load connections"
-              : !connectionsQuery.isLoading && !connectionsQuery.data?.length
-                ? "Create a connection first"
-                : undefined
-          }
-        />
-        <Select
+          hint="Defaults to the active connection."
+          error={connectionError}
+        >
+          <Select
+            placeholder={
+              connectionsQuery.isLoading
+                ? "Loading connections…"
+                : "Select connection"
+            }
+            data={(connectionsQuery.data ?? []).map((connection) => ({
+              value: connection.id,
+              label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
+            }))}
+            value={resolvedConnectionId ?? ""}
+            onChange={(value) => setConnectionId(value || null)}
+            searchable
+            disabled={!connectionsQuery.data?.length}
+            error={Boolean(connectionError)}
+          />
+        </Field>
+        <Field
           label="Preset"
-          description="Prefer presets in the Character Generator category."
-          placeholder={
-            presetsQuery.isLoading ? "Loading presets…" : "Select preset"
-          }
-          data={presetOptions}
-          value={presetId}
-          onChange={setPresetId}
-          searchable
-          clearable={false}
-          allowDeselect={false}
-          disabled={!presetOptions.length}
-          error={
-            presetsQuery.isError
-              ? "Failed to load presets"
-              : presetDetailQuery.isError
-                ? "Failed to load preset details"
-                : !presetsQuery.isLoading && !presetOptions.length
-                  ? "No presets available"
-                  : undefined
-          }
-        />
-        <Select
+          hint="Prefer presets in the Character Generator category."
+          error={presetError}
+        >
+          <Select
+            placeholder={
+              presetsQuery.isLoading ? "Loading presets…" : "Select preset"
+            }
+            data={presetOptions}
+            value={presetId ?? ""}
+            onChange={(value) => setPresetId(value || null)}
+            searchable
+            disabled={!presetOptions.length}
+            error={Boolean(presetError)}
+          />
+        </Field>
+        <Field
           label="Persona"
-          description="Optional — fills `{{user}}` and the Persona marker."
-          placeholder={
-            personasQuery.isLoading ? "Loading personas…" : "Select persona"
+          hint={
+            <RuntimeText text="Optional — fills {{user}} and the Persona marker." />
           }
-          data={(personasQuery.data ?? []).map((persona) => ({
-            value: persona.id,
-            label: `${persona.name || "untitled"}${persona.is_default ? " (default)" : ""}`,
-          }))}
-          value={personaId}
-          onChange={setPersonaId}
-          searchable
-          clearable
-          disabled={!personasQuery.data?.length}
-          error={personasQuery.isError ? "Failed to load personas" : undefined}
-        />
-
-        <MultiSelect
+          error={
+            personasQuery.isError ? "Failed to load personas" : undefined
+          }
+        >
+          <Select
+            placeholder={
+              personasQuery.isLoading ? "Loading personas…" : "Select persona"
+            }
+            data={(personasQuery.data ?? []).map((persona) => ({
+              value: persona.id,
+              label: `${persona.name || "untitled"}${persona.is_default ? " (default)" : ""}`,
+            }))}
+            value={personaId ?? ""}
+            onChange={(value) => setPersonaId(value || null)}
+            searchable
+            clearable
+            disabled={!personasQuery.data?.length}
+            error={personasQuery.isError}
+          />
+        </Field>
+        <Field
           label="Reference characters"
-          description="Fills the Reference Characters marker."
-          placeholder={
-            charactersQuery.isLoading
-              ? "Loading characters…"
-              : "Select characters"
-          }
-          clearable
-          data={characterOptions}
-          value={referenceCharacterIds}
-          onChange={setReferenceCharacterIds}
-          disabled={!characterOptions.length}
+          hint="Fills the Reference Characters marker."
           error={
             charactersQuery.isError ? "Failed to load characters" : undefined
           }
-        />
-      </SimpleGrid>
+        >
+          <MultiSelect
+            placeholder={
+              charactersQuery.isLoading
+                ? "Loading characters…"
+                : "Select characters"
+            }
+            clearable
+            data={characterOptions}
+            value={referenceCharacterIds}
+            onChange={setReferenceCharacterIds}
+            disabled={!characterOptions.length}
+            error={charactersQuery.isError}
+          />
+        </Field>
+      </div>
 
-      <Textarea
+      <Field
         label="Generator brief"
-        description="Fills the Generator Brief marker — the character concept."
-        autosize
-        minRows={4}
-        value={brief}
-        onChange={(event) => setBrief(event.currentTarget.value)}
-        placeholder="e.g. A soft-spoken clockmaker who repairs forbidden automata; dry wit, ink-stained hands…"
-      />
+        hint="Fills the Generator Brief marker — the character concept."
+      >
+        <Textarea
+          className={classes.textarea}
+          value={brief}
+          onChange={(event) => setBrief(event.currentTarget.value)}
+          placeholder="e.g. A soft-spoken clockmaker who repairs forbidden automata; dry wit, ink-stained hands…"
+        />
+      </Field>
 
-      <Group justify="flex-end">
+      <div className={classes.actionsEnd}>
         <Button
-          size="xs"
-          variant="light"
-          leftSection={<IconSparkles size={14} />}
+          type="button"
+          variant="default"
+          size="sm"
           loading={pendingField === "all"}
           disabled={generateDisabled}
+          leftSection={<IconSparkles size={14} />}
           onClick={() => void handleGenerate("all")}
         >
           Generate all card fields
         </Button>
-      </Group>
+      </div>
 
       {fieldRows.map((row) => (
-        <Stack key={row.field} gap="xs">
-          <Group justify="space-between" align="flex-end" wrap="nowrap">
-            <Text size="sm" fw={500}>
-              {row.label}
-            </Text>
+        <div key={row.field} className={classes.stackSm}>
+          <div className={classes.fieldHeader}>
+            <p className={classes.fieldTitle}>{row.label}</p>
             <Button
-              size="xs"
-              variant="light"
-              leftSection={<IconSparkles size={14} />}
+              type="button"
+              variant="default"
+              size="sm"
               loading={pendingField === row.field}
               disabled={generateDisabled}
+              leftSection={<IconSparkles size={14} />}
               onClick={() => void handleGenerate(row.field)}
             >
               Generate
             </Button>
-          </Group>
+          </div>
+          <p className={classes.fieldHint}>{row.description}</p>
           <Textarea
-            description={row.description}
-            autosize
-            minRows={row.minRows}
+            className={classes.textarea}
             value={row.value}
             onChange={(event) => row.onChange(event.currentTarget.value)}
           />
-        </Stack>
+        </div>
       ))}
 
       <AlternateGreetingsEditor
         value={alternateGreetings}
         onChange={onAlternateGreetingsChange}
-        minRows={4}
         action={
           <Button
-            size="xs"
-            variant="light"
-            leftSection={<IconSparkles size={14} />}
+            type="button"
+            variant="default"
+            size="sm"
             loading={pendingField === "alternate_greetings"}
             disabled={generateDisabled}
+            leftSection={<IconSparkles size={14} />}
             onClick={() => void handleGenerate("alternate_greetings")}
           >
             Generate
           </Button>
         }
       />
-    </Stack>
+    </div>
   );
 }

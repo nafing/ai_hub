@@ -29,13 +29,22 @@ export {
   createSectionFromKind,
   defaultVariable,
   defaultVariableOption,
+  normalizePreset,
+  toPresetExport,
 } from "./defaults";
+export {
+  parsePresetJson,
+  parsePresetImportFile,
+  PresetImportError,
+} from "./import";
 export { DEFAULT_PRESETS, type DefaultPresetDefinition } from "./default-presets";
 export type {
   CreatePresetInput,
   UpdatePresetInput,
   PresetListItem,
+  NeedsPresetVariablesCommand,
 } from "./api";
+export { NEEDS_PRESET_VARIABLES_CODE } from "./api";
 export {
   wrapSectionContent,
   substituteVariables,
@@ -43,6 +52,7 @@ export {
   clusterSectionsByGroup,
   buildPromptMessages,
   selectedVariableValues,
+  unresolvedPresetVariables,
   type PresetVariableValues,
   type PresetMarkerContent,
   type BuildPromptOptions,
@@ -54,6 +64,11 @@ export {
   lookupVar,
   resolveInlineMacro,
 } from "./template";
+export {
+  PRESET_TEMPLATE_MACROS,
+  PRESET_RUNTIME_VARIABLES,
+  type PresetMacroEntry,
+} from "./macros";
 export {
   formatCharacterInfoMarker,
   formatDialogueExamplesMarker,

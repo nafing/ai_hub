@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { LancedbModule } from "../../lancedb/lancedb.module";
 import { AgentsModule } from "../agents/agents.module";
 import { CharactersModule } from "../characters/characters.module";
 import { ConnectionsModule } from "../connections/connections.module";
@@ -19,6 +20,7 @@ import { ChatsService } from "./chats.service";
     CharactersModule,
     PersonasModule,
     LorebooksModule,
+    LancedbModule,
     AgentsModule,
     RegexesModule,
   ],

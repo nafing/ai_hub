@@ -4,6 +4,8 @@ export type {
   ChatMessage,
   ChatMessageRole,
   ChatSettings,
+  ChatAgentSetting,
+  ChatAgentSettingsMap,
   GroupChatMode,
   GroupResponseOrder,
 } from "./types";
@@ -24,20 +26,29 @@ export type {
   ChatListItem,
   ChatStreamEvent,
   PeekPromptResult,
+  PeekPromptLoreHit,
+  PeekPromptMemoryHit,
 } from "./api";
 export {
   defaultChatSettings,
-  defaultChatCreateInput,
   createChatMessage,
   primaryCharacterId,
+  DEFAULT_CHAT_HISTORY_DEPTH,
+  DEFAULT_CHAT_MEMORY_TOP_K,
+  DEFAULT_CHAT_MEMORY_TOKEN_BUDGET,
 } from "./defaults";
 export { activeMessageText, formatChatHistoryMarker } from "./history";
 export {
-  parseMesExample,
-  resolveGreetingSwipes,
-  buildCharacterGreetingMessage,
-  type MesExampleTurn,
-} from "./seed-messages";
+  normalizeChatMessages,
+  visibleChatMessages,
+  visibleChatMessagesThrough,
+  ancestorChatMessages,
+  branchParentOf,
+  chatMessageSubtreeIds,
+  removeChatMessageSwipe,
+  removeChatMessageSubtree,
+} from "./branches";
+export { buildCharacterGreetingMessage } from "./seed-messages";
 export {
   parseMentions,
   parseSlashCommand,
@@ -52,7 +63,6 @@ export {
   type SpeakerTurn,
 } from "./group-chat";
 export {
-  getAvailableSlashCommands,
   getSlashCompletions,
   matchSlashCommand,
   executeSlashCommand,

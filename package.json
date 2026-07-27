@@ -2,15 +2,14 @@
   "name": "ai_hub",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "build": "pnpm -r run build",
+    "dev": "pnpm -r --parallel run dev",
+    "lint": "pnpm -r run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types"
+    "check-types": "pnpm -r run check-types"
   },
   "devDependencies": {
     "prettier": "^3.9.6",
-    "turbo": "^2.10.6",
     "typescript": "^6.0.3"
   },
   "packageManager": "pnpm@9.0.0",

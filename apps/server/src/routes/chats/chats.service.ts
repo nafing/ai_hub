@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -8,7 +9,9 @@ import { randomUUID } from "node:crypto";
 import { Repository } from "typeorm";
 import {
   activeMessageText,
+  ancestorChatMessages,
   applyRegexScriptsToPromptMessages,
+  branchParentOf,
   buildPresetPromptContext,
   buildPromptMessages,
   buildCharacterGreetingMessage,
@@ -19,12 +22,16 @@ import {
   formatChatHistoryMarker,
   formatRecentHistoryForSmart,
   formatSmartCandidate,
+  normalizeChatMessages,
   parseSlashCommand,
   parseSmartSpeakerIds,
   primaryCharacterId,
+  removeChatMessageSubtree,
+  removeChatMessageSwipe,
   resolveSpeakerQueue,
   selectedVariableValues,
-  type Agent,
+  unresolvedPresetVariables,
+  visibleChatMessages,
   type Character,
   type Chat,
   type ChatListItem,
@@ -35,12 +42,17 @@ import {
   type CreateChatMessageInput,
   type GenerateChatInput,
   type LlmChatMessage,
+  type PeekPromptLoreHit,
+  type PeekPromptMemoryHit,
+  type PeekPromptResult,
   type SpeakerTurn,
   type UpdateChatInput,
   type UpdateChatMessageInput,
 } from "@ai-hub/shared";
+import { ChatMemoryService } from "../../lancedb/chat-memory.service";
+import { LoreRetrievalService } from "../../lancedb/lore-retrieval.service";
 import { completeWithConnection } from "../../utils/openrouter";
-import { AgentsService } from "../agents/agents.service";
+import { AgentRunnerService } from "../agents/agent-runner.service";
 import { CharactersService } from "../characters/characters.service";
 import { ConnectionsService } from "../connections/connections.service";
 import { LorebooksService } from "../lorebooks/lorebooks.service";
@@ -55,6 +67,8 @@ type ResolvedPreset = Awaited<ReturnType<PresetsService["findOne"]>>;
 
 @Injectable()
 export class ChatsService {
+  private readonly logger = new Logger(ChatsService.name);
+
   constructor(
     @InjectRepository(ChatEntity)
     private readonly chats: Repository<ChatEntity>,
@@ -63,7 +77,9 @@ export class ChatsService {
     private readonly characters: CharactersService,
     private readonly personas: PersonasService,
     private readonly lorebooks: LorebooksService,
-    private readonly agents: AgentsService,
+    private readonly loreRetrieval: LoreRetrievalService,
+    private readonly chatMemory: ChatMemoryService,
+    private readonly agentRunner: AgentRunnerService,
     private readonly regexes: RegexesService,
   ) {}
 
@@ -84,6 +100,10 @@ export class ChatsService {
       throw new BadRequestException(
         "At least one character is required for roleplay chats",
       );
+    }
+
+    if (input.parent_chat_id) {
+      await this.requireRow(input.parent_chat_id);
     }
 
     const now = new Date().toISOString();
@@ -108,17 +128,22 @@ export class ChatsService {
               : `${names[0]} +${names.length - 1}`;
       }
 
-      for (const [index, character] of resolvedCharacters.entries()) {
-        // Each character gets first_mes + alternate_greetings as swipe branches.
-        // greeting_index only picks the initial active swipe for the primary.
-        const greeting = buildCharacterGreetingMessage({
-          character,
-          greetingIndex: index === 0 ? input.greeting_index : 0,
-          createdAt: now,
-          id: randomUUID(),
-        });
-        if (!greeting) continue;
-        messages.push(greeting);
+      if (!input.skip_greeting) {
+        for (const [index, character] of resolvedCharacters.entries()) {
+          // Each character gets first_mes + alternate_greetings as swipe branches.
+          // greeting_index only picks the initial active swipe for the primary.
+          const greeting = buildCharacterGreetingMessage({
+            character,
+            greetingIndex: index === 0 ? input.greeting_index : 0,
+            createdAt: now,
+            id: randomUUID(),
+          });
+          if (!greeting) continue;
+          messages.push({
+            ...greeting,
+            ...branchParentOf(messages),
+          });
+        }
       }
     }
 
@@ -134,10 +159,15 @@ export class ChatsService {
       messages,
       summary: "",
       agent_state: {},
+      parent_chat_id: input.parent_chat_id?.trim() || null,
       created_at: now,
       updated_at: now,
     });
-    return this.toChat(await this.chats.save(entity));
+    const saved = await this.chats.save(entity);
+    if (messages.length > 0) {
+      void this.chatMemory.indexMessages(saved.id, messages);
+    }
+    return this.toChat(saved);
   }
 
   async update(id: string, input: UpdateChatInput): Promise<Chat> {
@@ -152,9 +182,15 @@ export class ChatsService {
         lorebook_ids:
           input.settings.lorebook_ids ?? row.settings.lorebook_ids ?? [],
         agent_ids: input.settings.agent_ids ?? row.settings.agent_ids ?? [],
+        agent_settings:
+          input.settings.agent_settings ?? row.settings.agent_settings ?? {},
         character_ids:
           input.settings.character_ids ?? row.settings.character_ids ?? [],
         variables: input.settings.variables ?? row.settings.variables ?? {},
+        character_dm_chat_ids:
+          input.settings.character_dm_chat_ids ??
+          row.settings.character_dm_chat_ids ??
+          {},
       });
     }
     row.updated_at = new Date().toISOString();
@@ -162,8 +198,275 @@ export class ChatsService {
   }
 
   async remove(id: string): Promise<void> {
-    await this.requireRow(id);
+    const row = await this.requireRow(id);
+    if (row.parent_chat_id) {
+      await this.unlinkCharacterDm(row.parent_chat_id, id);
+    }
     await this.chats.delete({ id });
+    void this.chatMemory.deleteChat(id);
+  }
+
+  /**
+   * Get or create a conversation DM for a character in this chat.
+   * Requires `settings.allow_character_dms`.
+   */
+  async getOrCreateCharacterDm(
+    parentId: string,
+    characterId: string,
+  ): Promise<Chat> {
+    const parent = await this.requireRow(parentId);
+    const settings = defaultChatSettings(parent.settings);
+
+    if (!settings.allow_character_dms) {
+      throw new BadRequestException("Character DMs are disabled for this chat");
+    }
+    if (!settings.character_ids.includes(characterId)) {
+      throw new BadRequestException("Character is not in this chat");
+    }
+
+    const existingId = settings.character_dm_chat_ids[characterId];
+    if (existingId) {
+      const existing = await this.chats.findOneBy({ id: existingId });
+      if (existing) return this.toChat(existing);
+    }
+
+    const character = await this.characters.findOne(characterId);
+    const name = character.data.name.trim() || "Character";
+    const dm = await this.create({
+      mode: "conversation",
+      title: `DM · ${name}`,
+      parent_chat_id: parentId,
+      skip_greeting: true,
+      settings: {
+        character_ids: [characterId],
+        persona_id: settings.persona_id,
+        connection_id: settings.connection_id,
+        lorebook_ids: [],
+        agent_ids: [],
+        allow_character_dms: false,
+        allow_twatter_references: settings.allow_twatter_references,
+      },
+    });
+
+    parent.settings = defaultChatSettings({
+      ...settings,
+      character_dm_chat_ids: {
+        ...settings.character_dm_chat_ids,
+        [characterId]: dm.id,
+      },
+    });
+    parent.updated_at = new Date().toISOString();
+    await this.chats.save(parent);
+
+    return dm;
+  }
+
+  private async unlinkCharacterDm(
+    parentId: string,
+    dmChatId: string,
+  ): Promise<void> {
+    const parent = await this.chats.findOneBy({ id: parentId });
+    if (!parent) return;
+    const settings = defaultChatSettings(parent.settings);
+    const nextMap = { ...settings.character_dm_chat_ids };
+    let changed = false;
+    for (const [characterId, chatId] of Object.entries(nextMap)) {
+      if (chatId === dmChatId) {
+        delete nextMap[characterId];
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    parent.settings = defaultChatSettings({
+      ...settings,
+      character_dm_chat_ids: nextMap,
+    });
+    parent.updated_at = new Date().toISOString();
+    await this.chats.save(parent);
+  }
+
+  /**
+   * Applies Character DM agent JSON: open/continue side DMs and kick generation.
+   */
+  private async applyCharacterDmAgent(
+    parentId: string,
+    state: unknown,
+    settings: ChatSettings,
+  ): Promise<{
+    state: Record<string, unknown>;
+    character_dm_chat_ids?: Record<string, string>;
+  }> {
+    if (!state || typeof state !== "object" || Array.isArray(state)) {
+      return { state: { error: "invalid character-dm state" } };
+    }
+    const record = { ...(state as Record<string, unknown>) };
+    if (record.error) return { state: record };
+
+    const rawDms = Array.isArray(record.dms) ? record.dms : [];
+    const maxDms = 2;
+    const started: Array<{
+      characterId: string;
+      chatId: string;
+      reason?: string;
+      title?: string;
+    }> = [];
+    const errors: string[] = [];
+    let map = { ...settings.character_dm_chat_ids };
+
+    for (const item of rawDms.slice(0, maxDms)) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const entry = item as Record<string, unknown>;
+      const characterId = String(entry.characterId ?? "").trim();
+      if (!characterId) continue;
+      if (!settings.character_ids.includes(characterId)) {
+        errors.push(`skipped unknown characterId ${characterId}`);
+        continue;
+      }
+
+      const reason =
+        typeof entry.reason === "string" ? entry.reason.trim() : "";
+      const openingMessage =
+        typeof entry.openingMessage === "string"
+          ? entry.openingMessage.trim()
+          : "";
+
+      try {
+        const dm = await this.getOrCreateCharacterDm(parentId, characterId);
+        map = { ...map, [characterId]: dm.id };
+
+        if (openingMessage) {
+          await this.addMessage(dm.id, {
+            role: "user",
+            content: openingMessage,
+          });
+        } else if (dm.messages.length === 0 && reason) {
+          await this.addMessage(dm.id, {
+            role: "system",
+            content: `Private side conversation. Context: ${reason}`,
+          });
+        }
+
+        void this.generate(dm.id, { forCharacterId: characterId }, () => {}).catch(
+          (error) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            this.logger.warn(
+              `Character DM generate failed for ${dm.id}: ${message}`,
+            );
+          },
+        );
+
+        started.push({
+          characterId,
+          chatId: dm.id,
+          reason: reason || undefined,
+          title: dm.title,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        errors.push(`${characterId}: ${message}`);
+        this.logger.warn(`Character DM apply failed: ${message}`);
+      }
+    }
+
+    return {
+      state: {
+        ...record,
+        started,
+        ...(errors.length ? { applyErrors: errors } : {}),
+        appliedAt: new Date().toISOString(),
+      },
+      character_dm_chat_ids: map,
+    };
+  }
+
+  async applyAgentProposal(
+    id: string,
+    input: { slug?: string; proposalId: string },
+  ): Promise<Chat> {
+    const row = await this.requireRow(id);
+    const slug = input.slug?.trim() || "card-evolution-auditor";
+    const state = row.agent_state?.[slug];
+    if (!state || typeof state !== "object" || Array.isArray(state)) {
+      throw new BadRequestException(`No proposals for agent ${slug}`);
+    }
+    const record = state as Record<string, unknown>;
+    const updates = Array.isArray(record.updates) ? [...record.updates] : [];
+    const index = updates.findIndex((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+      return String((item as { id?: unknown }).id ?? "") === input.proposalId;
+    });
+    if (index < 0) {
+      throw new NotFoundException(`Proposal ${input.proposalId} not found`);
+    }
+    const proposal = updates[index] as Record<string, unknown>;
+    if (proposal.status === "approved") {
+      return this.toChat(row);
+    }
+
+    const characterId = String(proposal.characterId ?? "").trim();
+    const field = String(proposal.field ?? "").trim();
+    const oldText = String(proposal.oldText ?? "");
+    const newText = String(proposal.newText ?? "");
+    if (!characterId || !field) {
+      throw new BadRequestException("Proposal is missing characterId or field");
+    }
+
+    const character = await this.characters.findOne(characterId);
+    const data = { ...character.data } as Record<string, unknown>;
+    const current = data[field];
+    if (typeof current !== "string") {
+      throw new BadRequestException(`Field "${field}" is not editable text`);
+    }
+    if (oldText && !current.includes(oldText)) {
+      throw new BadRequestException(
+        "oldText was not found in the character field (card may have changed)",
+      );
+    }
+    data[field] = oldText
+      ? current.replace(oldText, newText)
+      : newText;
+    await this.characters.update(characterId, {
+      data: data as typeof character.data,
+    });
+
+    updates[index] = { ...proposal, status: "approved" };
+    row.agent_state = {
+      ...row.agent_state,
+      [slug]: { ...record, updates },
+    };
+    row.updated_at = new Date().toISOString();
+    return this.toChat(await this.chats.save(row));
+  }
+
+  async dismissAgentProposal(
+    id: string,
+    input: { slug?: string; proposalId: string },
+  ): Promise<Chat> {
+    const row = await this.requireRow(id);
+    const slug = input.slug?.trim() || "card-evolution-auditor";
+    const state = row.agent_state?.[slug];
+    if (!state || typeof state !== "object" || Array.isArray(state)) {
+      throw new BadRequestException(`No proposals for agent ${slug}`);
+    }
+    const record = state as Record<string, unknown>;
+    const updates = Array.isArray(record.updates) ? [...record.updates] : [];
+    const index = updates.findIndex((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+      return String((item as { id?: unknown }).id ?? "") === input.proposalId;
+    });
+    if (index < 0) {
+      throw new NotFoundException(`Proposal ${input.proposalId} not found`);
+    }
+    const proposal = updates[index] as Record<string, unknown>;
+    updates[index] = { ...proposal, status: "dismissed" };
+    row.agent_state = {
+      ...row.agent_state,
+      [slug]: { ...record, updates },
+    };
+    row.updated_at = new Date().toISOString();
+    return this.toChat(await this.chats.save(row));
   }
 
   async addMessage(id: string, input: CreateChatMessageInput): Promise<Chat> {
@@ -181,17 +484,18 @@ export class ChatsService {
         );
       }
     }
-    row.messages = [
-      ...row.messages,
-      createChatMessage({
-        role,
-        content,
-        id: randomUUID(),
-        character_id: characterId,
-      }),
-    ];
+    const message = createChatMessage({
+      role,
+      content,
+      id: randomUUID(),
+      character_id: characterId,
+      ...branchParentOf(row.messages),
+    });
+    row.messages = [...normalizeChatMessages(row.messages), message];
     row.updated_at = new Date().toISOString();
-    return this.toChat(await this.chats.save(row));
+    const saved = await this.chats.save(row);
+    void this.chatMemory.indexMessage(id, message);
+    return this.toChat(saved);
   }
 
   async updateMessage(
@@ -200,6 +504,7 @@ export class ChatsService {
     input: UpdateChatMessageInput,
   ): Promise<Chat> {
     const row = await this.requireRow(id);
+    row.messages = normalizeChatMessages(row.messages);
     const index = row.messages.findIndex((message) => message.id === messageId);
     if (index === -1) {
       throw new NotFoundException(`Message ${messageId} not found`);
@@ -208,23 +513,19 @@ export class ChatsService {
     if (input.remove_active_swipe) {
       const existing = row.messages[index];
       if (existing.swipes.length <= 1) {
-        row.messages = row.messages.filter((message) => message.id !== messageId);
-      } else {
-        const swipeId = existing.swipe_id;
-        const swipes = existing.swipes.filter((_, i) => i !== swipeId);
-        const nextSwipeId = Math.min(swipeId, swipes.length - 1);
-        row.messages = row.messages.map((item, i) =>
-          i === index
-            ? {
-                ...item,
-                swipes,
-                swipe_id: nextSwipeId,
-              }
-            : item,
-        );
+        row.messages = removeChatMessageSubtree(row.messages, messageId);
+        row.updated_at = new Date().toISOString();
+        const saved = await this.chats.save(row);
+        void this.chatMemory.deleteMessage(id, messageId);
+        return this.toChat(saved);
       }
+      const swipeId = existing.swipe_id;
+      row.messages = removeChatMessageSwipe(row.messages, messageId, swipeId);
       row.updated_at = new Date().toISOString();
-      return this.toChat(await this.chats.save(row));
+      const saved = await this.chats.save(row);
+      const updated = saved.messages.find((message) => message.id === messageId);
+      if (updated) void this.chatMemory.indexMessage(id, updated);
+      return this.toChat(saved);
     }
 
     const message = { ...row.messages[index] };
@@ -245,17 +546,22 @@ export class ChatsService {
       i === index ? message : item,
     );
     row.updated_at = new Date().toISOString();
-    return this.toChat(await this.chats.save(row));
+    const saved = await this.chats.save(row);
+    void this.chatMemory.indexMessage(id, message);
+    return this.toChat(saved);
   }
 
   async removeMessage(id: string, messageId: string): Promise<Chat> {
     const row = await this.requireRow(id);
+    row.messages = normalizeChatMessages(row.messages);
     if (!row.messages.some((message) => message.id === messageId)) {
       throw new NotFoundException(`Message ${messageId} not found`);
     }
-    row.messages = row.messages.filter((message) => message.id !== messageId);
+    row.messages = removeChatMessageSubtree(row.messages, messageId);
     row.updated_at = new Date().toISOString();
-    return this.toChat(await this.chats.save(row));
+    const saved = await this.chats.save(row);
+    void this.chatMemory.deleteMessage(id, messageId);
+    return this.toChat(saved);
   }
 
   async generate(
@@ -270,20 +576,27 @@ export class ChatsService {
       return;
     }
 
+    if (await this.maybeEmitNeedsPresetVariables(row, emit)) {
+      return;
+    }
+
     const rawUserText = input.userMessage?.trim() ?? "";
     if (rawUserText) {
       const { command, rest } = parseSlashCommand(rawUserText);
       const storedContent = command
         ? rest.trim() || `/${command}`
         : rawUserText;
+      row.messages = normalizeChatMessages(row.messages);
       const userMessage = createChatMessage({
         role: "user",
         content: storedContent,
         id: randomUUID(),
+        ...branchParentOf(row.messages),
       });
       row.messages = [...row.messages, userMessage];
       row.updated_at = new Date().toISOString();
       await this.chats.save(row);
+      void this.chatMemory.indexMessage(row.id, userMessage);
       emit({ type: "user_message", message: userMessage });
     }
 
@@ -293,6 +606,7 @@ export class ChatsService {
       queueUserMessage: rawUserText || null,
       generationGuide: input.generationGuide?.trim() || undefined,
       impersonate: Boolean(input.impersonate),
+      runDirector: Boolean(input.runDirector),
     });
   }
 
@@ -302,6 +616,7 @@ export class ChatsService {
     messageId?: string,
   ): Promise<void> {
     const row = await this.requireRow(id);
+    row.messages = normalizeChatMessages(row.messages);
     let targetIndex: number | undefined;
 
     if (messageId) {
@@ -316,17 +631,23 @@ export class ChatsService {
         );
       }
     } else {
-      targetIndex = [...row.messages]
-        .map((message, index) => ({ message, index }))
+      const visible = visibleChatMessages(row.messages);
+      const last = [...visible]
         .reverse()
         .find(
-          ({ message }) =>
-            message.role === "assistant" || message.role === "user",
-        )?.index;
+          (message) => message.role === "assistant" || message.role === "user",
+        );
+      targetIndex = last
+        ? row.messages.findIndex((message) => message.id === last.id)
+        : undefined;
     }
 
-    if (targetIndex === undefined) {
+    if (targetIndex === undefined || targetIndex < 0) {
       throw new BadRequestException("No message to regenerate");
+    }
+
+    if (await this.maybeEmitNeedsPresetVariables(row, emit)) {
+      return;
     }
 
     await this.runCompletion(row, emit, {
@@ -335,15 +656,33 @@ export class ChatsService {
     });
   }
 
+  /** Emit setup-variables command when chat preset values are incomplete. */
+  private async maybeEmitNeedsPresetVariables(
+    row: ChatEntity,
+    emit: StreamEmit,
+  ): Promise<boolean> {
+    const settings = defaultChatSettings(row.settings);
+    const preset = settings.preset_id
+      ? await this.presets.findOne(settings.preset_id)
+      : await this.presets.findDefault(row.mode);
+    const unresolved = unresolvedPresetVariables(
+      preset.variables,
+      settings.variables,
+    );
+    if (unresolved.length === 0) return false;
+    emit({
+      type: "needs_preset_variables",
+      presetId: preset.id,
+      variables: unresolved,
+    });
+    return true;
+  }
+
   /** Build the prompt that would be used to regenerate / continue from a message. */
   async peekPrompt(
     id: string,
     messageId?: string,
-  ): Promise<{
-    messages: LlmChatMessage[];
-    character_id: string | null;
-    character_name: string;
-  }> {
+  ): Promise<PeekPromptResult> {
     const row = await this.requireRow(id);
     const settings = defaultChatSettings(row.settings);
     const characterList: Character[] = [];
@@ -362,7 +701,7 @@ export class ChatsService {
       ? await this.presets.findOne(settings.preset_id)
       : await this.presets.findDefault(row.mode);
 
-    let historyMessages = row.messages;
+    let historyMessages = visibleChatMessages(row.messages);
     let turn: SpeakerTurn = { kind: "merged" };
 
     if (messageId) {
@@ -372,18 +711,21 @@ export class ChatsService {
       }
       const target = row.messages[index];
       if (target.role === "assistant") {
-        historyMessages = row.messages.slice(0, index);
+        historyMessages = ancestorChatMessages(row.messages, messageId);
         turn =
           target.character_id &&
           settings.character_ids.includes(target.character_id)
             ? { kind: "character", characterId: target.character_id }
             : { kind: "merged" };
       } else if (target.role === "user") {
-        historyMessages = row.messages.slice(0, index);
+        historyMessages = ancestorChatMessages(row.messages, messageId);
         turn = { kind: "impersonate" };
       } else {
         // Peek "next reply after this message"
-        historyMessages = row.messages.slice(0, index + 1);
+        historyMessages = [
+          ...ancestorChatMessages(row.messages, messageId),
+          target,
+        ];
         turn =
           settings.group_mode === "individual" && settings.character_ids[0]
             ? { kind: "character", characterId: settings.character_ids[0] }
@@ -392,6 +734,7 @@ export class ChatsService {
     }
 
     return this.buildTurnPrompt({
+      chatId: row.id,
       settings,
       preset,
       characterList,
@@ -414,6 +757,7 @@ export class ChatsService {
       queueUserMessage?: string | null;
       generationGuide?: string;
       impersonate?: boolean;
+      runDirector?: boolean;
     },
   ): Promise<void> {
     const settings = defaultChatSettings(row.settings);
@@ -470,17 +814,19 @@ export class ChatsService {
         lorebooks,
         nameByCharacterId,
         turn,
-        historyMessages: row.messages.slice(0, options.targetIndex),
+        historyMessages: ancestorChatMessages(row.messages, existing.id),
         regenerateIndex: options.targetIndex,
         generationGuide: options.generationGuide,
+        runDirector: options.runDirector,
       });
       return;
     }
 
+    const visibleMessages = visibleChatMessages(row.messages);
     const turns = await this.resolveTurns({
       settings,
       characterList,
-      messages: row.messages,
+      messages: visibleMessages,
       userMessage: options.queueUserMessage,
       forCharacterId: options.forCharacterId,
       impersonate: options.impersonate,
@@ -500,8 +846,9 @@ export class ChatsService {
         lorebooks,
         nameByCharacterId,
         turn,
-        historyMessages: row.messages,
+        historyMessages: visibleChatMessages(row.messages),
         generationGuide: options.generationGuide,
+        runDirector: options.runDirector,
       });
     }
   }
@@ -617,6 +964,7 @@ export class ChatsService {
     historyMessages: ChatMessage[];
     regenerateIndex?: number;
     generationGuide?: string;
+    runDirector?: boolean;
   }): Promise<void> {
     const {
       row,
@@ -631,10 +979,69 @@ export class ChatsService {
       historyMessages,
       regenerateIndex,
       generationGuide,
+      runDirector,
     } = input;
     const settings = defaultChatSettings(row.settings);
 
+    const selectedAgents = await this.agentRunner.loadSelectedAgents({
+      settings,
+      mode: row.mode,
+      historyMessages,
+      runDirector,
+      parentChatId: row.parent_chat_id,
+    });
+
+    const mutable = {
+      summary: row.summary,
+      agentState: { ...(row.agent_state ?? {}) },
+      messages: [...row.messages],
+    };
+
+    const agentCtxBase = {
+      chat: this.toChat(row),
+      settings,
+      connection,
+      historyMessages,
+      userName: persona?.name,
+      lorebooks,
+      runDirector,
+      emit,
+      mutable,
+      characterCards: characterList
+        .map((character) =>
+          JSON.stringify(
+            {
+              characterId: character.id,
+              name: character.data.name,
+              description: character.data.description,
+              personality: character.data.personality,
+              scenario: character.data.scenario,
+              first_mes: character.data.first_mes,
+              mes_example: character.data.mes_example,
+              creator_notes: character.data.creator_notes,
+              system_prompt: character.data.system_prompt,
+              post_history_instructions:
+                character.data.post_history_instructions,
+            },
+            null,
+            2,
+          ),
+        )
+        .join("\n\n"),
+    };
+
+    const pre = await this.agentRunner.runPreGeneration(
+      { ...agentCtxBase, characterName: characterList[0]?.data.name },
+      selectedAgents,
+    );
+    if (Object.keys(pre.agentStatePatch).length) {
+      mutable.agentState = { ...mutable.agentState, ...pre.agentStatePatch };
+      row.agent_state = mutable.agentState;
+      agentCtxBase.chat = this.toChat(row);
+    }
+
     const built = await this.buildTurnPrompt({
+      chatId: row.id,
       settings,
       preset,
       characterList,
@@ -645,6 +1052,7 @@ export class ChatsService {
       historyMessages,
       chatSummary: row.summary,
       generationGuide,
+      agentInjectTexts: pre.injectTexts,
     });
 
     const { characterId, characterName, role, messages: promptMessages } =
@@ -673,17 +1081,47 @@ export class ChatsService {
     }
 
     if (role === "assistant") {
-      const agentResult = await this.runAgents({
-        chat: this.toChat(row),
-        settings,
-        connection,
+      // Parallel agents (Echo) run alongside post_processing after the stream.
+      const parallelWithContent = this.agentRunner.startParallel(
+        { ...agentCtxBase, characterName },
+        selectedAgents,
         content,
-        historyMessages,
-        characterName,
-        userName: persona?.name,
-      });
-      content = agentResult.content;
-      row.agent_state = { ...row.agent_state, ...agentResult.agentState };
+      );
+      const post = await this.agentRunner.runPostProcessing(
+        { ...agentCtxBase, characterName },
+        selectedAgents,
+        content,
+      );
+      content = post.content;
+      const parallelPatch = await parallelWithContent.promise;
+      mutable.agentState = {
+        ...mutable.agentState,
+        ...post.agentStatePatch,
+        ...parallelPatch,
+      };
+
+      if (
+        !row.parent_chat_id &&
+        settings.allow_character_dms &&
+        mutable.agentState["character-dm"]
+      ) {
+        const applied = await this.applyCharacterDmAgent(
+          row.id,
+          mutable.agentState["character-dm"],
+          settings,
+        );
+        mutable.agentState["character-dm"] = applied.state;
+        if (applied.character_dm_chat_ids) {
+          row.settings = defaultChatSettings({
+            ...defaultChatSettings(row.settings),
+            character_dm_chat_ids: applied.character_dm_chat_ids,
+          });
+        }
+      }
+
+      row.agent_state = mutable.agentState;
+      row.summary = mutable.summary;
+      row.messages = mutable.messages;
     }
 
     let savedMessage: ChatMessage;
@@ -701,12 +1139,14 @@ export class ChatsService {
         index === regenerateIndex ? savedMessage : message,
       );
     } else {
+      row.messages = normalizeChatMessages(row.messages);
       savedMessage = createChatMessage({
         role,
         content,
         id: randomUUID(),
         thinking: role === "assistant" ? thinking || null : null,
         character_id: role === "assistant" ? characterId : null,
+        ...branchParentOf(row.messages),
       });
       row.messages = [...row.messages, savedMessage];
     }
@@ -714,6 +1154,7 @@ export class ChatsService {
     row.updated_at = new Date().toISOString();
     const saved = await this.chats.save(row);
     Object.assign(row, saved);
+    void this.chatMemory.indexMessage(row.id, savedMessage);
     emit({
       type: "done",
       message: savedMessage,
@@ -722,6 +1163,7 @@ export class ChatsService {
   }
 
   private async buildTurnPrompt(input: {
+    chatId: string;
     settings: ChatSettings;
     preset: ResolvedPreset;
     characterList: Character[];
@@ -732,6 +1174,7 @@ export class ChatsService {
     historyMessages: ChatMessage[];
     chatSummary: string;
     generationGuide?: string;
+    agentInjectTexts?: string[];
   }): Promise<{
     messages: LlmChatMessage[];
     character_id: string | null;
@@ -739,8 +1182,13 @@ export class ChatsService {
     characterId: string | null;
     characterName: string;
     role: ChatMessage["role"];
+    lore_hits: PeekPromptLoreHit[];
+    lore_token_estimate: number;
+    memory_hits: PeekPromptMemoryHit[];
+    memory_token_estimate: number;
   }> {
     const {
+      chatId,
       settings,
       preset,
       characterList,
@@ -748,11 +1196,24 @@ export class ChatsService {
       lorebooks,
       nameByCharacterId,
       turn,
-      historyMessages,
-      chatSummary,
+      historyMessages: rawHistory,
+      chatSummary: rawSummary,
       generationGuide,
+      agentInjectTexts,
     } = input;
     const primary = characterList[0] ?? null;
+
+    const memory = await this.chatMemory.preparePromptMemory({
+      chatId,
+      settings,
+      historyMessages: rawHistory,
+      chatSummary: rawSummary,
+      nameByCharacterId,
+      charName: primary?.data.name,
+      userName: persona?.name,
+    });
+    const historyMessages = memory.historyMessages;
+    const chatSummary = memory.chatSummary;
 
     let characterId: string | null = null;
     let characterName = "Narrator";
@@ -799,11 +1260,23 @@ export class ChatsService {
     if (generationGuide?.trim()) {
       extraSystemParts.push(generationGuide.trim());
     }
+    if (agentInjectTexts?.length) {
+      extraSystemParts.push(...agentInjectTexts.filter(Boolean));
+    }
+
+    const {
+      lorebooks: filteredLorebooks,
+      hits: loreHits,
+      tokenEstimate: loreTokenEstimate,
+    } = await this.loreRetrieval.filterLorebooksForPrompt({
+      lorebooks,
+      historyMessages,
+    });
 
     const promptContext = buildPresetPromptContext({
       characters: promptCharacters,
       persona,
-      lorebooks,
+      lorebooks: filteredLorebooks,
       variables: {
         ...selectedVariableValues(preset.variables),
         ...settings.variables,
@@ -834,7 +1307,10 @@ export class ChatsService {
     );
     if (scripts.length) {
       const applied = applyRegexScriptsToPromptMessages(
-        promptMessages,
+        promptMessages.map((message) => ({
+          role: message.role as "system" | "user" | "assistant",
+          content: message.content,
+        })),
         scripts,
         { characterId: characterId ?? primaryCharacterId(settings) },
       );
@@ -851,132 +1327,26 @@ export class ChatsService {
       characterId,
       characterName,
       role,
+      lore_hits: loreHits.map((hit) => ({
+        lorebook_id: hit.lorebook_id,
+        lorebook_name: hit.lorebook_name,
+        entry_name:
+          hit.entry.name?.trim() ||
+          hit.entry.keys?.[0] ||
+          "Untitled entry",
+        source: hit.source,
+        score: hit.score,
+        preview: (hit.entry.content ?? "").trim().slice(0, 240),
+      })),
+      lore_token_estimate: loreTokenEstimate,
+      memory_hits: memory.hits.map((hit) => ({
+        message_id: hit.message_id,
+        role: hit.role,
+        score: hit.score,
+        preview: hit.content.slice(0, 240),
+      })),
+      memory_token_estimate: memory.tokenEstimate,
     };
-  }
-
-  private async runAgents(input: {
-    chat: Chat;
-    settings: ChatSettings;
-    connection: ResolvedConnection;
-    content: string;
-    historyMessages: ChatMessage[];
-    characterName?: string;
-    userName?: string;
-  }): Promise<{ content: string; agentState: Record<string, unknown> }> {
-    const agentIds = input.settings.agent_ids ?? [];
-    if (!agentIds.length) return { content: input.content, agentState: {} };
-
-    const allAgents = await Promise.all(
-      agentIds.map((agentId) => this.agents.findOne(agentId).catch(() => null)),
-    );
-    const selected = allAgents.filter(
-      (agent): agent is Agent =>
-        Boolean(agent) &&
-        !agent!.runtime_disabled &&
-        agent!.execution === "llm" &&
-        this.agentAllowedForMode(agent!, input.chat.mode),
-    );
-
-    let content = input.content;
-    const agentState: Record<string, unknown> = {};
-
-    for (const agent of selected.filter(
-      (item) =>
-        item.phase === "post_processing" && item.result_type === "text_rewrite",
-    )) {
-      const raw = await this.runAgentLlm(agent, input, content);
-      const rewritten = this.parseTextRewrite(raw);
-      if (rewritten) content = rewritten;
-    }
-
-    for (const agent of selected.filter(
-      (item) =>
-        !(
-          item.phase === "post_processing" &&
-          item.result_type === "text_rewrite"
-        ),
-    )) {
-      const raw = await this.runAgentLlm(agent, input, content);
-      agentState[agent.slug] = this.tryParseJson(raw) ?? { raw };
-    }
-
-    return { content, agentState };
-  }
-
-  private agentAllowedForMode(agent: Agent, mode: Chat["mode"]): boolean {
-    if (!agent.mode_allowlist?.length) return true;
-    return agent.mode_allowlist.includes(mode);
-  }
-
-  private async runAgentLlm(
-    agent: Agent,
-    input: {
-      connection: ResolvedConnection;
-      historyMessages: ChatMessage[];
-      characterName?: string;
-      userName?: string;
-      chat: Chat;
-    },
-    assistantResponse: string,
-  ): Promise<string> {
-    const history = formatChatHistoryMarker(input.historyMessages, {
-      charName: input.characterName,
-      userName: input.userName,
-    });
-    const prompt = [
-      agent.default_prompt_template,
-      "",
-      "<chat_history>",
-      history,
-      "</chat_history>",
-      "",
-      "<assistant_response>",
-      assistantResponse,
-      "</assistant_response>",
-      "",
-      "<current_game_state>",
-      JSON.stringify(input.chat.agent_state ?? {}, null, 2),
-      "</current_game_state>",
-    ].join("\n");
-
-    const result = await completeWithConnection(input.connection, [
-      { role: "user", content: prompt },
-    ]);
-    return result.content || result.reply;
-  }
-
-  private parseTextRewrite(raw: string): string | null {
-    const json = this.tryParseJson(raw);
-    if (
-      json &&
-      typeof json === "object" &&
-      !Array.isArray(json) &&
-      (json as { editNeeded?: unknown }).editNeeded === true &&
-      typeof (json as { editedText?: unknown }).editedText === "string" &&
-      (json as { editedText: string }).editedText.trim()
-    ) {
-      return (json as { editedText: string }).editedText.trim();
-    }
-    return null;
-  }
-
-  private tryParseJson(raw: string): unknown {
-    const trimmed = raw.trim();
-    if (!trimmed) return null;
-    try {
-      return JSON.parse(trimmed);
-    } catch {
-      const start = trimmed.indexOf("{");
-      const end = trimmed.lastIndexOf("}");
-      if (start >= 0 && end > start) {
-        try {
-          return JSON.parse(trimmed.slice(start, end + 1));
-        } catch {
-          return null;
-        }
-      }
-      return null;
-    }
   }
 
   private async resolvePersona(personaId: string | null) {
@@ -1016,17 +1386,17 @@ export class ChatsService {
       title: row.title,
       mode: row.mode,
       settings: defaultChatSettings(row.settings),
-      messages: row.messages ?? [],
+      messages: normalizeChatMessages(row.messages ?? []),
       summary: row.summary ?? "",
       agent_state: row.agent_state ?? {},
+      parent_chat_id: row.parent_chat_id ?? null,
       created_at: row.created_at,
       updated_at: row.updated_at,
     };
   }
 
   private toListItem(row: ChatEntity): ChatListItem {
-    const messages = row.messages ?? [];
-    const settings = defaultChatSettings(row.settings);
+    const messages = visibleChatMessages(row.messages ?? []);
     const last = [...messages]
       .reverse()
       .find((message) => activeMessageText(message).trim());
@@ -1037,8 +1407,6 @@ export class ChatsService {
       created_at: row.created_at,
       updated_at: row.updated_at,
       message_count: messages.length,
-      character_id: primaryCharacterId(settings),
-      character_ids: settings.character_ids,
       preview: last ? activeMessageText(last).slice(0, 160) : null,
     };
   }

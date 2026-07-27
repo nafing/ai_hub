@@ -1,0 +1,300 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: calc(100dvh - var(--header-height));
+}
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: flex-end;
+  min-height: min(72dvh, 38rem);
+  padding: clamp(2rem, 6vw, 4.5rem) clamp(1.25rem, 4vw, 3rem)
+    clamp(2.25rem, 5vw, 3.5rem);
+  overflow: hidden;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
+}
+
+.heroAtmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.heroGlow {
+  position: absolute;
+  inset: -20% -10% auto;
+  height: 70%;
+  background:
+    radial-gradient(
+      55% 70% at 18% 40%,
+      color-mix(in srgb, var(--color-accent) 28%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      45% 55% at 88% 18%,
+      color-mix(in srgb, var(--color-teal) 18%, transparent),
+      transparent 72%
+    ),
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--color-paper-deep) 40%, transparent) 0%,
+      transparent 55%
+    );
+  animation: heroDrift 18s ease-in-out infinite alternate;
+}
+
+.heroPlane {
+  position: absolute;
+  inset: auto 0 0;
+  height: 55%;
+  background:
+    linear-gradient(
+      to top,
+      var(--color-bg) 0%,
+      color-mix(in srgb, var(--color-bg) 55%, transparent) 42%,
+      transparent 100%
+    ),
+    repeating-linear-gradient(
+      -18deg,
+      transparent 0 14px,
+      color-mix(in srgb, var(--color-ink) 3.5%, transparent) 14px 15px
+    );
+  mask-image: linear-gradient(to top, black 35%, transparent 100%);
+}
+
+.heroGrain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.22;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+.heroInner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+  max-width: 38rem;
+}
+
+.brand {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(2.75rem, 8vw, 4.75rem);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 0.92;
+  color: var(--color-text);
+}
+
+.headline {
+  margin: 0;
+  max-width: 22ch;
+  font-family: var(--font-heading);
+  font-size: clamp(1.35rem, 3.2vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--color-text) 92%, var(--color-accent));
+}
+
+.lede {
+  margin: 0;
+  max-width: 36ch;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--color-text-dimmed);
+}
+
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.ctaGhost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-text);
+  transition: color 0.18s ease, gap 0.18s ease;
+}
+
+.ctaGhost:hover {
+  color: var(--color-primary);
+  gap: 0.55rem;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: clamp(2rem, 4vw, 3rem) clamp(1.25rem, 4vw, 3rem);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+}
+
+.sectionIntro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: 36rem;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+.sectionLede {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--color-text-dimmed);
+}
+
+.destList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--color-border);
+}
+
+.destLink {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 0.15rem;
+  border-bottom: 1px solid var(--color-border);
+  transition: background 0.16s ease, padding-inline 0.16s ease;
+}
+
+.destLink:hover {
+  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+  padding-inline: 0.55rem;
+}
+
+.destIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-md);
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.destCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.destLabel {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.destBlurb {
+  font-size: 0.8125rem;
+  color: var(--color-text-dimmed);
+}
+
+.destArrow {
+  color: var(--color-text-muted);
+  transition: transform 0.16s ease, color 0.16s ease;
+}
+
+.destLink:hover .destArrow {
+  color: var(--color-primary);
+  transform: translateX(3px);
+}
+
+.recentList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.recentLink {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.2rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+  transition: color 0.15s ease;
+}
+
+.recentLink:hover .recentTitle {
+  color: var(--color-primary);
+}
+
+.recentTitle {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recentMeta {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+@keyframes heroDrift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(2%, -1.5%, 0) scale(1.04);
+  }
+}
+
+@media (max-width: 640px) {
+  .hero {
+    min-height: min(68dvh, 32rem);
+    align-items: flex-end;
+  }
+
+  .headline {
+    max-width: none;
+  }
+
+  .destLink {
+    gap: 0.7rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroGlow {
+    animation: none;
+  }
+}

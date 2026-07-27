@@ -24,6 +24,10 @@ export class ChatEntity {
   @Column("simple-json")
   agent_state!: Record<string, unknown>;
 
+  /** Parent chat when this row is a character DM; null for root chats. */
+  @Column("text", { nullable: true })
+  parent_chat_id!: string | null;
+
   @Column("text")
   created_at!: string;
 

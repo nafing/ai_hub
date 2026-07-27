@@ -55,7 +55,14 @@ export {
   createSectionFromKind,
   defaultVariable,
   defaultVariableOption,
+  normalizePreset,
+  toPresetExport,
 } from "./presets/defaults";
+export {
+  parsePresetJson,
+  parsePresetImportFile,
+  PresetImportError,
+} from "./presets/import";
 export {
   DEFAULT_PRESETS,
   type DefaultPresetDefinition,
@@ -64,7 +71,9 @@ export type {
   CreatePresetInput,
   UpdatePresetInput,
   PresetListItem,
+  NeedsPresetVariablesCommand,
 } from "./presets/api";
+export { NEEDS_PRESET_VARIABLES_CODE } from "./presets/api";
 export {
   wrapSectionContent,
   substituteVariables,
@@ -72,6 +81,7 @@ export {
   clusterSectionsByGroup,
   buildPromptMessages,
   selectedVariableValues,
+  unresolvedPresetVariables,
   type PresetVariableValues,
   type PresetMarkerContent,
   type BuildPromptOptions,
@@ -83,6 +93,11 @@ export {
   lookupVar,
   resolveInlineMacro,
 } from "./presets/template";
+export {
+  PRESET_TEMPLATE_MACROS,
+  PRESET_RUNTIME_VARIABLES,
+  type PresetMacroEntry,
+} from "./presets/macros";
 export {
   formatCharacterInfoMarker,
   formatDialogueExamplesMarker,
@@ -96,6 +111,7 @@ export {
 export type {
   ChatMessage as LlmChatMessage,
   ChatMessageRole as LlmChatMessageRole,
+  LlmToolCall,
 } from "./llm/types";
 export { extractThinking } from "./llm/extract-thinking";
 
@@ -185,6 +201,21 @@ export type {
   AgentListItem,
 } from "./agents/api";
 export { DEFAULT_AGENTS } from "./agents/default-agents";
+export {
+  shouldRunAgentByInterval,
+  countAssistantMessages,
+  resolveAgentPromptTemplate,
+  resolveAgentRuntimeSettings,
+  resolveAgentRunInterval,
+  resolveAgentPromptTemplateId,
+  fillAgentPromptTemplate,
+  parseAgentTextRewrite,
+  tryParseJsonObject,
+  tryParseJsonValue,
+  formatAgentInjectSections,
+  agentAllowedForMode,
+  isTextRewriteAgent,
+} from "./agents/runtime";
 
 export type {
   Character,
@@ -193,6 +224,7 @@ export type {
   CharacterBookEntryPosition,
   CharacterCardData,
   CharacterCardV2,
+  CharacterVersion,
 } from "./characters/types";
 export {
   CHARA_CARD_SPEC,
@@ -205,7 +237,6 @@ export type {
 } from "./characters/api";
 export {
   defaultCharacter,
-  defaultCharacterBook,
   defaultCharacterBookEntry,
   defaultCharacterCardData,
   normalizeAlternateGreetings,
@@ -217,6 +248,11 @@ export {
   setCharacterTalkativeness,
   DEFAULT_TALKATIVENESS,
 } from "./characters/talkativeness";
+export {
+  createCharacterVersion,
+  normalizeCharacterVersions,
+  nextCharacterVersionLabel,
+} from "./characters/versions";
 export {
   parseCharacterCardJson,
   parseCharacterCardPng,
@@ -235,6 +271,7 @@ export type {
   CreateLorebookInput,
   UpdateLorebookInput,
   LorebookListItem,
+  LoreIndexStatus,
 } from "./lorebooks/api";
 export {
   LOREBOOK_ENTRY_POSITIONS,
@@ -262,7 +299,16 @@ export type {
   UpdatePersonaInput,
   PersonaListItem,
 } from "./personas/api";
-export { defaultPersona, normalizePersona } from "./personas/defaults";
+export {
+  defaultPersona,
+  normalizePersona,
+  toPersonaExport,
+} from "./personas/defaults";
+export {
+  parsePersonaJson,
+  parsePersonaImportFile,
+  PersonaImportError,
+} from "./personas/import";
 
 export type {
   Chat,
@@ -270,6 +316,8 @@ export type {
   ChatMessage,
   ChatMessageRole,
   ChatSettings,
+  ChatAgentSetting,
+  ChatAgentSettingsMap,
   GroupChatMode,
   GroupResponseOrder,
 } from "./chats/types";
@@ -290,20 +338,29 @@ export type {
   ChatListItem,
   ChatStreamEvent,
   PeekPromptResult,
+  PeekPromptLoreHit,
+  PeekPromptMemoryHit,
 } from "./chats/api";
 export {
   defaultChatSettings,
-  defaultChatCreateInput,
   createChatMessage,
   primaryCharacterId,
+  DEFAULT_CHAT_HISTORY_DEPTH,
+  DEFAULT_CHAT_MEMORY_TOP_K,
+  DEFAULT_CHAT_MEMORY_TOKEN_BUDGET,
 } from "./chats/defaults";
 export { activeMessageText, formatChatHistoryMarker } from "./chats/history";
 export {
-  parseMesExample,
-  resolveGreetingSwipes,
-  buildCharacterGreetingMessage,
-} from "./chats/seed-messages";
-export type { MesExampleTurn } from "./chats/seed-messages";
+  normalizeChatMessages,
+  visibleChatMessages,
+  visibleChatMessagesThrough,
+  ancestorChatMessages,
+  branchParentOf,
+  chatMessageSubtreeIds,
+  removeChatMessageSwipe,
+  removeChatMessageSubtree,
+} from "./chats/branches";
+export { buildCharacterGreetingMessage } from "./chats/seed-messages";
 export {
   parseMentions,
   parseSlashCommand,
@@ -318,7 +375,6 @@ export {
   type SpeakerTurn,
 } from "./chats/group-chat";
 export {
-  getAvailableSlashCommands,
   getSlashCompletions,
   matchSlashCommand,
   executeSlashCommand,

@@ -67,6 +67,14 @@ export class CharactersController {
     return this.charactersService.update(id, body);
   }
 
+  @Delete(":id/versions/:versionId")
+  removeVersion(
+    @Param("id") id: string,
+    @Param("versionId") versionId: string,
+  ): Promise<Character> {
+    return this.charactersService.removeVersion(id, versionId);
+  }
+
   @Delete(":id")
   async remove(@Param("id") id: string): Promise<{ ok: true }> {
     await this.charactersService.remove(id);

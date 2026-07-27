@@ -9,6 +9,8 @@ import type {
   UpdatePresetInput,
   WrapFormat,
 } from "@ai-hub/shared";
+import { promptPresetVariables } from "@/features/presets/PresetCommandBridge";
+import { extractNeedsPresetVariables } from "@/features/presets/needsPresetVariables";
 import { api } from "@/lib/api";
 
 export async function listPresets(): Promise<PresetListItem[]> {
@@ -76,9 +78,27 @@ export async function testPreset(
   id: string,
   input: TestPresetInput,
 ): Promise<TestPresetResult> {
-  const { data } = await api.post<TestPresetResult>(
-    `/presets/${id}/test`,
-    input,
-  );
-  return data;
+  let variables = { ...(input.variables ?? {}) };
+
+  for (;;) {
+    try {
+      const { data } = await api.post<TestPresetResult>(`/presets/${id}/test`, {
+        ...input,
+        variables,
+      });
+      return data;
+    } catch (error) {
+      const command = extractNeedsPresetVariables(error);
+      if (!command) throw error;
+
+      const chosen = await promptPresetVariables(
+        command.presetId,
+        command.variables,
+      );
+      if (!chosen) {
+        throw new Error("Preset variables setup cancelled");
+      }
+      variables = { ...variables, ...chosen };
+    }
+  }
 }

@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Button, Group, Modal, TextInput } from "@mantine/core";
-import { notifications } from "@mantine/notifications";
 import { useNavigate } from "@tanstack/react-router";
 import { defaultConnection } from "@ai-hub/shared";
+import { Button, Modal, TextInput, notifications } from "@/components/ui";
 import { useCreateConnection } from "./queries";
+import classes from "./CreateConnectionModal.module.css";
 
 type CreateConnectionModalProps = {
   opened: boolean;
@@ -56,7 +56,7 @@ export function CreateConnectionModal({
       opened={opened}
       onClose={handleClose}
       title="New connection"
-      centered
+      size="sm"
     >
       <form
         onSubmit={(event) => {
@@ -64,27 +64,30 @@ export function CreateConnectionModal({
           void handleCreate();
         }}
       >
-        <TextInput
-          label="Name"
-          description="A friendly name like 'Claude Sonnet — RP' or 'GPT-4o Main'."
-          placeholder="My connection"
-          data-autofocus
-          required
-          value={name}
-          onChange={(event) => setName(event.currentTarget.value)}
-        />
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" type="button" onClick={handleClose}>
+        <label className={classes.field}>
+          <span className={classes.fieldLabel}>Name</span>
+          <p className={classes.fieldHint}>
+            A friendly name like &apos;Claude Sonnet — RP&apos; or &apos;GPT-4o
+            Main&apos;.
+          </p>
+          <TextInput
+            placeholder="My connection"
+            required
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+          />
+        </label>
+        <div className={classes.actions}>
+          <Button variant="default" type="button"
+            onClick={handleClose}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            loading={createMutation.isPending}
-            disabled={!name.trim()}
-          >
-            Create
+          <Button variant="primary" type="submit"
+            disabled={!name.trim() || createMutation.isPending}>
+            {createMutation.isPending ? "Creating…" : "Create"}
           </Button>
-        </Group>
+        </div>
       </form>
     </Modal>
   );

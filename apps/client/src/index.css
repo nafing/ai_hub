@@ -1,1 +1,200 @@
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Syne:wght@500;600;700;800&display=swap");
+
+:root {
+  color-scheme: dark;
+
+  --font-sans: "IBM Plex Sans", sans-serif;
+  --font-heading: "Syne", sans-serif;
+  --font-scale: 1;
+  --ui-scale: 1;
+  --radius-scale: 1;
+
+  /* Lumiverse Purple (custom theme defaults) */
+  --color-paper: #0c0c0e;
+  --color-paper-deep: #1a1a1d;
+  --color-mist: #2a2a2f;
+  --color-ink: #f3f4f6;
+  --color-ink-muted: #9ca3af;
+  --color-ink-soft: #6b7280;
+  --color-accent: #9a75d7;
+  --color-accent-hover: #7e5bb8;
+  --color-accent-soft: rgba(154, 117, 215, 0.16);
+  --color-sidebar: #0e0e11;
+  --color-sidebar-text: #f3f4f6;
+  --color-stage: #0a0a0c;
+  --color-teal: #c4b5fd;
+  --color-teal-deep: #7c6bb8;
+  --color-thoughts: #e5e7eb;
+
+  /* UI aliases */
+  --color-bg: var(--color-paper);
+  --color-surface: var(--color-paper-deep);
+  --color-surface-raised: var(--color-mist);
+  --color-surface-hover: #323238;
+  --color-border: #2a2a2f;
+  --color-border-strong: #3a3a42;
+
+  --color-text: var(--color-ink);
+  --color-text-dimmed: var(--color-ink-muted);
+  --color-text-muted: var(--color-ink-soft);
+
+  --color-primary: var(--color-accent);
+  --color-primary-hover: var(--color-accent-hover);
+  --color-primary-soft: var(--color-accent-soft);
+  --color-primary-ring: rgba(154, 117, 215, 0.45);
+
+  --color-secondary: #6b7280;
+  --color-speech: var(--color-teal);
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  --header-height: 60px;
+  --navbar-width: 260px;
+  --aside-width: 300px;
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+
+  --field-gap: 0.35rem;
+  --field-label-size: 0.75rem;
+  --field-hint-size: 0.6875rem;
+  --section-gap: 1.15rem;
+
+  --z-header: 100;
+  --z-navbar: 110;
+  --z-overlay: 105;
+  --z-modal: 200;
+  --z-toast: 300;
+
+  --glass-blur: 0px;
+  --glass-saturate: 1;
+  --glass-filter: none;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  font-size: 16px;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  background-color: var(--color-paper);
+  background-image: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+:root[data-glass="on"] {
+  --glass-blur: 18px;
+  --glass-saturate: 1.35;
+  --glass-filter: blur(18px) saturate(1.35);
+}
+
+:root[data-glass="on"] body {
+  background-color: var(--color-paper);
+  background-image:
+    radial-gradient(
+      1100px 520px at 8% -8%,
+      color-mix(in srgb, var(--color-primary) 28%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      900px 480px at 92% 4%,
+      color-mix(in srgb, var(--color-speech) 18%, transparent),
+      transparent 58%
+    ),
+    radial-gradient(
+      700px 420px at 50% 110%,
+      color-mix(in srgb, var(--color-primary) 12%, transparent),
+      transparent 55%
+    );
+  background-attachment: fixed;
+}
+
+:root[data-glass="on"] #root {
+  background: transparent;
+}
+
+/* Shared glass surface treatment for chrome that opts in via [data-glass-surface] */
+:root[data-glass="on"] [data-glass-surface] {
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-ink);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-ink) 28%, transparent)
+    transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-ink) 28%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-ink) 45%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

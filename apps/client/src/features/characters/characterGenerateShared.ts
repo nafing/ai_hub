@@ -36,11 +36,7 @@ export function resolvePresetVariables(
         return match?.value ?? selected;
       })
       .filter(Boolean);
-    if (resolved.length === 0) {
-      const fallback = variable.options[0]?.value;
-      if (fallback) out[name] = fallback;
-      continue;
-    }
+    if (resolved.length === 0) continue;
     out[name] = variable.multi_select ? resolved : resolved[0]!;
   }
   return out;
@@ -75,13 +71,13 @@ function asStringArray(value: unknown): string[] | undefined {
   return undefined;
 }
 
-/** Format greetings for generator prompt variables. */
+/** Format greetings for generator prompt variables. Empty when none. */
 export function formatAlternateGreetingsForPrompt(greetings: string[]): string {
   const cleaned = greetings.map((item) => item.trim()).filter(Boolean);
-  return cleaned.length > 0 ? JSON.stringify(cleaned) : "(none yet)";
+  return cleaned.length > 0 ? JSON.stringify(cleaned) : "";
 }
 
-export function cardHasContent(card: ExtractedCharacterCard): boolean {
+function cardHasContent(card: ExtractedCharacterCard): boolean {
   return Object.values(card).some((value) => {
     if (Array.isArray(value)) return value.length > 0;
     return Boolean(value);

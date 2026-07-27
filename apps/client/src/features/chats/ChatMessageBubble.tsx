@@ -1,19 +1,5 @@
 import { useState } from "react";
 import {
-  ActionIcon,
-  Avatar,
-  Box,
-  Button,
-  Collapse,
-  Group,
-  Stack,
-  Text,
-  Textarea,
-  Tooltip,
-  UnstyledButton,
-} from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import {
   IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
@@ -24,11 +10,11 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import dayjs from "dayjs";
-import {
-  activeMessageText,
-  type ChatMessage,
-} from "@ai-hub/shared";
+import { activeMessageText, type ChatMessage } from "@ai-hub/shared";
+import { ActionIcon, Button, Textarea, RuntimeText } from "@/components/ui";
 import { formatChatText } from "./formatChatText";
+import classes from "./ChatMessageBubble.module.css";
+import type { PresetVariableValues } from "@ai-hub/shared";
 
 type ChatMessageBubbleProps = {
   message: ChatMessage;
@@ -36,6 +22,8 @@ type ChatMessageBubbleProps = {
   /** Persona / character display name shown next to the timestamp. */
   speakerName?: string | null;
   avatarUrl?: string | null;
+  /** Substitutes `{{char}}` / `{{user}}` (and other macros) in the body. */
+  macroValues?: PresetVariableValues;
   isStreaming?: boolean;
   disabled?: boolean;
   onSwipe?: (swipeId: number) => void;
@@ -59,6 +47,7 @@ export function ChatMessageBubble({
   displayText,
   speakerName,
   avatarUrl,
+  macroValues,
   isStreaming = false,
   disabled = false,
   onSwipe,
@@ -67,7 +56,7 @@ export function ChatMessageBubble({
   onPeekPrompt,
   onDelete,
 }: ChatMessageBubbleProps) {
-  const [thinkingOpen, { toggle: toggleThinking }] = useDisclosure(false);
+  const [thinkingOpen, setThinkingOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const isUser = message.role === "user";
@@ -99,186 +88,127 @@ export function ChatMessageBubble({
   }
 
   return (
-    <Box
-      style={{
-        alignSelf: "stretch",
-        width: "100%",
-      }}
-    >
-      <Stack
-        gap="sm"
-        p="md"
-        style={{
-          borderRadius: 16,
-          background: "var(--mantine-color-dark-7, var(--mantine-color-body))",
-          border: "1px solid var(--mantine-color-dark-5, var(--mantine-color-default-border))",
-        }}
+    <div className={classes.root}>
+      <div
+        className={[classes.card, isUser ? classes.cardUser : ""]
+          .filter(Boolean)
+          .join(" ")}
       >
-        <Group gap="sm" wrap="nowrap" align="flex-start">
-          <Avatar
-            src={avatarUrl || undefined}
-            radius="xl"
-            size={40}
-            color={isUser ? "blue" : "violet"}
+        <div className={classes.header}>
+          <span
+            className={`${classes.avatar}${isUser ? ` ${classes.avatarUser}` : ""}`}
           >
-            {name.slice(0, 1).toUpperCase()}
-          </Avatar>
-          <Group gap={8} wrap="nowrap" style={{ minWidth: 0, flex: 1 }} pt={4}>
-            <Text size="sm" fw={700} lineClamp={1}>
-              {name}
-            </Text>
-            {timeLabel ? (
-              <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-                {timeLabel}
-              </Text>
-            ) : null}
-          </Group>
-        </Group>
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" />
+            ) : (
+              name.slice(0, 1).toUpperCase()
+            )}
+          </span>
+          <div className={classes.meta}>
+            <p className={classes.name}>{name}</p>
+            {timeLabel ? <p className={classes.time}>{timeLabel}</p> : null}
+          </div>
+        </div>
 
         {message.thinking ? (
-          <Box>
-            <UnstyledButton onClick={toggleThinking}>
-              <Group gap={4}>
-                {thinkingOpen ? (
+          <div className={classes.thinking}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={classes.thinkingToggle}
+              onClick={() => setThinkingOpen((open) => !open)}
+              leftSection={
+                thinkingOpen ? (
                   <IconChevronUp size={14} />
                 ) : (
                   <IconChevronDown size={14} />
-                )}
-                <Text size="xs" c="dimmed">
-                  Thinking
-                </Text>
-              </Group>
-            </UnstyledButton>
-            <Collapse expanded={thinkingOpen}>
-              <Text size="sm" c="dimmed" style={{ whiteSpace: "pre-wrap" }}>
-                {message.thinking}
-              </Text>
-            </Collapse>
-          </Box>
+                )
+              }
+            >
+              Thinking
+            </Button>
+            {thinkingOpen ? (
+              <p className={classes.thinkingBody}>{message.thinking}</p>
+            ) : null}
+          </div>
         ) : null}
 
         {editing ? (
-          <Stack gap="xs">
+          <div className={classes.editStack}>
             <Textarea
-              autosize
-              minRows={3}
-              maxRows={16}
+              className={classes.textarea}
               value={draft}
               onChange={(event) => setDraft(event.currentTarget.value)}
               autoFocus
             />
-            <Group gap="xs" justify="flex-end">
-              <Button
-                size="xs"
-                variant="default"
+            <div className={classes.editActions}>
+              <Button variant="default" type="button"
                 onClick={() => setEditing(false)}
               >
                 Cancel
               </Button>
-              <Button
-                size="xs"
+              <Button variant="primary" type="button"
                 onClick={saveEdit}
-                disabled={!draft.trim()}
-              >
+                disabled={!draft.trim()}>
                 Save
               </Button>
-            </Group>
-          </Stack>
+            </div>
+          </div>
         ) : (
-          <Text size="sm" style={{ whiteSpace: "pre-wrap", lineHeight: 1.55 }}>
-            {formatChatText(bodyText)}
+          <p className={classes.body}>
+            <RuntimeText
+              values={macroValues}
+              highlightUnresolved={false}
+              format={formatChatText}
+            >
+              {bodyText}
+            </RuntimeText>
             {isStreaming ? "▍" : ""}
-          </Text>
+          </p>
         )}
 
         {canSwipe || showActions ? (
-          <Group gap={4} wrap="nowrap">
+          <div className={classes.actions}>
             {onEdit ? (
-              <Tooltip label="Edit">
-                <ActionIcon
-                  size="sm"
-                  variant="subtle"
-                  color="gray"
-                  aria-label="Edit"
-                  disabled={disabled}
-                  onClick={startEdit}
-                >
-                  <IconPencil size={16} />
-                </ActionIcon>
-              </Tooltip>
+              <ActionIcon type="button" variant="ghost" title="Edit" aria-label="Edit" disabled={disabled} onClick={startEdit}>
+                <IconPencil size={16} />
+              </ActionIcon>
             ) : null}
             {onRegenerate ? (
-              <Tooltip label="Regenerate">
-                <ActionIcon
-                  size="sm"
-                  variant="subtle"
-                  color="gray"
-                  aria-label="Regenerate"
-                  disabled={disabled}
-                  onClick={onRegenerate}
-                >
-                  <IconRefresh size={16} />
-                </ActionIcon>
-              </Tooltip>
+              <ActionIcon type="button" variant="ghost" title="Regenerate" aria-label="Regenerate" disabled={disabled} onClick={onRegenerate}>
+                <IconRefresh size={16} />
+              </ActionIcon>
             ) : null}
             {onPeekPrompt ? (
-              <Tooltip label="Peek prompt">
-                <ActionIcon
-                  size="sm"
-                  variant="subtle"
-                  color="gray"
-                  aria-label="Peek prompt"
-                  disabled={disabled}
-                  onClick={onPeekPrompt}
-                >
-                  <IconEye size={16} />
-                </ActionIcon>
-              </Tooltip>
+              <ActionIcon type="button" variant="ghost" title="Peek prompt" aria-label="Peek prompt" disabled={disabled} onClick={onPeekPrompt}>
+                <IconEye size={16} />
+              </ActionIcon>
             ) : null}
             {onDelete ? (
-              <Tooltip label="Delete">
-                <ActionIcon
-                  size="sm"
-                  variant="subtle"
-                  color="gray"
-                  aria-label="Delete"
-                  disabled={disabled}
-                  onClick={onDelete}
-                >
-                  <IconTrash size={16} />
-                </ActionIcon>
-              </Tooltip>
+              <ActionIcon type="button" variant="ghost" title="Delete" aria-label="Delete" disabled={disabled} onClick={onDelete}>
+                <IconTrash size={16} />
+              </ActionIcon>
             ) : null}
             {canSwipe ? (
               <>
-                <ActionIcon
-                  size="sm"
-                  variant="subtle"
-                  color="gray"
-                  aria-label="Previous swipe"
-                  disabled={message.swipe_id <= 0 || disabled}
-                  onClick={() => onSwipe?.(message.swipe_id - 1)}
+                <ActionIcon type="button" variant="ghost" aria-label="Previous swipe" disabled={message.swipe_id <= 0 || disabled} onClick={() => onSwipe?.(message.swipe_id - 1)}
                 >
                   <IconChevronLeft size={16} />
                 </ActionIcon>
-                <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                <span className={classes.swipeCount}>
                   {message.swipe_id + 1} / {swipeCount}
-                </Text>
-                <ActionIcon
-                  size="sm"
-                  variant="subtle"
-                  color="gray"
-                  aria-label="Next swipe"
-                  disabled={message.swipe_id >= swipeCount - 1 || disabled}
+                </span>
+                <ActionIcon type="button" variant="ghost" aria-label="Next swipe" disabled={message.swipe_id>= swipeCount - 1 || disabled}
                   onClick={() => onSwipe?.(message.swipe_id + 1)}
                 >
                   <IconChevronRight size={16} />
                 </ActionIcon>
               </>
             ) : null}
-          </Group>
+          </div>
         ) : null}
-      </Stack>
-    </Box>
+      </div>
+    </div>
   );
 }

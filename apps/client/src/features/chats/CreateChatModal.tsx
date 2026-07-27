@@ -1,22 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Button,
-  Group,
+import { useNavigate } from "@tanstack/react-router";
+import type { ChatMode, CreateChatInput } from "@ai-hub/shared";
+import { Button,
   Modal,
   MultiSelect,
   Select,
-  Stack,
   TextInput,
-  SegmentedControl,
-} from "@mantine/core";
-import { notifications } from "@mantine/notifications";
-import { useNavigate } from "@tanstack/react-router";
-import type { ChatMode, CreateChatInput } from "@ai-hub/shared";
+  notifications,
+  RuntimeText,
+} from "@/components/ui";
 import { useCharacters } from "@/features/characters/queries";
 import { useConnections } from "@/features/connections/queries";
 import { usePersonas } from "@/features/personas/queries";
 import { useDefaultPreset, usePresets } from "@/features/presets/queries";
 import { useCreateChat } from "./queries";
+import classes from "./CreateChatModal.module.css";
 
 type CreateChatModalProps = {
   opened: boolean;
@@ -149,75 +147,108 @@ export function CreateChatModal({ opened, onClose }: CreateChatModalProps) {
 
   return (
     <Modal opened={opened} onClose={onClose} title="New chat" size="md">
-      <Stack>
-        <SegmentedControl
-          value={mode}
-          onChange={(value) => setMode(value as ChatMode)}
-          data={[
-            { label: "Roleplay", value: "roleplay" },
-            { label: "Conversation", value: "conversation" },
-          ]}
-        />
-        <TextInput
-          label="Title"
-          placeholder={
-            mode === "roleplay"
-              ? "Defaults to character names"
-              : "Conversation"
-          }
-          value={title}
-          onChange={(event) => setTitle(event.currentTarget.value)}
-        />
-        <MultiSelect
-          label="Characters"
-          description="First selected is primary ({{char}}). Each character opens with their greeting and alternate greetings as swipes."
-          placeholder="Select characters"
-          data={characterOptions}
-          value={characterIds}
-          onChange={setCharacterIds}
-          searchable
-          clearable
-          required
-        />
-        <Select
-          label="Persona"
-          placeholder="Default persona"
-          data={personaOptions}
-          value={personaId}
-          onChange={setPersonaId}
-          searchable
-          clearable
-        />
-        <Select
-          label="Connection"
-          placeholder="Default connection"
-          data={connectionOptions}
-          value={connectionId}
-          onChange={setConnectionId}
-          searchable
-          clearable
-        />
-        <Select
-          label="Preset"
-          placeholder={`Default ${mode} preset`}
-          data={presetOptions}
-          value={presetId}
-          onChange={setPresetId}
-          searchable
-          clearable
-        />
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
-            Cancel
+      <div className={classes.stack}>
+        <div className={classes.segmented} role="group" aria-label="Chat mode">
+          <Button
+            type="button"
+            variant={mode === "roleplay" ? "light" : "ghost"}
+            size="sm"
+            className={`${classes.segment}${mode === "roleplay" ? ` ${classes.segmentActive}` : ""}`}
+            onClick={() => setMode("roleplay")}
+          >
+            Roleplay
           </Button>
           <Button
-            onClick={() => void handleCreate()}
-            loading={createMutation.isPending}
+            type="button"
+            variant={mode === "conversation" ? "light" : "ghost"}
+            size="sm"
+            className={`${classes.segment}${mode === "conversation" ? ` ${classes.segmentActive}` : ""}`}
+            onClick={() => setMode("conversation")}
           >
-            Create
+            Conversation
           </Button>
-        </Group>
-      </Stack>
+        </div>
+
+        <label className={classes.field}>
+          <span className={classes.fieldLabel}>Title</span>
+          <TextInput
+            placeholder={
+              mode === "roleplay"
+                ? "Defaults to character names"
+                : "Conversation"
+            }
+            value={title}
+            onChange={(event) => setTitle(event.currentTarget.value)}
+          />
+        </label>
+
+        <div className={classes.field}>
+          <span className={classes.fieldLabel}>Characters</span>
+          <p className={classes.fieldHint}>
+            First selected is primary (
+            <RuntimeText>{"{{char}}"}</RuntimeText>
+            ). Each character opens with their greeting and alternate greetings
+            as swipes.
+          </p>
+          <MultiSelect
+            placeholder="Select characters"
+            data={characterOptions}
+            value={characterIds}
+            onChange={setCharacterIds}
+            searchable
+            clearable
+          />
+        </div>
+
+        <div className={classes.field}>
+          <span className={classes.fieldLabel}>Persona</span>
+          <Select
+            placeholder="Default persona"
+            data={personaOptions}
+            value={personaId ?? ""}
+            onChange={(value) => setPersonaId(value || null)}
+            searchable
+            clearable
+          />
+        </div>
+
+        <div className={classes.field}>
+          <span className={classes.fieldLabel}>Connection</span>
+          <Select
+            placeholder="Default connection"
+            data={connectionOptions}
+            value={connectionId ?? ""}
+            onChange={(value) => setConnectionId(value || null)}
+            searchable
+            clearable
+          />
+        </div>
+
+        <div className={classes.field}>
+          <span className={classes.fieldLabel}>Preset</span>
+          <Select
+            placeholder={`Default ${mode} preset`}
+            data={presetOptions}
+            value={presetId ?? ""}
+            onChange={(value) => setPresetId(value || null)}
+            searchable
+            clearable
+          />
+        </div>
+
+        <div className={classes.actions}>
+          <Button variant="default" type="button"
+            onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="button"
+            disabled={createMutation.isPending}
+            onClick={() => void handleCreate()}
+          >
+            {createMutation.isPending ? "Creating…" : "Create"}
+          </Button>
+        </div>
+      </div>
     </Modal>
   );
 }

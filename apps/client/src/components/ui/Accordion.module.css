@@ -1,0 +1,58 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.item {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.itemOpen {
+  border-color: var(--color-border-strong);
+}
+
+.control {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  color: var(--color-text);
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.control:hover {
+  background: var(--color-surface-hover);
+}
+
+.controlContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: var(--color-text-dimmed);
+  transition: transform 0.18s ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+  color: var(--color-primary);
+}
+
+.panel {
+  padding: 0 var(--space-md) var(--space-md);
+  border-top: 1px solid var(--color-border);
+}

@@ -23,14 +23,6 @@ export function defaultCharacterBookEntry(): CharacterBookEntry {
   };
 }
 
-/** Blank character book. */
-export function defaultCharacterBook(): CharacterBook {
-  return {
-    extensions: {},
-    entries: [],
-  };
-}
-
 /** Blank `data` payload for a new card. */
 export function defaultCharacterCardData(
   overrides: Partial<CharacterCardData> = {},

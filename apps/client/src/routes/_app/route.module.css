@@ -1,0 +1,228 @@
+.shell {
+  --shell-header-h: var(--header-height);
+  --shell-navbar-w: var(--navbar-width);
+
+  display: grid;
+  grid-template-columns: var(--shell-navbar-w) minmax(0, 1fr);
+  grid-template-rows: var(--shell-header-h) minmax(0, 1fr);
+  grid-template-areas:
+    "navbar header"
+    "navbar main";
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+:global(:root[data-glass="on"]) .shell {
+  background: transparent;
+}
+
+:global(:root[data-glass="on"]) .main {
+  background: transparent;
+}
+
+.header {
+  grid-area: header;
+  z-index: var(--z-header);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+  isolation: isolate;
+}
+
+.navbar {
+  grid-area: navbar;
+  z-index: var(--z-navbar);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+  height: 100%;
+  max-height: 100dvh;
+  min-height: 0;
+  padding: var(--space-md) var(--space-sm);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-sidebar);
+  color: var(--color-sidebar-text);
+  overflow: hidden;
+}
+
+.navbarTop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 1.75rem;
+  padding-inline: var(--space-sm);
+}
+
+.navScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-inline: var(--space-xs);
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: var(--space-md) var(--space-sm) var(--space-xs);
+  color: var(--color-text-muted);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.navLink {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 0.7rem 0.5rem 0.75rem;
+  color: var(--color-text-dimmed);
+  border-radius: var(--radius-md);
+  background: transparent;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.navLink:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface-hover) 70%, transparent);
+}
+
+.navLinkActive {
+  color: var(--color-text);
+  background: var(--color-primary-soft);
+}
+
+.navLinkActive::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 1rem;
+  border-radius: 1px;
+  background: var(--color-primary);
+  transform: translateY(-50%);
+}
+
+.navLinkActive .navLabel {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.navIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 1.15rem;
+  height: 1.15rem;
+  color: inherit;
+}
+
+.navIcon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.navLabel {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.main {
+  grid-area: main;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0;
+  background: var(--color-bg);
+}
+
+.container {
+  width: min(100%, 80rem);
+  margin-inline: auto;
+}
+
+.burger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 2rem;
+  height: 2rem;
+  padding: 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.overlay {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "header"
+      "main";
+  }
+
+  .burger {
+    display: inline-flex;
+  }
+
+  .navbar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(var(--shell-navbar-w), 86vw);
+    height: 100dvh;
+    border-right: 1px solid var(--color-border);
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+    box-shadow: none;
+  }
+
+  .navbarOpen {
+    transform: translateX(0);
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.55);
+  }
+
+  .overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-overlay);
+    border: 0;
+    padding: 0;
+    background: rgba(8, 8, 14, 0.65);
+    cursor: pointer;
+  }
+}

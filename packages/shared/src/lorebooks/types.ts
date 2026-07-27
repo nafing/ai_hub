@@ -38,4 +38,9 @@ export type Lorebook = {
   recursive_scanning: boolean;
   extensions: Record<string, unknown>;
   entries: LorebookEntry[];
+  /**
+   * True when the LanceDB vector index may be out of date for this book
+   * (failed embed, pending reindex). Server-owned; not client-writable.
+   */
+  index_dirty: boolean;
 };

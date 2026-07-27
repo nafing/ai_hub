@@ -1,0 +1,171 @@
+.root {
+  align-self: stretch;
+  width: 100%;
+}
+
+.root:hover .actions {
+  opacity: 1;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.card:hover {
+  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+}
+
+.cardUser {
+  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+}
+
+.cardUser:hover {
+  background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.85rem;
+  height: 1.85rem;
+  overflow: hidden;
+  color: var(--color-primary);
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-soft);
+}
+
+.avatarUser {
+  color: var(--color-speech);
+  background: color-mix(in srgb, var(--color-speech) 16%, transparent);
+}
+
+.avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  min-width: 0;
+  flex: 1;
+  padding-top: 0.15rem;
+}
+
+.name {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time {
+  margin: 0;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+}
+
+.thinking {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.thinkingToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.6875rem;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.thinkingBody {
+  margin: 0;
+  color: var(--color-text-dimmed);
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+}
+
+.editStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.textarea {
+  width: 100%;
+  min-height: 4rem;
+  padding: 0.45rem 0.65rem;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font: inherit;
+  line-height: 1.45;
+  resize: none;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.editActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+}
+
+.body {
+  margin: 0;
+  padding-left: calc(1.85rem + 0.55rem);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px;
+  padding-left: calc(1.85rem + 0.55rem);
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+}
+
+.swipeCount {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+  padding: 0 0.25rem;
+}

@@ -35,6 +35,16 @@ export async function deleteCharacter(id: string): Promise<void> {
   await api.delete(`/characters/${id}`);
 }
 
+export async function deleteCharacterVersion(
+  id: string,
+  versionId: string,
+): Promise<Character> {
+  const { data } = await api.delete<Character>(
+    `/characters/${id}/versions/${versionId}`,
+  );
+  return data;
+}
+
 export async function duplicateCharacter(id: string): Promise<Character> {
   const { data } = await api.post<Character>(`/characters/${id}/duplicate`);
   return data;

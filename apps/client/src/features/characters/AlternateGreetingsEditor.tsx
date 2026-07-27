@@ -1,13 +1,7 @@
 import type { ReactNode } from "react";
-import {
-  ActionIcon,
-  Button,
-  Group,
-  Stack,
-  Text,
-  Textarea,
-} from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
+import classes from "./AlternateGreetingsEditor.module.css";
+import { ActionIcon, Button, Textarea } from "@/components/ui";
 
 type AlternateGreetingsEditorProps = {
   label?: string;
@@ -15,7 +9,6 @@ type AlternateGreetingsEditorProps = {
   value: string[];
   onChange: (value: string[]) => void;
   disabled?: boolean;
-  minRows?: number;
   /** Optional control rendered opposite the label (e.g. Generate / Rebuild). */
   action?: ReactNode;
 };
@@ -26,7 +19,6 @@ export function AlternateGreetingsEditor({
   value,
   onChange,
   disabled = false,
-  minRows = 3,
   action,
 }: AlternateGreetingsEditorProps) {
   const greetings = value.length > 0 ? value : [];
@@ -46,65 +38,50 @@ export function AlternateGreetingsEditor({
   }
 
   return (
-    <Stack gap="xs">
-      <Group justify="space-between" align="flex-end" wrap="nowrap">
-        <div>
-          <Text size="sm" fw={500}>
-            {label}
-          </Text>
+    <div className={classes.root}>
+      <div className={classes.header}>
+        <div className={classes.labels}>
+          <span className={classes.label}>{label}</span>
           {description ? (
-            <Text size="xs" c="dimmed">
-              {description}
-            </Text>
+            <p className={classes.hint}>{description}</p>
           ) : null}
         </div>
-        <Group gap="xs" wrap="nowrap">
+        <div className={classes.headerActions}>
           {action}
           <Button
-            size="xs"
+            type="button"
             variant="default"
+            size="sm"
             leftSection={<IconPlus size={14} />}
             disabled={disabled}
             onClick={addGreeting}
           >
             Add
           </Button>
-        </Group>
-      </Group>
+        </div>
+      </div>
 
       {greetings.length === 0 ? (
-        <Text size="sm" c="dimmed">
-          No alternate greetings yet.
-        </Text>
+        <p className={classes.empty}>No alternate greetings yet.</p>
       ) : (
-        <Stack gap="sm">
+        <div className={classes.list}>
           {greetings.map((greeting, index) => (
-            <Group key={index} align="flex-start" wrap="nowrap" gap="xs">
+            <div key={index} className={classes.row}>
               <Textarea
+                className={classes.textarea}
                 aria-label={`Alternate greeting ${index + 1}`}
-                autosize
-                minRows={minRows}
                 value={greeting}
                 disabled={disabled}
-                style={{ flex: 1 }}
-                onChange={(event) =>
-                  updateAt(index, event.currentTarget.value)
-                }
+                onChange={(event) => updateAt(index, event.target.value)}
               />
-              <ActionIcon
-                mt={4}
-                variant="subtle"
-                color="red"
-                aria-label={`Remove greeting ${index + 1}`}
-                disabled={disabled}
-                onClick={() => removeAt(index)}
+              <ActionIcon type="button" variant="ghostDanger" aria-label={`Remove greeting ${index + 1}`} disabled={disabled} onClick={() => removeAt(index)}
               >
                 <IconTrash size={16} />
               </ActionIcon>
-            </Group>
+            </div>
           ))}
-        </Stack>
+        </div>
       )}
-    </Stack>
+    </div>
   );
 }

@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Button, Group, Modal, TextInput } from "@mantine/core";
-import { notifications } from "@mantine/notifications";
 import { useNavigate } from "@tanstack/react-router";
 import { defaultLorebook } from "@ai-hub/shared";
+import { Button, Modal, TextInput, notifications } from "@/components/ui";
 import { useCreateLorebook } from "./queries";
+import classes from "./CreateLorebookModal.module.css";
 
 type CreateLorebookModalProps = {
   opened: boolean;
@@ -51,34 +51,36 @@ export function CreateLorebookModal({
   }
 
   return (
-    <Modal opened={opened} onClose={handleClose} title="New lorebook" centered>
+    <Modal opened={opened} onClose={handleClose} title="New lorebook" size="sm">
       <form
         onSubmit={(event) => {
           event.preventDefault();
           void handleCreate();
         }}
       >
-        <TextInput
-          label="Name"
-          description="Display name for this world / lore book."
-          placeholder="World Lore"
-          data-autofocus
-          required
-          value={name}
-          onChange={(event) => setName(event.currentTarget.value)}
-        />
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" type="button" onClick={handleClose}>
+        <label className={classes.field}>
+          <span className={classes.fieldLabel}>Name</span>
+          <p className={classes.fieldHint}>
+            Display name for this world / lore book.
+          </p>
+          <TextInput
+            placeholder="World Lore"
+            required
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+          />
+        </label>
+        <div className={classes.actions}>
+          <Button variant="default" type="button"
+            onClick={handleClose}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            loading={createMutation.isPending}
-            disabled={!name.trim()}
-          >
-            Create
+          <Button variant="primary" type="submit"
+            disabled={!name.trim() || createMutation.isPending}>
+            {createMutation.isPending ? "Creating…" : "Create"}
           </Button>
-        </Group>
+        </div>
       </form>
     </Modal>
   );

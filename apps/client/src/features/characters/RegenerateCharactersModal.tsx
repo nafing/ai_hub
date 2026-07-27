@@ -1,22 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  Button,
-  Group,
-  Modal,
-  MultiSelect,
-  SegmentedControl,
-  Select,
-  SimpleGrid,
-  Stack,
-  Text,
-  Textarea,
-} from "@mantine/core";
-import { notifications } from "@mantine/notifications";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   buildPresetPromptContext,
+  nextCharacterVersionLabel,
   type CharacterCardData,
 } from "@ai-hub/shared";
+import { Button, Textarea,
+  Modal,
+  MultiSelect,
+  notifications,
+  RuntimeText,
+  Select,
+} from "@/components/ui";
 import { useConnections } from "@/features/connections/queries";
 import { runGenerator } from "@/features/generators/api";
 import { getPersona } from "@/features/personas/api";
@@ -38,6 +33,7 @@ import {
   type ImportAiReviewContext,
 } from "./ImportAiReviewModal";
 import { characterKeys, useCharacters } from "./queries";
+import classes from "./RegenerateCharactersModal.module.css";
 
 type RegenerateScope = "concept" | "all";
 
@@ -52,6 +48,38 @@ type RegenerateCharactersModalProps = {
   opened: boolean;
   onClose: () => void;
 };
+
+function Field({
+  label,
+  hint,
+  error,
+  required,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  error?: string;
+  required?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.field}>
+      <span
+        className={[
+          classes.fieldLabel,
+          required ? classes.fieldLabelRequired : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {label}
+      </span>
+      {hint ? <p className={classes.fieldHint}>{hint}</p> : null}
+      {children}
+      {error ? <p className={classes.fieldError}>{error}</p> : null}
+    </div>
+  );
+}
 
 function mergeConceptFields(
   base: CharacterCardData,
@@ -136,6 +164,15 @@ export function RegenerateCharactersModal({
   const resolvedConnectionId = connectionId ?? defaultConnectionId;
   const presetDetailQuery = usePreset(presetId ?? undefined);
 
+  const connectionOptions = useMemo(
+    () =>
+      (connectionsQuery.data ?? []).map((connection) => ({
+        value: connection.id,
+        label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
+      })),
+    [connectionsQuery.data],
+  );
+
   const presetOptions = useMemo(() => {
     const characterPresets = (presetsQuery.data ?? []).filter(
       (preset) => preset.category === "character_generator",
@@ -148,6 +185,15 @@ export function RegenerateCharactersModal({
     }));
   }, [presetsQuery.data]);
 
+  const personaOptions = useMemo(
+    () =>
+      (personasQuery.data ?? []).map((persona) => ({
+        value: persona.id,
+        label: `${persona.name || "untitled"}${persona.is_default ? " (default)" : ""}`,
+      })),
+    [personasQuery.data],
+  );
+
   const characterOptions = useMemo(
     () =>
       (charactersQuery.data ?? []).map((character) => ({
@@ -156,6 +202,33 @@ export function RegenerateCharactersModal({
       })),
     [charactersQuery.data],
   );
+
+  const characterFieldError =
+    charactersQuery.isError
+      ? "Failed to load characters"
+      : !charactersQuery.isLoading && !characterOptions.length
+        ? "Create a character first"
+        : undefined;
+
+  const connectionFieldError =
+    connectionsQuery.isError
+      ? "Failed to load connections"
+      : !connectionsQuery.isLoading && !connectionOptions.length
+        ? "Create a connection first"
+        : undefined;
+
+  const presetFieldError =
+    presetsQuery.isError
+      ? "Failed to load presets"
+      : presetDetailQuery.isError
+        ? "Failed to load preset details"
+        : !presetsQuery.isLoading && !presetOptions.length
+          ? "No presets available"
+          : undefined;
+
+  const personaFieldError = personasQuery.isError
+    ? "Failed to load personas"
+    : undefined;
 
   function clearAiReview() {
     setAiReviewOpen(false);
@@ -211,67 +284,34 @@ export function RegenerateCharactersModal({
     ]);
 
     const targetCards = targets.map((character) => character.data);
-    const roster = targetCards
+    const castRoster = targetCards
       .map(
         (card, index) =>
           `${index + 1}. ${card.name.trim() || `Character ${index + 1}`}`,
       )
       .join("\n");
 
-    const regenerateHint =
-      scope === "concept"
-        ? [
-            `REGENERATE CONCEPT for ALL ${targetCards.length} selected characters in one pass.`,
-            "Regenerate name, description, personality, and scenario for each.",
-            "Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.",
-            "Preserve distinct identities and relationships; keep the same cast size and order.",
-            `Current roster (same order expected in output):\n${roster}`,
-            `Return exactly ${targetCards.length} objects in {"characters":[...]} — one per character, same order.`,
-          ].join(" ")
-        : [
-            `REGENERATE FULL CARD for ALL ${targetCards.length} selected characters in one pass.`,
-            "Rebuild each character card from scratch using the Generator Brief and reference cards.",
-            "Preserve distinct identities and relationships; keep the same cast size and order.",
-            `Current roster (same order expected in output):\n${roster}`,
-            `Return exactly ${targetCards.length} objects in {"characters":[...]} — one per character, same order.`,
-          ].join(" ");
-
     const promptContext = buildPresetPromptContext({
-      generatorBrief: `${brief}\n\n${regenerateHint}`,
+      generatorBrief: brief,
       persona,
       referenceCharacterList: targets,
       variables: {
         ...resolvePresetVariables(preset.variables),
-        char:
-          targetCards
-            .map((card) => card.name.trim())
-            .filter(Boolean)
-            .join(" / ") || "(unnamed cast)",
+        generation_mode: "regenerate",
+        regenerate_scope: scope,
+        cast_size: String(targetCards.length),
+        cast_roster: castRoster,
+        char: targetCards
+          .map((card) => card.name.trim())
+          .filter(Boolean)
+          .join(" / "),
         target_field: "all card fields",
-        existing_description:
-          scope === "concept"
-            ? "(see reference characters — regenerate concepts)"
-            : "(see reference characters — regenerate full cards)",
-        existing_personality:
-          scope === "concept"
-            ? "(see reference characters — regenerate concepts)"
-            : "(see reference characters — regenerate full cards)",
-        existing_scenario:
-          scope === "concept"
-            ? "(see reference characters — regenerate concepts)"
-            : "(see reference characters — regenerate full cards)",
-        existing_first_mes:
-          scope === "concept"
-            ? "(keep unless concept requires change)"
-            : "(see reference characters — regenerate)",
-        existing_mes_example:
-          scope === "concept"
-            ? "(keep unless concept requires change)"
-            : "(see reference characters — regenerate)",
-        existing_alternate_greetings:
-          scope === "concept"
-            ? "(keep unless concept requires change)"
-            : "(see reference characters — regenerate)",
+        existing_description: "",
+        existing_personality: "",
+        existing_scenario: "",
+        existing_first_mes: "",
+        existing_mes_example: "",
+        existing_alternate_greetings: "",
       },
     });
 
@@ -351,20 +391,33 @@ export function RegenerateCharactersModal({
       for (let index = 0; index < reviewTargetIds.length; index += 1) {
         const id = reviewTargetIds[index]!;
         const data = aiReviewCards[index]!;
-        const updated = await updateCharacter(id, { data });
-        updatedNames.push(updated.data.name || "untitled");
+        const existing = await getCharacter(id);
+        const versionLabel = nextCharacterVersionLabel(
+          existing.versions.map((version) => version.label),
+        );
+        const updated = await updateCharacter(id, {
+          data: {
+            ...data,
+            character_version: versionLabel,
+          },
+          create_version: true,
+          version_label: versionLabel,
+        });
+        updatedNames.push(
+          `${updated.data.name || "untitled"} (${versionLabel})`,
+        );
       }
 
       void queryClient.invalidateQueries({ queryKey: characterKeys.all });
       notifications.show({
         title:
           reviewTargetIds.length > 1
-            ? "Regenerated characters"
-            : "Regenerated",
+            ? "New versions created"
+            : "New version created",
         message:
           reviewTargetIds.length > 1
-            ? `Updated ${reviewTargetIds.length} characters: ${updatedNames.join(", ")}.`
-            : `${updatedNames[0]} updated.`,
+            ? `Saved ${reviewTargetIds.length} new versions: ${updatedNames.join(", ")}.`
+            : `${updatedNames[0]} saved as a new version.`,
         color: "green",
       });
       handleClose();
@@ -387,6 +440,8 @@ export function RegenerateCharactersModal({
     Boolean(generatorBrief.trim());
 
   const busy = generating || confirmingAi || aiReviewOpen;
+  const generateDisabled =
+    !aiReady || busy || generating || presetDetailQuery.isLoading;
 
   return (
     <>
@@ -394,159 +449,166 @@ export function RegenerateCharactersModal({
         opened={opened && !aiReviewOpen}
         onClose={handleClose}
         title="Regenerate characters"
-        centered
         size="lg"
       >
-        <Stack gap="sm">
-          <Text size="sm" c="dimmed">
+        <div className={classes.stack}>
+          <p className={classes.muted}>
             Rebuild selected library characters under one brief, preview the
-            results, then save updates back to the same cards.
-          </Text>
+            results, then save each result as a new card version (previous
+            versions stay intact).
+          </p>
 
-          <MultiSelect
+          <Field
             label="Characters"
-            description="Targets to regenerate — order is preserved in the AI pass."
-            placeholder={
-              charactersQuery.isLoading
-                ? "Loading characters…"
-                : "Select characters"
-            }
-            searchable
-            clearable
-            data={characterOptions}
-            value={targetCharacterIds}
-            onChange={setTargetCharacterIds}
-            disabled={busy || !characterOptions.length}
-            error={
-              charactersQuery.isError
-                ? "Failed to load characters"
-                : !charactersQuery.isLoading && !characterOptions.length
-                  ? "Create a character first"
-                  : undefined
-            }
-            withAsterisk
-          />
-
-          <Stack gap={6}>
-            <Text size="sm" fw={500}>
-              Scope
-            </Text>
-            <SegmentedControl
-              fullWidth
-              value={scope}
-              onChange={(value) => setScope(value as RegenerateScope)}
-              disabled={busy}
-              data={[
-                { label: "Concept", value: "concept" },
-                { label: "Full card", value: "all" },
-              ]}
+            hint="Targets to regenerate — order is preserved in the AI pass."
+            required
+            error={characterFieldError}
+          >
+            <MultiSelect
+              searchable
+              clearable
+              data={characterOptions}
+              value={targetCharacterIds}
+              onChange={setTargetCharacterIds}
+              disabled={busy || !characterOptions.length}
+              error={Boolean(characterFieldError)}
+              placeholder={
+                charactersQuery.isLoading
+                  ? "Loading characters…"
+                  : "Select characters"
+              }
             />
-            <Text size="xs" c="dimmed">
+          </Field>
+
+          <Field label="Scope">
+            <div className={classes.segmented} role="group" aria-label="Scope">
+              {(
+                [
+                  { label: "Concept", value: "concept" as const },
+                  { label: "Full card", value: "all" as const },
+                ] as const
+              ).map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={scope === option.value ? "light" : "ghost"}
+                  size="sm"
+                  className={[
+                    classes.segment,
+                    scope === option.value ? classes.segmentActive : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  disabled={busy}
+                  aria-pressed={scope === option.value}
+                  onClick={() => setScope(option.value)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+            <p className={classes.fieldHint}>
               {scope === "concept"
                 ? "Updates name, description, personality, and scenario."
                 : "Rebuilds all main card fields from the brief."}
-            </Text>
-          </Stack>
+            </p>
+          </Field>
 
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-            <Select
+          <div className={classes.grid}>
+            <Field
               label="Connection"
-              description="Defaults to the active connection."
-              placeholder={
-                connectionsQuery.isLoading
-                  ? "Loading connections…"
-                  : "Select connection"
-              }
-              data={(connectionsQuery.data ?? []).map((connection) => ({
-                value: connection.id,
-                label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
-              }))}
-              value={resolvedConnectionId}
-              onChange={setConnectionId}
-              searchable
-              clearable={false}
-              allowDeselect={false}
-              disabled={busy || !connectionsQuery.data?.length}
-              error={
-                connectionsQuery.isError
-                  ? "Failed to load connections"
-                  : !connectionsQuery.isLoading &&
-                      !connectionsQuery.data?.length
-                    ? "Create a connection first"
-                    : undefined
-              }
-            />
-            <Select
+              hint="Defaults to the active connection."
+              error={connectionFieldError}
+            >
+              <Select
+                searchable
+                data={connectionOptions}
+                value={resolvedConnectionId ?? ""}
+                onChange={(value) => setConnectionId(value)}
+                disabled={busy || !connectionOptions.length}
+                error={Boolean(connectionFieldError)}
+                placeholder={
+                  connectionsQuery.isLoading
+                    ? "Loading connections…"
+                    : "Select connection"
+                }
+              />
+            </Field>
+
+            <Field
               label="Preset"
-              description="Prefer Character Generator presets."
-              placeholder={
-                presetsQuery.isLoading ? "Loading presets…" : "Select preset"
-              }
-              data={presetOptions}
-              value={presetId}
-              onChange={setPresetId}
-              searchable
-              clearable={false}
-              allowDeselect={false}
-              disabled={busy || !presetOptions.length}
-              error={
-                presetsQuery.isError
-                  ? "Failed to load presets"
-                  : presetDetailQuery.isError
-                    ? "Failed to load preset details"
-                    : !presetsQuery.isLoading && !presetOptions.length
-                      ? "No presets available"
-                      : undefined
-              }
-            />
-            <Select
+              hint="Prefer Character Generator presets."
+              error={presetFieldError}
+            >
+              <Select
+                searchable
+                data={presetOptions}
+                value={presetId ?? ""}
+                onChange={(value) => setPresetId(value || null)}
+                disabled={busy || !presetOptions.length}
+                error={Boolean(presetFieldError)}
+                placeholder={
+                  presetsQuery.isLoading ? "Loading presets…" : "Select preset"
+                }
+              />
+            </Field>
+
+            <Field
               label="Persona"
-              description="Optional — fills `{{user}}` and the Persona marker."
-              placeholder={
-                personasQuery.isLoading
-                  ? "Loading personas…"
-                  : "Select persona"
+              hint={
+                <>
+                  Optional — fills <RuntimeText>{"{{user}}"}</RuntimeText>{" "}
+                  and the Persona marker.
+                </>
               }
-              data={(personasQuery.data ?? []).map((persona) => ({
-                value: persona.id,
-                label: `${persona.name || "untitled"}${persona.is_default ? " (default)" : ""}`,
-              }))}
-              value={personaId}
-              onChange={setPersonaId}
-              searchable
-              clearable
-              disabled={busy || !personasQuery.data?.length}
-              error={
-                personasQuery.isError ? "Failed to load personas" : undefined
-              }
-            />
-          </SimpleGrid>
+              error={personaFieldError}
+            >
+              <Select
+                searchable
+                clearable
+                data={personaOptions}
+                value={personaId ?? ""}
+                onChange={(value) => setPersonaId(value || null)}
+                disabled={busy || !personaOptions.length}
+                error={Boolean(personaFieldError)}
+                placeholder={
+                  personasQuery.isLoading
+                    ? "Loading personas…"
+                    : "Select persona"
+                }
+              />
+            </Field>
+          </div>
 
-          <Textarea
+          <Field
             label="Generator brief"
-            description="Required — direction for the regenerate pass."
-            autosize
-            minRows={4}
-            withAsterisk
-            value={generatorBrief}
-            onChange={(event) => setGeneratorBrief(event.currentTarget.value)}
-            placeholder="e.g. Shift the whole cast into a noir port city; keep relationships, darken the tone…"
-            disabled={busy}
-          />
-        </Stack>
+            hint="Required — direction for the regenerate pass."
+            required
+          >
+            <Textarea
+              className={classes.textarea}
+              value={generatorBrief}
+              onChange={(event) => setGeneratorBrief(event.currentTarget.value)}
+              placeholder="e.g. Shift the whole cast into a noir port city; keep relationships, darken the tone…"
+              disabled={busy}
+            />
+          </Field>
+        </div>
 
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" type="button" onClick={handleClose}>
+        <div className={classes.actions}>
+          <Button variant="default" type="button"
+            onClick={handleClose}>
             Cancel
           </Button>
-          <Button
+          <Button variant="primary" type="button"
+            disabled={generateDisabled}
             onClick={() => void handleGenerate()}
-            loading={generating || presetDetailQuery.isLoading}
-            disabled={!aiReady || busy}
           >
-            Generate with AI
+            {generating || presetDetailQuery.isLoading
+              ? "Generating…"
+              : "Generate with AI"}
           </Button>
-        </Group>
+        </div>
       </Modal>
 
       {aiReviewContext ? (
@@ -558,7 +620,7 @@ export function RegenerateCharactersModal({
           confirming={confirmingAi}
           lockCardCount
           title={`Review regenerated characters (${aiReviewCards.length})`}
-          confirmLabel={`Update ${aiReviewCards.length} character${aiReviewCards.length === 1 ? "" : "s"}`}
+          confirmLabel={`Save ${aiReviewCards.length} new version${aiReviewCards.length === 1 ? "" : "s"}`}
           onConfirm={() => void handleConfirmAiReview()}
           onCancel={() => {
             clearAiReview();

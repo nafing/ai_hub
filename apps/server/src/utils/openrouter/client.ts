@@ -12,6 +12,11 @@ export type OpenRouterChatChoice = {
     role?: string;
     content?: string | null;
     reasoning?: string | null;
+    tool_calls?: Array<{
+      id?: string;
+      type?: string;
+      function?: { name?: string; arguments?: string };
+    }>;
   };
   delta?: {
     role?: string;
@@ -38,6 +43,11 @@ export type OpenRouterChatResult = {
   reasoning: string;
   finishReason: string | null;
   model: string | null;
+  toolCalls: Array<{
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  }>;
   raw: OpenRouterChatResponse;
 };
 
@@ -188,11 +198,36 @@ async function readJsonChatCompletion(
   }
 
   const choice = raw.choices?.[0];
+  const toolCalls = (choice?.message?.tool_calls ?? [])
+    .map((call) => {
+      const id = call.id?.trim();
+      const name = call.function?.name?.trim();
+      if (!id || !name) return null;
+      return {
+        id,
+        type: "function" as const,
+        function: {
+          name,
+          arguments: call.function?.arguments ?? "{}",
+        },
+      };
+    })
+    .filter(
+      (
+        call,
+      ): call is {
+        id: string;
+        type: "function";
+        function: { name: string; arguments: string };
+      } => Boolean(call),
+    );
+
   return {
     reply: choice?.message?.content?.trim() ?? "",
     reasoning: choice?.message?.reasoning?.trim() ?? "",
     finishReason: choice?.finish_reason ?? null,
     model: raw.model ?? null,
+    toolCalls,
     raw,
   };
 }
@@ -269,6 +304,7 @@ async function readStreamingChatCompletion(
     reasoning: reasoning.trim(),
     finishReason,
     model,
+    toolCalls: [],
     raw: {
       ...(lastChunk ?? {}),
       model: model ?? lastChunk?.model,

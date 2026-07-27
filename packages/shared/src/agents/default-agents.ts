@@ -264,6 +264,29 @@ export const DEFAULT_AGENTS: AgentDefinition[] = [
     "execution": "llm"
   },
   {
+    "slug": "character-dm",
+    "name": "Character DM",
+    "description": "After each main reply, decides whether cast members should start or continue private side DMs with the player. Requires Connected chats → Allow character DMs. Add in Chat Settings → Agents → Misc Agents.",
+    "author": "Pasta Devs",
+    "phase": "post_processing",
+    "category": "misc",
+    "enabled_by_default": false,
+    "default_tools": [],
+    "default_prompt_template": "You are Character DM, a post-processing agent for roleplay.\nAfter the latest assistant message, decide whether any cast members should open or continue a private side conversation (DM) with {{user}}.\nOnly propose DMs when it fits the story: secrets, private reactions, flirtation, plotting, check-ins, or off-screen messages. Do not open a DM every turn. Prefer 0 or 1 DM; never more than 2.\nUse exact characterId values from <character_cards>. Do not invent IDs. Skip characters who have no reason to message privately.\nReturn only valid JSON:\n{\n  \"dms\": [\n    {\n      \"characterId\": \"exact character id\",\n      \"reason\": \"why this private chat happens now\",\n      \"openingMessage\": \"optional short player-side seed (1–2 sentences) to send into the DM before the character replies; empty string if the character should speak first\"\n    }\n  ]\n}\nIf none, return {\"dms\":[]}.",
+    "default_settings": {
+      "maxDmsPerTurn": 2
+    },
+    "mode_allowlist": [
+      "roleplay"
+    ],
+    "result_type": null,
+    "default_inject_as_section": false,
+    "run_interval": null,
+    "prompt_templates": [],
+    "runtime_disabled": false,
+    "execution": "llm"
+  },
+  {
     "slug": "prose-guardian",
     "name": "Prose Guardian",
     "description": "Post-processes the latest assistant message to remove banned words, repetition, and unwanted prose habits without changing the meaning. Add the Agent in Chat Settings → Agents → Writer Agents for Roleplay mode.",

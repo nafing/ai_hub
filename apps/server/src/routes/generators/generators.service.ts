@@ -1,7 +1,9 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
 import {
   GENERATOR_CATEGORIES,
+  NEEDS_PRESET_VARIABLES_CODE,
   substituteVariables,
+  unresolvedPresetVariables,
   type GeneratorCategory,
   type PresetMarkerContent,
   type PresetVariableValues,
@@ -51,6 +53,18 @@ export class GeneratorsService {
       throw new BadRequestException(
         `Preset "${preset.id}" is category "${preset.category}", expected "${input.category}"`,
       );
+    }
+
+    const unresolved = unresolvedPresetVariables(
+      preset.variables,
+      input.variables,
+    );
+    if (unresolved.length > 0) {
+      throw new ConflictException({
+        code: NEEDS_PRESET_VARIABLES_CODE,
+        presetId: preset.id,
+        variables: unresolved,
+      });
     }
 
     const connection = input.connectionId

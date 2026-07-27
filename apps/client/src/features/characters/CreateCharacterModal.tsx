@@ -1,17 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  Button,
-  Checkbox,
-  Group,
-  Modal,
-  MultiSelect,
-  Select,
-  SimpleGrid,
-  Stack,
-  TextInput,
-  Textarea,
-} from "@mantine/core";
-import { notifications } from "@mantine/notifications";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -20,6 +7,15 @@ import {
   defaultCharacterCardData,
   type CharacterCardData,
 } from "@ai-hub/shared";
+import { Button, Textarea,
+  Modal,
+  MultiSelect,
+  TextInput,
+  notifications,
+  RuntimeText,
+  Select,
+  Switch,
+} from "@/components/ui";
 import { useConnections } from "@/features/connections/queries";
 import { runGenerator } from "@/features/generators/api";
 import { getPersona } from "@/features/personas/api";
@@ -40,11 +36,33 @@ import {
   type ImportAiReviewContext,
 } from "./ImportAiReviewModal";
 import { characterKeys, useCharacters, useCreateCharacter } from "./queries";
+import classes from "./CreateCharacterModal.module.css";
 
 type CreateCharacterModalProps = {
   opened: boolean;
   onClose: () => void;
 };
+
+function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.field}>
+      <span className={classes.fieldLabel}>{label}</span>
+      {hint ? <p className={classes.fieldHint}>{hint}</p> : null}
+      {children}
+      {error ? <p className={classes.fieldError}>{error}</p> : null}
+    </div>
+  );
+}
 
 export function CreateCharacterModal({
   opened,
@@ -224,40 +242,26 @@ export function CreateCharacterModal({
       seedName ? { name: seedName } : undefined,
     );
 
-    const createHint = [
-      "CREATE WITH AI:",
-      "Build one or more new character cards from the Generator Brief (and optional Name seed).",
-      "There is no imported source card — invent the cast from the brief.",
-      "Reference Characters (if any) are existing library cards the new one(s) should fit with — do not copy them wholesale.",
-      'If the brief describes TWO OR MORE distinct characters (separate names/identities), you MUST return multiple objects in {"characters":[...]} — one card each.',
-      "Do not collapse a duo/group into a single card.",
-      "If only one distinct character is requested, return a one-item characters array.",
-      seedName
-        ? `Optional name seed for the primary / first character: "${seedName}" (you may refine or rename if the brief implies otherwise).`
-        : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-
     const [persona, referenceCharacters] = await Promise.all([
       personaId ? getPersona(personaId) : Promise.resolve(null),
       Promise.all(referenceCharacterIds.map((id) => getCharacter(id))),
     ]);
     const promptContext = buildPresetPromptContext({
-      generatorBrief: `${brief}\n\n${createHint}`,
+      generatorBrief: brief,
       persona,
       referenceCharacterList: referenceCharacters,
       variables: {
         ...resolvePresetVariables(preset.variables),
-        char:
-          seedName || "(unnamed — invent from brief; may be one of several)",
+        generation_mode: "create",
+        name_seed: seedName,
+        char: seedName,
         target_field: "all card fields",
-        existing_description: "(none yet — create from brief)",
-        existing_personality: "(none yet — create from brief)",
-        existing_scenario: "(none yet — create from brief)",
-        existing_first_mes: "(none yet — create from brief)",
-        existing_mes_example: "(none yet — create from brief)",
-        existing_alternate_greetings: "(none yet — create from brief)",
+        existing_description: "",
+        existing_personality: "",
+        existing_scenario: "",
+        existing_first_mes: "",
+        existing_mes_example: "",
+        existing_alternate_greetings: "",
       },
     });
 
@@ -359,178 +363,208 @@ export function CreateCharacterModal({
   const busy =
     createMutation.isPending || generating || confirmingAi || aiReviewOpen;
 
+  const connectionError = connectionsQuery.isError
+    ? "Failed to load connections"
+    : !connectionsQuery.isLoading && !connectionsQuery.data?.length
+      ? "Create a connection first"
+      : undefined;
+
+  const presetError = presetsQuery.isError
+    ? "Failed to load presets"
+    : presetDetailQuery.isError
+      ? "Failed to load preset details"
+      : !presetsQuery.isLoading && !presetOptions.length
+        ? "No presets available"
+        : undefined;
+
+  const personaError = personasQuery.isError
+    ? "Failed to load personas"
+    : undefined;
+
+  const charactersError = charactersQuery.isError
+    ? "Failed to load characters"
+    : undefined;
+
   return (
     <>
       <Modal
         opened={opened && !aiReviewOpen}
         onClose={handleClose}
         title="New character"
-        centered
         size={createWithAi ? "lg" : "md"}
       >
-        <Stack gap="sm">
-          <TextInput
+        <div className={classes.stack}>
+          <Field
             label="Name"
-            description={
-              createWithAi
-                ? "Optional seed for the primary character — the model may refine it."
-                : "Replaces `{{char}}` in prompts."
+            hint={
+              createWithAi ? (
+                <>
+                  Optional seed for the primary character — the model may refine
+                  it.
+                </>
+              ) : (
+                <>
+                  Replaces <RuntimeText>{"{{char}}"}</RuntimeText> in prompts.
+                </>
+              )
             }
-            placeholder="Aria"
-            data-autofocus
-            required={!createWithAi}
-            value={name}
-            onChange={(event) => setName(event.currentTarget.value)}
-            disabled={busy}
-          />
+          >
+            <TextInput
+              placeholder="Aria"
+              autoFocus
+              required={!createWithAi}
+              value={name}
+              onChange={(event) => setName(event.currentTarget.value)}
+              disabled={busy}
+            />
+          </Field>
 
-          <Checkbox
+          <Switch
+            variant="card"
+            checked={createWithAi}
+            onChange={setCreateWithAi}
+            disabled={busy}
             label="Create with AI"
             description="Runs the Character Generator from a brief, then opens a preview where you can rebuild concept or individual fields before saving. Multi-character briefs become separate cards."
-            checked={createWithAi}
-            onChange={(event) => setCreateWithAi(event.currentTarget.checked)}
-            disabled={busy}
           />
 
           {createWithAi ? (
             <>
-              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                <Select
+              <div className={`${classes.grid} ${classes.grid2}`}>
+                <Field
                   label="Connection"
-                  description="Defaults to the active connection."
-                  placeholder={
-                    connectionsQuery.isLoading
-                      ? "Loading connections…"
-                      : "Select connection"
-                  }
-                  data={(connectionsQuery.data ?? []).map((connection) => ({
-                    value: connection.id,
-                    label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
-                  }))}
-                  value={resolvedConnectionId}
-                  onChange={setConnectionId}
-                  searchable
-                  clearable={false}
-                  allowDeselect={false}
-                  disabled={busy || !connectionsQuery.data?.length}
-                  error={
-                    connectionsQuery.isError
-                      ? "Failed to load connections"
-                      : !connectionsQuery.isLoading &&
-                          !connectionsQuery.data?.length
-                        ? "Create a connection first"
-                        : undefined
-                  }
-                />
-                <Select
+                  hint="Defaults to the active connection."
+                  error={connectionError}
+                >
+                  <Select
+                    placeholder={
+                      connectionsQuery.isLoading
+                        ? "Loading connections…"
+                        : "Select connection"
+                    }
+                    data={(connectionsQuery.data ?? []).map((connection) => ({
+                      value: connection.id,
+                      label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
+                    }))}
+                    value={resolvedConnectionId ?? ""}
+                    onChange={(value) => setConnectionId(value || null)}
+                    searchable
+                    disabled={busy || !connectionsQuery.data?.length}
+                    error={Boolean(connectionError)}
+                  />
+                </Field>
+
+                <Field
                   label="Preset"
-                  description="Prefer Character Generator presets."
-                  placeholder={
-                    presetsQuery.isLoading
-                      ? "Loading presets…"
-                      : "Select preset"
-                  }
-                  data={presetOptions}
-                  value={presetId}
-                  onChange={setPresetId}
-                  searchable
-                  clearable={false}
-                  allowDeselect={false}
-                  disabled={busy || !presetOptions.length}
-                  error={
-                    presetsQuery.isError
-                      ? "Failed to load presets"
-                      : presetDetailQuery.isError
-                        ? "Failed to load preset details"
-                        : !presetsQuery.isLoading && !presetOptions.length
-                          ? "No presets available"
-                          : undefined
-                  }
-                />
-                <Select
+                  hint="Prefer Character Generator presets."
+                  error={presetError}
+                >
+                  <Select
+                    placeholder={
+                      presetsQuery.isLoading
+                        ? "Loading presets…"
+                        : "Select preset"
+                    }
+                    data={presetOptions}
+                    value={presetId ?? ""}
+                    onChange={(value) => setPresetId(value || null)}
+                    searchable
+                    disabled={busy || !presetOptions.length}
+                    error={Boolean(presetError)}
+                  />
+                </Field>
+
+                <Field
                   label="Persona"
-                  description="Optional — fills `{{user}}` and the Persona marker."
-                  placeholder={
-                    personasQuery.isLoading
-                      ? "Loading personas…"
-                      : "Select persona"
+                  hint={
+                    <>
+                      Optional — fills <RuntimeText>{"{{user}}"}</RuntimeText>{" "}
+                      and the Persona marker.
+                    </>
                   }
-                  data={(personasQuery.data ?? []).map((persona) => ({
-                    value: persona.id,
-                    label: `${persona.name || "untitled"}${persona.is_default ? " (default)" : ""}`,
-                  }))}
-                  value={personaId}
-                  onChange={setPersonaId}
-                  searchable
-                  clearable
-                  disabled={busy || !personasQuery.data?.length}
-                  error={
-                    personasQuery.isError
-                      ? "Failed to load personas"
-                      : undefined
-                  }
-                />
+                  error={personaError}
+                >
+                  <Select
+                    placeholder={
+                      personasQuery.isLoading
+                        ? "Loading personas…"
+                        : "Select persona"
+                    }
+                    data={(personasQuery.data ?? []).map((persona) => ({
+                      value: persona.id,
+                      label: `${persona.name || "untitled"}${persona.is_default ? " (default)" : ""}`,
+                    }))}
+                    value={personaId ?? ""}
+                    onChange={(value) => setPersonaId(value || null)}
+                    searchable
+                    clearable
+                    disabled={busy || !personasQuery.data?.length}
+                    error={Boolean(personaError)}
+                  />
+                </Field>
 
-                <MultiSelect
+                <Field
                   label="Reference characters"
-                  description="Optional — fills the Reference Characters marker."
-                  placeholder={
-                    charactersQuery.isLoading
-                      ? "Loading characters…"
-                      : "Select characters"
-                  }
-                  clearable
-                  data={characterOptions}
-                  value={referenceCharacterIds}
-                  onChange={setReferenceCharacterIds}
-                  disabled={busy || !characterOptions.length}
-                  error={
-                    charactersQuery.isError
-                      ? "Failed to load characters"
-                      : undefined
-                  }
-                />
-              </SimpleGrid>
+                  hint="Optional — fills the Reference Characters marker."
+                  error={charactersError}
+                >
+                  <MultiSelect
+                    placeholder={
+                      charactersQuery.isLoading
+                        ? "Loading characters…"
+                        : "Select characters"
+                    }
+                    clearable
+                    data={characterOptions}
+                    value={referenceCharacterIds}
+                    onChange={setReferenceCharacterIds}
+                    disabled={busy || !characterOptions.length}
+                    error={Boolean(charactersError)}
+                  />
+                </Field>
+              </div>
 
-              <Textarea
+              <Field
                 label="Generator brief"
-                description="Required — fills the Generator Brief marker (concept / cast / tone)."
-                autosize
-                minRows={4}
-                withAsterisk
-                value={generatorBrief}
-                onChange={(event) =>
-                  setGeneratorBrief(event.currentTarget.value)
-                }
-                placeholder="e.g. A soft-spoken clockmaker who repairs forbidden automata; dry wit, ink-stained hands…"
-                disabled={busy}
-              />
+                hint="Required — fills the Generator Brief marker (concept / cast / tone)."
+              >
+                <Textarea
+                  className={classes.textarea}
+                  value={generatorBrief}
+                  onChange={(event) =>
+                    setGeneratorBrief(event.currentTarget.value)
+                  }
+                  placeholder="e.g. A soft-spoken clockmaker who repairs forbidden automata; dry wit, ink-stained hands…"
+                  disabled={busy}
+                />
+              </Field>
             </>
           ) : null}
-        </Stack>
+        </div>
 
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" type="button" onClick={handleClose}>
+        <div className={classes.actions}>
+          <Button variant="default" type="button"
+            onClick={handleClose}>
             Cancel
           </Button>
           {createWithAi ? (
-            <Button
+            <Button variant="primary" type="button"
               onClick={() => void handleGenerateWithAi()}
-              loading={generating || presetDetailQuery.isLoading}
-              disabled={!aiReady || busy}
+              disabled={!aiReady || busy || presetDetailQuery.isLoading}
             >
-              Generate with AI
+              {generating || presetDetailQuery.isLoading
+                ? "Generating…"
+                : "Generate with AI"}
             </Button>
           ) : (
-            <Button
+            <Button variant="primary" type="button"
               onClick={() => void handleCreateBlank()}
-              loading={createMutation.isPending}
               disabled={!name.trim() || busy}
             >
-              Create
+              {createMutation.isPending ? "Creating…" : "Create"}
             </Button>
           )}
-        </Group>
+        </div>
       </Modal>
 
       {aiReviewContext ? (

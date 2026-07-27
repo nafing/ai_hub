@@ -1,20 +1,4 @@
-import { useMemo, useState } from "react";
-import {
-  Checkbox,
-  Code,
-  Group,
-  NumberInput,
-  Select,
-  SimpleGrid,
-  Stack,
-  Switch,
-  TagsInput,
-  Text,
-  TextInput,
-  Textarea,
-  Title,
-} from "@mantine/core";
-import { isNotEmpty, useForm } from "@mantine/form";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   REGEX_APPLY_TO,
   REGEX_APPLY_TO_LABELS,
@@ -30,6 +14,16 @@ import {
   type RegexScript,
   type RegexTarget,
 } from "@ai-hub/shared";
+import {
+  Textarea,
+  Select,
+  TagsInput,
+  TextInput,
+  NumberInput,
+  Switch,
+  Checkbox,
+} from "@/components/ui";
+import classes from "./RegexForm.module.css";
 
 export type RegexFormValues = CreateRegexScriptInput;
 
@@ -39,251 +33,330 @@ type RegexFormProps = {
   onSubmit: (values: RegexFormValues) => Promise<void> | void;
 };
 
+type FieldErrors = Partial<Record<keyof RegexFormValues, string>>;
+
 const SAMPLE =
   "*She smiles* and says hello. ((OOC: ignore this)) She smiles again.";
+
+function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.field}>
+      <span className={classes.fieldLabel}>{label}</span>
+      {hint ? <p className={classes.fieldHint}>{hint}</p> : null}
+      {children}
+      {error ? <p className={classes.fieldError}>{error}</p> : null}
+    </div>
+  );
+}
 
 export function RegexForm({
   formId = "regex-form",
   initialValues,
   onSubmit,
 }: RegexFormProps) {
-  const form = useForm<RegexFormValues>({
-    mode: "uncontrolled",
-    initialValues,
-    validate: {
-      name: isNotEmpty("Name is required"),
-      find_regex: (value) => {
-        if (!value.trim()) return "Find pattern is required";
-        if (isUnsafeRegexPattern(value)) {
-          return "Pattern looks unsafe (possible ReDoS) — simplify nested quantifiers";
-        }
-        try {
-          // eslint-disable-next-line no-new
-          new RegExp(value, "g");
-        } catch {
-          return "Invalid regular expression";
-        }
-        return null;
-      },
-      targets: (value) =>
-        value.length === 0 ? "Select at least one target" : null,
-      flags: (value) => {
-        if (!/^[gimsuy]*$/.test(value)) {
-          return "Flags may only include g, i, m, s, u, y";
-        }
-        return null;
-      },
-    },
+  const [values, setValues] = useState<RegexFormValues>({
+    ...initialValues,
+    targets: [...initialValues.targets],
+    character_ids: [...initialValues.character_ids],
   });
-
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [sample, setSample] = useState(SAMPLE);
-  const [previewValues, setPreviewValues] = useState(initialValues);
-  const [scope, setScope] = useState(initialValues.scope);
 
-  form.watch("find_regex", ({ value }) => {
-    setPreviewValues((prev) => ({ ...prev, find_regex: value }));
-  });
-  form.watch("replace_with", ({ value }) => {
-    setPreviewValues((prev) => ({ ...prev, replace_with: value }));
-  });
-  form.watch("flags", ({ value }) => {
-    setPreviewValues((prev) => ({ ...prev, flags: value }));
-  });
-  form.watch("scope", ({ value }) => {
-    setScope(value);
-  });
+  function setField<K extends keyof RegexFormValues>(
+    key: K,
+    value: RegexFormValues[K],
+  ) {
+    setValues((current) => ({ ...current, [key]: value }));
+    setErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
+  function toggleTarget(target: RegexTarget) {
+    setValues((current) => {
+      const has = current.targets.includes(target);
+      const targets = has
+        ? current.targets.filter((item) => item !== target)
+        : [...current.targets, target];
+      return { ...current, targets };
+    });
+    setErrors((current) => {
+      if (!current.targets) return current;
+      const next = { ...current };
+      delete next.targets;
+      return next;
+    });
+  }
+
+  function validate(next: RegexFormValues): FieldErrors {
+    const result: FieldErrors = {};
+
+    if (!next.name.trim()) {
+      result.name = "Name is required";
+    }
+
+    if (!next.find_regex.trim()) {
+      result.find_regex = "Find pattern is required";
+    } else if (isUnsafeRegexPattern(next.find_regex)) {
+      result.find_regex =
+        "Pattern looks unsafe (possible ReDoS) — simplify nested quantifiers";
+    } else {
+      try {
+        // eslint-disable-next-line no-new
+        new RegExp(next.find_regex, "g");
+      } catch {
+        result.find_regex = "Invalid regular expression";
+      }
+    }
+
+    if (next.targets.length === 0) {
+      result.targets = "Select at least one target";
+    }
+
+    if (!/^[gimsuy]*$/.test(next.flags)) {
+      result.flags = "Flags may only include g, i, m, s, u, y";
+    }
+
+    return result;
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors = validate(values);
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    await onSubmit({
+      ...values,
+      character_ids:
+        values.scope === "character" ? values.character_ids : [],
+      min_depth: values.min_depth ?? null,
+      max_depth: values.max_depth ?? null,
+    });
+  }
 
   const preview = useMemo(() => {
     const script: RegexScript = {
       id: "preview",
-      ...previewValues,
+      ...values,
       enabled: true,
     };
     return applyRegexScriptToText(sample, script);
-  }, [previewValues, sample]);
+  }, [values, sample]);
+
+  function parseDepth(raw: string): number | null {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return Math.floor(n);
+  }
 
   return (
-    <form
-      id={formId}
-      onSubmit={form.onSubmit((values) => {
-        void onSubmit({
-          ...values,
-          character_ids:
-            values.scope === "character" ? values.character_ids : [],
-          min_depth: values.min_depth === undefined ? null : values.min_depth,
-          max_depth: values.max_depth === undefined ? null : values.max_depth,
-        });
-      })}
-    >
-      <Stack gap="lg">
-        <Stack gap="sm">
-          <Title order={4}>Basics</Title>
-          <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <TextInput
-              label="Name"
-              description="The display name for this regex."
-              withAsterisk
-              key={form.key("name")}
-              {...form.getInputProps("name")}
-            />
-            <NumberInput
-              label="Order"
-              description="Lower runs first"
-              allowDecimal={false}
-              key={form.key("order")}
-              {...form.getInputProps("order")}
-            />
-          </SimpleGrid>
-          <Switch
-            label="Enabled"
-            key={form.key("enabled")}
-            {...form.getInputProps("enabled", { type: "checkbox" })}
-          />
-        </Stack>
-
-        <Stack gap="sm">
-          <Title order={4}>Pattern</Title>
-          <TextInput
-            label="Find regex"
-            description="JS regex source without surrounding slashes. Example: \\*([^*]+)\\*"
-            withAsterisk
-            styles={{
-              input: { fontFamily: "var(--mantine-font-family-monospace)" },
-            }}
-            key={form.key("find_regex")}
-            {...form.getInputProps("find_regex")}
-          />
-          <TextInput
-            label="Replace with"
-            description="Use $1, $2 for capture groups. Example: $1"
-            styles={{
-              input: { fontFamily: "var(--mantine-font-family-monospace)" },
-            }}
-            key={form.key("replace_with")}
-            {...form.getInputProps("replace_with")}
-          />
-          <TextInput
-            label="Flags"
-            description="Recommended: g. Allowed: g i m s u y"
-            styles={{
-              input: { fontFamily: "var(--mantine-font-family-monospace)" },
-            }}
-            key={form.key("flags")}
-            {...form.getInputProps("flags")}
-          />
-        </Stack>
-
-        <Stack gap="sm">
-          <Title order={4}>Where it applies</Title>
-          <Checkbox.Group
-            label="Targets"
-            description="Which message sources the script runs on"
-            key={form.key("targets")}
-            {...form.getInputProps("targets")}
+    <form id={formId} className={classes.form} onSubmit={handleSubmit}>
+      <section className={classes.section}>
+        <h3 className={classes.sectionTitle}>Basics</h3>
+        <div className={`${classes.grid} ${classes.grid2}`}>
+          <Field
+            label="Name"
+            hint="The display name for this regex."
+            error={errors.name}
           >
-            <Group mt="xs">
-              {REGEX_TARGETS.map((target) => (
-                <Checkbox
-                  key={target}
-                  value={target}
-                  label={REGEX_TARGET_LABELS[target as RegexTarget]}
-                />
-              ))}
-            </Group>
-          </Checkbox.Group>
+            <TextInput
+              error={Boolean(errors.name)}
+              value={values.name}
+              onChange={(event) => setField("name", event.target.value)}
+              required
+            />
+          </Field>
+          <Field label="Order" hint="Lower runs first" error={errors.order}>
+            <NumberInput
+              step={1}
+              value={values.order}
+              onChange={(value) => setField("order", value === "" ? 0 : value)}
+            />
+          </Field>
+        </div>
 
+        <Switch
+          variant="card"
+          checked={values.enabled}
+          onChange={(checked) => setField("enabled", checked)}
+          label="Enabled"
+          description="When off, the script is skipped."
+        />
+      </section>
+
+      <section className={classes.section}>
+        <h3 className={classes.sectionTitle}>Pattern</h3>
+        <Field
+          label="Find regex"
+          hint="JS regex source without surrounding slashes. Example: \\*([^*]+)\\*"
+          error={errors.find_regex}
+        >
+          <TextInput
+            className={classes.mono}
+            error={Boolean(errors.find_regex)}
+            value={values.find_regex}
+            onChange={(event) => setField("find_regex", event.target.value)}
+            required
+          />
+        </Field>
+        <Field
+          label="Replace with"
+          hint="Use $1, $2 for capture groups. Example: $1"
+          error={errors.replace_with}
+        >
+          <TextInput
+            className={classes.mono}
+            value={values.replace_with}
+            onChange={(event) => setField("replace_with", event.target.value)}
+          />
+        </Field>
+        <Field
+          label="Flags"
+          hint="Recommended: g. Allowed: g i m s u y"
+          error={errors.flags}
+        >
+          <TextInput
+            className={classes.mono}
+            error={Boolean(errors.flags)}
+            value={values.flags}
+            onChange={(event) => setField("flags", event.target.value)}
+          />
+        </Field>
+      </section>
+
+      <section className={classes.section}>
+        <h3 className={classes.sectionTitle}>Where it applies</h3>
+
+        <Field
+          label="Targets"
+          hint="Which message sources the script runs on"
+          error={errors.targets}
+        >
+          <div className={classes.checkRow}>
+            {REGEX_TARGETS.map((target) => (
+              <Checkbox
+                key={target}
+                className={classes.check}
+                checked={values.targets.includes(target)}
+                onChange={() => toggleTarget(target as RegexTarget)}
+                label={REGEX_TARGET_LABELS[target as RegexTarget]}
+              />
+            ))}
+          </div>
+        </Field>
+
+        <Field
+          label="Apply to"
+          hint="Display = screen only · Prompt = model context only · Both = both"
+        >
           <Select
-            label="Apply to"
-            description="Display = screen only · Prompt = model context only · Both = both"
             data={REGEX_APPLY_TO.map((value) => ({
               value,
               label: REGEX_APPLY_TO_LABELS[value as RegexApplyTo],
             }))}
-            allowDeselect={false}
-            key={form.key("apply_to")}
-            {...form.getInputProps("apply_to")}
+            value={values.apply_to}
+            onChange={(value) => {
+              if (value) setField("apply_to", value as RegexApplyTo);
+            }}
           />
+        </Field>
 
-          <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        <div className={`${classes.grid} ${classes.grid2}`}>
+          <Field
+            label="Min depth"
+            hint="0 = newest message. Empty = no min"
+          >
             <NumberInput
-              label="Min depth"
-              description="0 = newest message. Empty = no min"
-              allowDecimal={false}
               min={0}
-              key={form.key("min_depth")}
-              {...form.getInputProps("min_depth")}
+              step={1}
+              value={values.min_depth ?? ""}
               onChange={(value) =>
-                form.setFieldValue(
-                  "min_depth",
-                  value === "" || value === undefined ? null : Number(value),
-                )
+                setField("min_depth", parseDepth(value === "" ? "" : String(value)))
               }
             />
+          </Field>
+          <Field label="Max depth" hint="Empty = no max">
             <NumberInput
-              label="Max depth"
-              description="Empty = no max"
-              allowDecimal={false}
               min={0}
-              key={form.key("max_depth")}
-              {...form.getInputProps("max_depth")}
+              step={1}
+              value={values.max_depth ?? ""}
               onChange={(value) =>
-                form.setFieldValue(
-                  "max_depth",
-                  value === "" || value === undefined ? null : Number(value),
-                )
+                setField("max_depth", parseDepth(value === "" ? "" : String(value)))
               }
             />
-          </SimpleGrid>
+          </Field>
+        </div>
 
+        <Field
+          label="Scope"
+          hint="Global runs everywhere; character-scoped only for listed IDs"
+        >
           <Select
-            label="Scope"
-            description="Which message sources the script runs on"
             data={REGEX_SCOPES.map((value) => ({
               value,
               label: REGEX_SCOPE_LABELS[value as RegexScope],
             }))}
-            allowDeselect={false}
-            key={form.key("scope")}
-            {...form.getInputProps("scope")}
+            value={values.scope}
+            onChange={(value) => {
+              if (value) setField("scope", value as RegexScope);
+            }}
           />
+        </Field>
 
-          {scope === "character" ? (
+        {values.scope === "character" ? (
+          <Field
+            label="Character IDs"
+            hint="Scripts run only when the chat character matches one of these IDs"
+          >
             <TagsInput
-              label="Character IDs"
-              description="Scripts run only when the chat character matches one of these IDs"
+              value={values.character_ids}
+              onChange={(character_ids) =>
+                setField("character_ids", character_ids)
+              }
               placeholder="Paste character id and press Enter"
-              key={form.key("character_ids")}
-              {...form.getInputProps("character_ids")}
             />
-          ) : null}
-        </Stack>
+          </Field>
+        ) : null}
+      </section>
 
-        <Stack gap="sm">
-          <Title order={4}>Live preview</Title>
-          <Text size="sm" c="dimmed">
-            Tries the current pattern on sample text (same engine as chat
-            display/prompt apply, including ReDoS + timeout guards).
-          </Text>
+      <section className={classes.section}>
+        <h3 className={classes.sectionTitle}>Live preview</h3>
+        <p className={classes.previewHint}>
+          Tries the current pattern on sample text (same engine as chat
+          display/prompt apply, including ReDoS + timeout guards).
+        </p>
+        <Field label="Sample input">
           <Textarea
-            label="Sample input"
-            autosize
+            className={classes.textarea}
             value={sample}
-            onChange={(event) => setSample(event.currentTarget.value)}
+            onChange={(event) => setSample(event.target.value)}
           />
-          <div>
-            <Text size="sm" fw={500} mb={4}>
-              Output
-            </Text>
-            {preview.skipped ? (
-              <Text size="sm" c="red">
-                Skipped: {preview.skipped}
-              </Text>
-            ) : (
-              <Code block>{preview.text || "(empty)"}</Code>
-            )}
-          </div>
-        </Stack>
-      </Stack>
+        </Field>
+        <div className={classes.previewOut}>
+          <span className={classes.fieldLabel}>Output</span>
+          {preview.skipped ? (
+            <p className={classes.previewError}>Skipped: {preview.skipped}</p>
+          ) : (
+            <pre className={classes.code}>{preview.text || "(empty)"}</pre>
+          )}
+        </div>
+      </section>
     </form>
   );
 }

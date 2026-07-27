@@ -1,30 +1,24 @@
-import {
-  Box,
-  Button,
-  Center,
-  FileButton,
-  Group,
-  Image,
-  Loader,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
-import { modals } from "@mantine/modals";
-import { notifications } from "@mantine/notifications";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { toCharacterCardV2 } from "@ai-hub/shared";
+import {
+  nextCharacterVersionLabel,
+  toCharacterCardV2,
+  type CharacterVersion,
+} from "@ai-hub/shared";
+import { Button, Modal, notifications } from "@/components/ui";
 import { api } from "@/lib/api";
 import { CharacterForm } from "@/features/characters/CharacterForm";
 import { characterAvatarSrc } from "@/features/characters/avatar-url";
-import { CharacterLinkedLorebooks } from "@/features/lorebooks/CharacterLinkedLorebooks";
+import { LinkedLorebooksPanel } from "@/features/lorebooks/CharacterLinkedLorebooks";
 import {
   useCharacter,
   useDeleteCharacter,
   useDeleteCharacterAvatar,
+  useDeleteCharacterVersion,
   useUpdateCharacter,
   useUploadCharacterAvatar,
 } from "@/features/characters/queries";
+import classes from "./index.module.css";
 
 const FORM_ID = "character-edit-form";
 
@@ -35,40 +29,68 @@ export const Route = createFileRoute("/_app/characters/$characterId/")({
 function RouteComponent() {
   const { characterId } = Route.useParams();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteVersionOpen, setDeleteVersionOpen] = useState(false);
   const { data, isLoading, isError } = useCharacter(characterId);
   const updateMutation = useUpdateCharacter();
   const deleteMutation = useDeleteCharacter();
+  const deleteVersionMutation = useDeleteCharacterVersion();
   const uploadAvatarMutation = useUploadCharacterAvatar();
   const deleteAvatarMutation = useDeleteCharacterAvatar();
+  const saveModeRef = useRef<"update" | "new">("update");
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
+    null,
+  );
 
-  function confirmDelete() {
-    modals.openConfirmModal({
-      title: "Delete character",
-      children: (
-        <Text size="sm">
-          Delete <strong>{data?.data.name || "this character"}</strong>? This
-          cannot be undone.
-        </Text>
-      ),
-      labels: { confirm: "Delete", cancel: "Cancel" },
-      confirmProps: { color: "red" },
-      onConfirm: () => {
-        deleteMutation.mutate(characterId, {
-          onSuccess: () => {
-            notifications.show({
-              title: "Deleted",
-              message: "Character removed.",
-              color: "green",
-            });
-            void navigate({ to: "/characters" });
-          },
-          onError: (error) => {
-            notifications.show({
-              title: "Delete failed",
-              message: error instanceof Error ? error.message : "Unknown error",
-              color: "red",
-            });
-          },
+  useEffect(() => {
+    if (!data) return;
+    setSelectedVersionId((current) => {
+      if (current && data.versions.some((version) => version.id === current)) {
+        return current;
+      }
+      return data.active_version_id;
+    });
+  }, [data]);
+
+  const selectedVersion: CharacterVersion | null = useMemo(() => {
+    if (!data || !selectedVersionId) return null;
+    return (
+      data.versions.find((version) => version.id === selectedVersionId) ??
+      data.versions.find((version) => version.id === data.active_version_id) ??
+      data.versions[data.versions.length - 1] ??
+      null
+    );
+  }, [data, selectedVersionId]);
+
+  const versionOptions = useMemo(
+    () =>
+      (data?.versions ?? []).map((version) => ({
+        value: version.id,
+        label:
+          version.id === data?.active_version_id
+            ? `${version.label} (active)`
+            : version.label,
+      })),
+    [data],
+  );
+
+  function handleConfirmDelete() {
+    setDeleteOpen(false);
+    deleteMutation.mutate(characterId, {
+      onSuccess: () => {
+        notifications.show({
+          title: "Deleted",
+          message: "Character removed.",
+          color: "green",
+        });
+        void navigate({ to: "/characters" });
+      },
+      onError: (error) => {
+        notifications.show({
+          title: "Delete failed",
+          message: error instanceof Error ? error.message : "Unknown error",
+          color: "red",
         });
       },
     });
@@ -123,140 +145,286 @@ function RouteComponent() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <Center py="xl">
-        <Loader />
-      </Center>
+  function handleVersionChange(versionId: string) {
+    if (!data || versionId === selectedVersionId) return;
+    setSelectedVersionId(versionId);
+  }
+
+  function handleConfirmDeleteVersion() {
+    if (!data || !selectedVersion) return;
+    const versionId = selectedVersion.id;
+    const label = selectedVersion.label;
+    setDeleteVersionOpen(false);
+    deleteVersionMutation.mutate(
+      { id: data.id, versionId },
+      {
+        onSuccess: (character) => {
+          setSelectedVersionId(character.active_version_id);
+          notifications.show({
+            title: "Version deleted",
+            message: `Removed version ${label}.`,
+            color: "green",
+          });
+        },
+        onError: (error) => {
+          notifications.show({
+            title: "Delete version failed",
+            message: error instanceof Error ? error.message : "Unknown error",
+            color: "red",
+          });
+        },
+      },
     );
   }
 
-  if (isError || !data) {
-    return <Text c="red">Character not found.</Text>;
+  if (isLoading) {
+    return (
+      <div className={classes.loading}>
+        <div className={classes.spinner} aria-label="Loading" />
+      </div>
+    );
   }
 
-  const { id, avatar, ...formValues } = data;
-  const avatarSrc = characterAvatarSrc(avatar, String(api.defaults.baseURL));
+  if (isError || !data || !selectedVersion) {
+    return <p className={classes.error}>Character not found.</p>;
+  }
+
+  const avatarSrc = characterAvatarSrc(data.avatar, String(api.defaults.baseURL));
+  const formValues = {
+    spec: data.spec,
+    spec_version: data.spec_version,
+    data: selectedVersion.data,
+  };
 
   return (
-    <Stack>
-      <Box
-        pos="sticky"
-        top="var(--app-shell-header-offset, 0px)"
-        bg="var(--mantine-color-body)"
-        style={{ zIndex: "calc(var(--mantine-z-index-app) - 1)" }}
-        py="xs"
-      >
-        <Group justify="space-between" align="start" wrap="nowrap">
-          <div>
-            <Title order={2}>{data.data.name || "Edit character"}</Title>
-            <Text c="dimmed">Metadata, prompt fields, and advanced JSON.</Text>
-          </div>
-          <Group gap="xs" wrap="nowrap">
-            <Button variant="default" onClick={handleExport}>
-              Export
-            </Button>
-            <Button
-              type="submit"
-              form={FORM_ID}
-              loading={updateMutation.isPending}
-            >
-              Save
-            </Button>
-            <Button
-              color="red"
-              variant="light"
-              onClick={confirmDelete}
-              loading={deleteMutation.isPending}
-            >
-              Delete
-            </Button>
-          </Group>
-        </Group>
-      </Box>
+    <div className={classes.page}>
+      <header className={classes.header}>
+        <div>
+          <h2 className={classes.title}>
+            {selectedVersion.data.name || "Edit character"}
+          </h2>
+          <p className={classes.subtitle}>
+            Metadata, prompt fields, and version history (
+            {data.versions.length}{" "}
+            {data.versions.length === 1 ? "version" : "versions"}).
+          </p>
+        </div>
+        <div className={classes.actions}>
+          <Button variant="default" type="button" onClick={handleExport}>
+            Export
+          </Button>
+          <Button
+            variant="default"
+            type="submit"
+            form={FORM_ID}
+            disabled={updateMutation.isPending}
+            onClick={() => {
+              saveModeRef.current = "new";
+            }}
+          >
+            Save as new version
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            form={FORM_ID}
+            disabled={updateMutation.isPending}
+            onClick={() => {
+              saveModeRef.current = "update";
+            }}
+          >
+            {updateMutation.isPending ? "Saving…" : "Save"}
+          </Button>
+          <Button
+            variant="danger"
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            disabled={deleteMutation.isPending}
+          >
+            {deleteMutation.isPending ? "Deleting…" : "Delete"}
+          </Button>
+        </div>
+      </header>
 
       <CharacterForm
-        key={id}
+        key={`${data.id}:${selectedVersion.id}`}
         formId={FORM_ID}
         initialValues={formValues}
-        lorebooksSection={<CharacterLinkedLorebooks characterId={id} />}
+        versionSelect={{
+          options: versionOptions,
+          value: selectedVersion.id,
+          onChange: (versionId) => {
+            void handleVersionChange(versionId);
+          },
+          onDelete:
+            data.versions.length > 1
+              ? () => setDeleteVersionOpen(true)
+              : undefined,
+          deleteDisabled: data.versions.length <= 1,
+          deletePending: deleteVersionMutation.isPending,
+        }}
+        lorebooksSection={
+          <LinkedLorebooksPanel
+            entityId={data.id}
+            linkField="linked_characters"
+            entityLabel="character"
+          />
+        }
         avatarSection={
-          <Group align="start" gap="md" wrap="nowrap">
-            <Box
-              w={120}
-              h={120}
-              style={{
-                flexShrink: 0,
-                borderRadius: 8,
-                overflow: "hidden",
-                background: "var(--mantine-color-default-hover)",
-              }}
-            >
+          <div className={classes.avatarSection}>
+            <div className={classes.avatarFrame}>
               {avatarSrc ? (
-                <Image src={avatarSrc} alt="" w={120} h={120} fit="cover" />
+                <img src={avatarSrc} alt="" className={classes.avatarImage} />
               ) : (
-                <Center h="100%">
-                  <Text size="xs" c="dimmed">
-                    No avatar
-                  </Text>
-                </Center>
+                <p className={classes.avatarPlaceholder}>No avatar</p>
               )}
-            </Box>
-            <Stack gap="xs">
-              <Text size="sm" fw={500}>
-                Avatar
-              </Text>
-              <Text size="xs" c="dimmed">
+            </div>
+            <div className={classes.avatarMeta}>
+              <p className={classes.avatarLabel}>Avatar</p>
+              <p className={classes.avatarHint}>
                 Stored as PNG on the server. Not part of the card JSON.
-              </Text>
-              <Group gap="xs">
-                <FileButton
-                  onChange={(file) => void handleAvatarUpload(file)}
+              </p>
+              <div className={classes.avatarActions}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
                   accept="image/png,.png"
+                  className={classes.hiddenFileInput}
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0] ?? null;
+                    event.currentTarget.value = "";
+                    void handleAvatarUpload(file);
+                  }}
+                />
+                <Button
+                  variant="default"
+                  size="sm"
+                  type="button"
+                  disabled={uploadAvatarMutation.isPending}
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  {(props) => (
-                    <Button
-                      size="xs"
-                      variant="default"
-                      loading={uploadAvatarMutation.isPending}
-                      {...props}
-                    >
-                      Upload PNG
-                    </Button>
-                  )}
-                </FileButton>
-                {avatar ? (
+                  {uploadAvatarMutation.isPending
+                    ? "Uploading…"
+                    : "Upload PNG"}
+                </Button>
+                {data.avatar ? (
                   <Button
-                    size="xs"
                     variant="subtle"
-                    color="red"
-                    loading={deleteAvatarMutation.isPending}
+                    size="sm"
+                    type="button"
+                    disabled={deleteAvatarMutation.isPending}
                     onClick={() => void handleAvatarRemove()}
                   >
-                    Remove
+                    {deleteAvatarMutation.isPending ? "Removing…" : "Remove"}
                   </Button>
                 ) : null}
-              </Group>
-            </Stack>
-          </Group>
+              </div>
+            </div>
+          </div>
         }
         onSubmit={async (values) => {
+          const createVersion = saveModeRef.current === "new";
+          saveModeRef.current = "update";
+
+          const versionLabel = createVersion
+            ? nextCharacterVersionLabel(
+                data.versions.map((version) => version.label),
+              )
+            : selectedVersion.label;
+
           try {
-            await updateMutation.mutateAsync({ id, input: values });
+            const updated = await updateMutation.mutateAsync({
+              id: data.id,
+              input: {
+                data: {
+                  ...values.data,
+                  character_version: versionLabel,
+                },
+                active_version_id: createVersion
+                  ? undefined
+                  : selectedVersion.id,
+                create_version: createVersion,
+                version_label: versionLabel,
+              },
+            });
+            setSelectedVersionId(updated.active_version_id);
             notifications.show({
-              title: "Saved",
-              message: "Character updated.",
+              title: createVersion ? "Version created" : "Saved",
+              message: createVersion
+                ? `Saved as version ${versionLabel}.`
+                : "Character version updated.",
               color: "green",
             });
           } catch (error) {
             notifications.show({
               title: "Save failed",
-              message: error instanceof Error ? error.message : "Unknown error",
+              message:
+                error instanceof Error ? error.message : "Unknown error",
               color: "red",
             });
           }
         }}
       />
-    </Stack>
+
+      <Modal
+        opened={deleteVersionOpen}
+        onClose={() => setDeleteVersionOpen(false)}
+        title="Delete version"
+        size="sm"
+      >
+        <p className={classes.modalBody}>
+          Delete version{" "}
+          <strong>{selectedVersion.label || "this version"}</strong>? This
+          cannot be undone.
+          {selectedVersion.id === data.active_version_id
+            ? " It is currently active — another version will become active."
+            : null}
+        </p>
+        <div className={classes.modalActions}>
+          <Button
+            variant="default"
+            type="button"
+            onClick={() => setDeleteVersionOpen(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="dangerSolid"
+            type="button"
+            onClick={handleConfirmDeleteVersion}
+          >
+            Delete version
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        opened={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title="Delete character"
+        size="sm"
+      >
+        <p className={classes.modalBody}>
+          Delete <strong>{data.data.name || "this character"}</strong>? This
+          cannot be undone.
+        </p>
+        <div className={classes.modalActions}>
+          <Button
+            variant="default"
+            type="button"
+            onClick={() => setDeleteOpen(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="dangerSolid"
+            type="button"
+            onClick={handleConfirmDelete}
+          >
+            Delete
+          </Button>
+        </div>
+      </Modal>
+    </div>
   );
 }

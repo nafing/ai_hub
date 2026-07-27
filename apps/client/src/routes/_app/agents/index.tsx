@@ -1,37 +1,30 @@
-import { useMemo } from "react";
-import {
-  ActionIcon,
-  Badge,
-  Box,
-  Card,
-  Center,
-  Group,
-  Loader,
-  SimpleGrid,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import { modals } from "@mantine/modals";
-import { notifications } from "@mantine/notifications";
+import { useMemo, useState } from "react";
+import { motion } from "motion/react";
 import { IconCopy, IconPlus, IconTrash } from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import type { AgentListItem } from "@ai-hub/shared";
+import { type AgentListItem } from "@ai-hub/shared";
+import { ActionIcon, Button, Modal, notifications } from "@/components/ui";
 import { CreateAgentModal } from "@/features/agents/CreateAgentModal";
 import {
   useAgents,
   useDeleteAgent,
   useDuplicateAgent,
 } from "@/features/agents/queries";
+import classes from "./index.module.css";
 
 export const Route = createFileRoute("/_app/agents/")({
   component: RouteComponent,
 });
 
+type DeleteTarget = {
+  id: string;
+  name: string;
+};
+
 function RouteComponent() {
-  const [createOpened, { open: openCreate, close: closeCreate }] =
-    useDisclosure(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+
   const { data, isLoading, isError } = useAgents();
   const deleteMutation = useDeleteAgent();
   const duplicateMutation = useDuplicateAgent();
@@ -46,32 +39,23 @@ function RouteComponent() {
     return { custom: customAgents, builtin: builtinAgents };
   }, [data]);
 
-  function confirmDelete(id: string, name: string) {
-    modals.openConfirmModal({
-      title: "Delete agent",
-      children: (
-        <Text size="sm">
-          Delete <strong>{name || "this agent"}</strong>? This cannot be undone.
-        </Text>
-      ),
-      labels: { confirm: "Delete", cancel: "Cancel" },
-      confirmProps: { color: "red" },
-      onConfirm: () => {
-        deleteMutation.mutate(id, {
-          onSuccess: () => {
-            notifications.show({
-              title: "Deleted",
-              message: "Agent removed.",
-              color: "green",
-            });
-          },
-          onError: (error) => {
-            notifications.show({
-              title: "Delete failed",
-              message: error instanceof Error ? error.message : "Unknown error",
-              color: "red",
-            });
-          },
+  function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    const { id } = deleteTarget;
+    setDeleteTarget(null);
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        notifications.show({
+          title: "Deleted",
+          message: "Agent removed.",
+          color: "green",
+        });
+      },
+      onError: (error) => {
+        notifications.show({
+          title: "Delete failed",
+          message: error instanceof Error ? error.message : "Unknown error",
+          color: "red",
         });
       },
     });
@@ -97,100 +81,115 @@ function RouteComponent() {
   }
 
   return (
-    <Stack>
-      <CreateAgentModal opened={createOpened} onClose={closeCreate} />
-
-      <Box
-        pos="sticky"
-        top="var(--app-shell-header-offset, 0px)"
-        bg="var(--mantine-color-body)"
-        style={{ zIndex: "calc(var(--mantine-z-index-app) - 1)" }}
-        py="xs"
-      >
-        <Group justify="space-between" align="start" wrap="nowrap">
-          <Title order={2}>Agents</Title>
-          <Group gap="xs" wrap="nowrap">
-            <ActionIcon
-              variant="default"
-              aria-label="New agent"
-              onClick={openCreate}
-            >
-              <IconPlus />
-            </ActionIcon>
-          </Group>
-        </Group>
-        <Text c="dimmed">
+    <div className={classes.page}>
+      <header className={classes.header}>
+        <div className={classes.headerRow}>
+          <h2 className={classes.title}>Agents</h2>
+          <ActionIcon type="button" variant="default" aria-label="New agent" onClick={() => setCreateOpen(true)}
+          >
+            <IconPlus size={16} />
+          </ActionIcon>
+        </div>
+        <p className={classes.subtitle}>
           Pipeline agents (pre/post/parallel). Built-ins are seeded from
           examples and cannot be deleted.
-        </Text>
-      </Box>
+        </p>
+      </header>
 
       {isLoading ? (
-        <Center py="xl">
-          <Loader />
-        </Center>
+        <div className={classes.loading}>
+          <div className={classes.spinner} aria-label="Loading" />
+        </div>
       ) : null}
 
-      {isError ? <Text c="red">Failed to load agents.</Text> : null}
+      {isError ? (
+        <p className={classes.statusError}>Failed to load agents.</p>
+      ) : null}
 
       {!isLoading && !isError ? (
-        <Stack gap="xl">
-          <Stack gap="sm">
+        <>
+          <section className={classes.group}>
             <div>
-              <Title order={4}>Custom</Title>
-              <Text size="sm" c="dimmed">
+              <h3 className={classes.groupTitle}>Custom</h3>
+              <p className={classes.groupHint}>
                 Your own agents — create, edit, and delete freely.
-              </Text>
+              </p>
             </div>
             {custom.length === 0 ? (
-              <Text c="dimmed" size="sm">
+              <p className={classes.status}>
                 No custom agents yet. Create one with +.
-              </Text>
+              </p>
             ) : (
-              <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
+              <div className={classes.grid}>
                 {custom.map((agent) => (
                   <AgentCard
                     key={agent.id}
                     agent={agent}
                     onDuplicate={handleDuplicate}
-                    onDelete={confirmDelete}
-                    duplicateLoading={duplicateMutation.isPending}
-                    deleteLoading={deleteMutation.isPending}
+                    onDelete={(id, name) => setDeleteTarget({ id, name })}
+                    duplicatePending={duplicateMutation.isPending}
+                    deletePending={deleteMutation.isPending}
                   />
                 ))}
-              </SimpleGrid>
+              </div>
             )}
-          </Stack>
+          </section>
 
-          <Stack gap="sm">
+          <section className={classes.group}>
             <div>
-              <Title order={4}>Built-in</Title>
-              <Text size="sm" c="dimmed">
+              <h3 className={classes.groupTitle}>Built-in</h3>
+              <p className={classes.groupHint}>
                 Default agents shipped with the hub — editable, not deletable.
-              </Text>
+              </p>
             </div>
             {builtin.length === 0 ? (
-              <Text c="dimmed" size="sm">
-                No built-in agents loaded.
-              </Text>
+              <p className={classes.status}>No built-in agents loaded.</p>
             ) : (
-              <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
+              <div className={classes.grid}>
                 {builtin.map((agent) => (
                   <AgentCard
                     key={agent.id}
                     agent={agent}
                     onDuplicate={handleDuplicate}
-                    onDelete={confirmDelete}
-                    duplicateLoading={duplicateMutation.isPending}
-                    deleteLoading={deleteMutation.isPending}
+                    onDelete={(id, name) => setDeleteTarget({ id, name })}
+                    duplicatePending={duplicateMutation.isPending}
+                    deletePending={deleteMutation.isPending}
                   />
                 ))}
-              </SimpleGrid>
+              </div>
             )}
-          </Stack>
-        </Stack>
+          </section>
+        </>
       ) : null}
-    </Stack>
+
+      <CreateAgentModal
+        opened={createOpen}
+        onClose={() => setCreateOpen(false)}
+      />
+
+      <Modal
+        opened={deleteTarget != null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete agent"
+        size="sm"
+      >
+        <p className={classes.modalBody}>
+          Delete <strong>{deleteTarget?.name || "this agent"}</strong>? This
+          cannot be undone.
+        </p>
+        <div className={classes.modalActions}>
+          <Button variant="default" type="button"
+            onClick={() => setDeleteTarget(null)}
+          >
+            Cancel
+          </Button>
+          <Button variant="dangerSolid" type="button"
+            onClick={handleConfirmDelete}>
+            Delete
+          </Button>
+        </div>
+      </Modal>
+    </div>
   );
 }
 
@@ -198,92 +197,72 @@ function AgentCard({
   agent,
   onDuplicate,
   onDelete,
-  duplicateLoading,
-  deleteLoading,
+  duplicatePending,
+  deletePending,
 }: {
   agent: AgentListItem;
   onDuplicate: (id: string) => void;
   onDelete: (id: string, name: string) => void;
-  duplicateLoading: boolean;
-  deleteLoading: boolean;
+  duplicatePending: boolean;
+  deletePending: boolean;
 }) {
   return (
-    <Card withBorder padding={0}>
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.16 }}
+    >
       <Link
         to="/agents/$agentId"
         params={{ agentId: agent.id }}
-        style={{
-          textDecoration: "none",
-          color: "inherit",
-          display: "block",
-        }}
+        className={classes.card}
       >
-        <Box p="md">
-          <Group justify="space-between" align="start" wrap="nowrap">
-            <div style={{ minWidth: 0 }}>
-              <Text size="lg" fw={600} lineClamp={1}>
-                {agent.name || "untitled"}
-              </Text>
-              <Text size="xs" c="dimmed" ff="monospace" lineClamp={1}>
-                {agent.slug}
-              </Text>
-              <Text size="sm" c="dimmed" lineClamp={2} mt={4}>
-                {agent.description || "No description"}
-              </Text>
-            </div>
-            <Group gap="xs" wrap="nowrap">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                aria-label="Duplicate"
-                onClick={(event) => {
+        <div className={classes.cardTop}>
+          <div className={classes.cardText}>
+            <p className={classes.cardName}>{agent.name || "untitled"}</p>
+            <p className={classes.cardSlug}>{agent.slug}</p>
+            <p className={classes.cardDescription}>
+              {agent.description || "No description"}
+            </p>
+          </div>
+          <div className={classes.cardActions}>
+            <ActionIcon type="button" variant="ghost" aria-label="Duplicate" disabled={duplicatePending} onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDuplicate(agent.id);
+              }}
+            >
+              <IconCopy size={15} />
+            </ActionIcon>
+            {!agent.is_built_in ? (
+              <ActionIcon type="button" variant="ghostDanger" aria-label="Delete" disabled={deletePending} onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  onDuplicate(agent.id);
+                  onDelete(agent.id, agent.name);
                 }}
-                loading={duplicateLoading}
               >
-                <IconCopy />
+                <IconTrash size={15} />
               </ActionIcon>
-              {!agent.is_built_in ? (
-                <ActionIcon
-                  size="sm"
-                  variant="subtle"
-                  color="red"
-                  aria-label="Delete"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onDelete(agent.id, agent.name);
-                  }}
-                  loading={deleteLoading}
-                >
-                  <IconTrash />
-                </ActionIcon>
-              ) : null}
-            </Group>
-          </Group>
-          <Group gap={6} mt="sm">
-            <Badge size="sm" variant="light">
-              {agent.phase}
-            </Badge>
-            <Badge size="sm" variant="outline">
-              {agent.category}
-            </Badge>
-            {agent.execution === "feature" ? (
-              <Badge size="sm" variant="outline" color="orange">
-                feature
-              </Badge>
             ) : null}
-            {agent.default_tools.length > 0 ? (
-              <Badge size="sm" variant="outline">
-                {agent.default_tools.length}{" "}
-                {agent.default_tools.length === 1 ? "tool" : "tools"}
-              </Badge>
-            ) : null}
-          </Group>
-        </Box>
+          </div>
+        </div>
+        <div className={classes.badges}>
+          <span className={classes.badgeSoft}>{agent.phase}</span>
+          <span className={classes.badgeOutline}>{agent.category}</span>
+          {agent.execution === "feature" ? (
+            <span className={classes.badgeWarn}>feature</span>
+          ) : null}
+          {agent.default_tools.length > 0 ? (
+            <span className={classes.badgeOutline}>
+              {agent.default_tools.length}{" "}
+              {agent.default_tools.length === 1 ? "tool" : "tools"}
+            </span>
+          ) : null}
+          {agent.is_built_in ? (
+            <span className={classes.badgeBuiltin}>Built-in</span>
+          ) : null}
+        </div>
       </Link>
-    </Card>
+    </motion.div>
   );
 }

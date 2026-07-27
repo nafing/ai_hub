@@ -1,69 +1,54 @@
-import {
-  ActionIcon,
-  Badge,
-  Box,
-  Card,
-  Center,
-  Group,
-  Loader,
-  SimpleGrid,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import { modals } from "@mantine/modals";
-import { notifications } from "@mantine/notifications";
-import { IconCopy, IconPlus, IconTrash } from "@tabler/icons-react";
+import { useState } from "react";
+import { motion } from "motion/react";
+import { IconCopy, IconPlus, IconTrash, IconUpload } from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { PersonaListItem } from "@ai-hub/shared";
+import { ActionIcon, Button, Modal, notifications, RuntimeText } from "@/components/ui";
 import { api } from "@/lib/api";
 import { CreatePersonaModal } from "@/features/personas/CreatePersonaModal";
+import { ImportPersonaModal } from "@/features/personas/ImportPersonaModal";
 import { personaAvatarSrc } from "@/features/personas/avatar-url";
 import {
   useDeletePersona,
   useDuplicatePersona,
   usePersonas,
 } from "@/features/personas/queries";
+import classes from "./index.module.css";
 
 export const Route = createFileRoute("/_app/personas/")({
   component: RouteComponent,
 });
 
+type DeleteTarget = {
+  id: string;
+  name: string;
+};
+
 function RouteComponent() {
-  const [createOpened, { open: openCreate, close: closeCreate }] =
-    useDisclosure(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const { data, isLoading, isError } = usePersonas();
   const deleteMutation = useDeletePersona();
   const duplicateMutation = useDuplicatePersona();
 
-  function confirmDelete(id: string, name: string) {
-    modals.openConfirmModal({
-      title: "Delete persona",
-      children: (
-        <Text size="sm">
-          Delete <strong>{name || "this persona"}</strong>? This cannot be
-          undone.
-        </Text>
-      ),
-      labels: { confirm: "Delete", cancel: "Cancel" },
-      confirmProps: { color: "red" },
-      onConfirm: () => {
-        deleteMutation.mutate(id, {
-          onSuccess: () => {
-            notifications.show({
-              title: "Deleted",
-              message: "Persona removed.",
-              color: "green",
-            });
-          },
-          onError: (error) => {
-            notifications.show({
-              title: "Delete failed",
-              message: error instanceof Error ? error.message : "Unknown error",
-              color: "red",
-            });
-          },
+  function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    const { id } = deleteTarget;
+    setDeleteTarget(null);
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        notifications.show({
+          title: "Deleted",
+          message: "Persona removed.",
+          color: "green",
+        });
+      },
+      onError: (error) => {
+        notifications.show({
+          title: "Delete failed",
+          message: error instanceof Error ? error.message : "Unknown error",
+          color: "red",
         });
       },
     });
@@ -89,60 +74,97 @@ function RouteComponent() {
   }
 
   return (
-    <Stack>
-      <CreatePersonaModal opened={createOpened} onClose={closeCreate} />
-
-      <Box
-        pos="sticky"
-        top="var(--app-shell-header-offset, 0px)"
-        bg="var(--mantine-color-body)"
-        style={{ zIndex: "calc(var(--mantine-z-index-app) - 1)" }}
-        py="xs"
-      >
-        <Group justify="space-between" align="start" wrap="nowrap">
-          <Title order={2}>Personas</Title>
-          <ActionIcon
-            variant="default"
-            aria-label="New persona"
-            onClick={openCreate}
-          >
-            <IconPlus />
-          </ActionIcon>
-        </Group>
-        <Text c="dimmed">
-          Player personas for `{"{{user}}"}`. One can be marked as default.
-        </Text>
-      </Box>
+    <div className={classes.page}>
+      <header className={classes.header}>
+        <div className={classes.headerRow}>
+          <h2 className={classes.title}>Personas</h2>
+          <div className={classes.headerActions}>
+            <ActionIcon
+              type="button"
+              variant="default"
+              aria-label="Import persona"
+              onClick={() => setImportOpen(true)}
+            >
+              <IconUpload size={16} />
+            </ActionIcon>
+            <ActionIcon
+              type="button"
+              variant="default"
+              aria-label="New persona"
+              onClick={() => setCreateOpen(true)}
+            >
+              <IconPlus size={16} />
+            </ActionIcon>
+          </div>
+        </div>
+        <p className={classes.subtitle}>
+          Player personas for <RuntimeText>{"{{user}}"}</RuntimeText>. One can
+          be marked as default.
+        </p>
+      </header>
 
       {isLoading ? (
-        <Center py="xl">
-          <Loader />
-        </Center>
+        <div className={classes.loading}>
+          <div className={classes.spinner} aria-label="Loading" />
+        </div>
       ) : null}
 
-      {isError ? <Text c="red">Failed to load personas.</Text> : null}
-
-      {!isLoading && !isError ? (
-        (data ?? []).length === 0 ? (
-          <Text c="dimmed" size="sm">
-            No personas yet. Create one with +.
-          </Text>
-        ) : (
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-            {(data ?? []).map((persona) => (
-              <PersonaCard
-                key={persona.id}
-                persona={persona}
-                onDuplicate={handleDuplicate}
-                onDelete={confirmDelete}
-                duplicateLoading={duplicateMutation.isPending}
-                deleteLoading={deleteMutation.isPending}
-              />
-            ))}
-          </SimpleGrid>
-        )
+      {isError ? (
+        <p className={classes.statusError}>Failed to load personas.</p>
       ) : null}
-    </Stack>
+
+      {!isLoading && !isError && (data?.length ?? 0) === 0 ? (
+        <p className={classes.status}>No personas yet. Create one with +.</p>
+      ) : null}
+
+      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
+        <div className={classes.grid}>
+          {(data ?? []).map((persona) => (
+            <PersonaCard
+              key={persona.id}
+              persona={persona}
+              onDuplicate={handleDuplicate}
+              onDelete={(id, name) => setDeleteTarget({ id, name })}
+              duplicatePending={duplicateMutation.isPending}
+              deletePending={deleteMutation.isPending}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <CreatePersonaModal
+        opened={createOpen}
+        onClose={() => setCreateOpen(false)}
+      />
+
+      <ImportPersonaModal
+        opened={importOpen}
+        onClose={() => setImportOpen(false)}
+      />
+
+      <Modal
+        opened={deleteTarget != null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete persona"
+        size="sm"
+      >
+        <p className={classes.modalBody}>
+          Delete <strong>{deleteTarget?.name || "this persona"}</strong>? This
+          cannot be undone.
+        </p>
+        <div className={classes.modalActions}>
+          <Button variant="default" type="button"
+            onClick={() => setDeleteTarget(null)}
+          >
+            Cancel
+          </Button>
+          <Button variant="dangerSolid" type="button"
+            onClick={handleConfirmDelete}>
+            Delete
+          </Button>
+        </div>
+      </Modal>
+    </div>
   );
 }
 
@@ -150,14 +172,14 @@ function PersonaCard({
   persona,
   onDuplicate,
   onDelete,
-  duplicateLoading,
-  deleteLoading,
+  duplicatePending,
+  deletePending,
 }: {
   persona: PersonaListItem;
   onDuplicate: (id: string) => void;
   onDelete: (id: string, name: string) => void;
-  duplicateLoading: boolean;
-  deleteLoading: boolean;
+  duplicatePending: boolean;
+  deletePending: boolean;
 }) {
   const avatarSrc = personaAvatarSrc(
     persona.avatar,
@@ -165,87 +187,68 @@ function PersonaCard({
   );
 
   return (
-    <Card withBorder padding={0}>
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.16 }}
+    >
       <Link
         to="/personas/$personaId"
         params={{ personaId: persona.id }}
-        style={{
-          textDecoration: "none",
-          color: "inherit",
-          display: "block",
-        }}
+        className={classes.card}
       >
-        <Box p="md">
-          <Group justify="space-between" align="start" wrap="nowrap">
-            <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-              {avatarSrc ? (
-                <Box
-                  w={48}
-                  h={48}
-                  style={{
-                    flexShrink: 0,
-                    borderRadius: 6,
-                    overflow: "hidden",
-                    background: "var(--mantine-color-default-hover)",
-                  }}
-                >
-                  <img
-                    src={avatarSrc}
-                    alt=""
-                    width={48}
-                    height={48}
-                    style={{ objectFit: "cover", display: "block" }}
-                  />
-                </Box>
-              ) : null}
-              <div style={{ minWidth: 0 }}>
-                <Text size="lg" fw={600} lineClamp={1}>
-                  {persona.name || "untitled"}
-                </Text>
-                <Text size="sm" c="dimmed" lineClamp={2} mt={4}>
-                  {persona.description || "No description"}
-                </Text>
-              </div>
-            </Group>
-            <Group gap="xs" wrap="nowrap">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                aria-label="Duplicate"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onDuplicate(persona.id);
-                }}
-                loading={duplicateLoading}
-              >
-                <IconCopy />
-              </ActionIcon>
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                color="red"
-                aria-label="Delete"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onDelete(persona.id, persona.name);
-                }}
-                loading={deleteLoading}
-              >
-                <IconTrash />
-              </ActionIcon>
-            </Group>
-          </Group>
-          <Group gap={6} mt="sm">
-            {persona.is_default ? (
-              <Badge size="sm" variant="light">
-                default
-              </Badge>
-            ) : null}
-          </Group>
-        </Box>
+        <div className={classes.cardTop}>
+          <div className={classes.cardIdentity}>
+            {avatarSrc ? (
+              <span className={classes.avatar}>
+                <img src={avatarSrc} alt="" width={48} height={48} />
+              </span>
+            ) : (
+              <span className={classes.avatarFallback} aria-hidden>
+                {(persona.name || "?").slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            <div className={classes.cardText}>
+              <p className={classes.cardName}>{persona.name || "untitled"}</p>
+              <p className={classes.cardDescription}>
+                {persona.description ? (
+                  <RuntimeText
+                    values={{ user: persona.name || "untitled" }}
+                    highlightUnresolved={false}
+                  >
+                    {persona.description}
+                  </RuntimeText>
+                ) : (
+                  "No description"
+                )}
+              </p>
+            </div>
+          </div>
+          <div className={classes.cardActions}>
+            <ActionIcon type="button" variant="ghost" aria-label="Duplicate" disabled={duplicatePending} onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDuplicate(persona.id);
+              }}
+            >
+              <IconCopy size={15} />
+            </ActionIcon>
+            <ActionIcon type="button" variant="ghostDanger" aria-label="Delete" disabled={deletePending} onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDelete(persona.id, persona.name);
+              }}
+            >
+              <IconTrash size={15} />
+            </ActionIcon>
+          </div>
+        </div>
+        {persona.is_default ? (
+          <div className={classes.badges}>
+            <span className={classes.badgeSoft}>default</span>
+          </div>
+        ) : null}
       </Link>
-    </Card>
+    </motion.div>
   );
 }

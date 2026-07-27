@@ -1,3 +1,4 @@
+import type { Variable } from "../presets/types";
 import type { Chat, ChatMessage, ChatMode, ChatSettings } from "./types";
 
 export type CreateChatInput = {
@@ -6,6 +7,10 @@ export type CreateChatInput = {
   settings?: Partial<ChatSettings>;
   /** When set, seed roleplay greeting from this alternate greeting index (0 = first_mes). */
   greeting_index?: number;
+  /** Link this chat as a side DM / child of another chat. */
+  parent_chat_id?: string | null;
+  /** Skip first_mes / alternate_greetings seeding (e.g. empty DM threads). */
+  skip_greeting?: boolean;
 };
 
 export type UpdateChatInput = {
@@ -51,6 +56,11 @@ export type GenerateChatInput = {
    * (used by `/continue`).
    */
   continueMessageId?: string;
+  /**
+   * When true and Narrative Director is selected, run it in pre_generation
+   * and inject its direction into the main prompt.
+   */
+  runDirector?: boolean;
 };
 
 export type ChatListItem = Pick<
@@ -58,9 +68,6 @@ export type ChatListItem = Pick<
   "id" | "title" | "mode" | "created_at" | "updated_at"
 > & {
   message_count: number;
-  /** Primary character (first in settings.character_ids), if any */
-  character_id: string | null;
-  character_ids: string[];
   preview: string | null;
 };
 
@@ -73,6 +80,20 @@ export type ChatStreamEvent =
     }
   | { type: "thinking"; delta: string }
   | { type: "delta"; delta: string }
+  | {
+      type: "agent_phase";
+      phase: "pre_generation" | "parallel" | "post_processing";
+      slug: string;
+      name: string;
+    }
+  | {
+      type: "agent_done";
+      phase: "pre_generation" | "parallel" | "post_processing";
+      slug: string;
+      name: string;
+      error?: string;
+    }
+  | { type: "needs_preset_variables"; presetId: string; variables: Variable[] }
   | { type: "error"; message: string }
   | {
       type: "done";
@@ -80,9 +101,35 @@ export type ChatStreamEvent =
       chat: Chat;
     };
 
+/** Lore entry selected for a turn (constant / keyword / vector). */
+export type PeekPromptLoreHit = {
+  lorebook_id: string;
+  lorebook_name: string;
+  entry_name: string;
+  source: "constant" | "keyword" | "vector";
+  score: number;
+  preview: string;
+};
+
+/** Older chat message retrieved into memory for a turn. */
+export type PeekPromptMemoryHit = {
+  message_id: string;
+  role: string;
+  score: number;
+  preview: string;
+};
+
 /** Prompt preview for a chat turn (Peek Prompt). */
 export type PeekPromptResult = {
   messages: Array<{ role: string; content: string }>;
   character_id: string | null;
   character_name: string;
+  /** Hybrid lore retrieval hits that survived token budget. */
+  lore_hits: PeekPromptLoreHit[];
+  /** Rough token estimate of injected lore content. */
+  lore_token_estimate: number;
+  /** Semantic chat memory hits injected beside the manual summary. */
+  memory_hits: PeekPromptMemoryHit[];
+  /** Rough token estimate of retrieved memory text. */
+  memory_token_estimate: number;
 };

@@ -81,6 +81,17 @@ export class ToolsService implements OnModuleInit {
     return this.toTool(row);
   }
 
+  async findByNames(names: string[]): Promise<Tool[]> {
+    const wanted = [...new Set(names.map((name) => name.trim()).filter(Boolean))];
+    if (!wanted.length) return [];
+    const rows = await this.tools.find();
+    const byName = new Map(rows.map((row) => [row.name, row]));
+    return wanted
+      .map((name) => byName.get(name))
+      .filter((row): row is NonNullable<typeof row> => Boolean(row))
+      .map((row) => this.toTool(row));
+  }
+
   async create(input: CreateToolInput): Promise<Tool> {
     await this.assertUniqueName(input.name);
     const entity = this.tools.create({

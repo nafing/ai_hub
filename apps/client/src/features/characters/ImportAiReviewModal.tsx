@@ -1,18 +1,4 @@
-import { useMemo, useState } from "react";
-import {
-  Accordion,
-  ActionIcon,
-  Button,
-  Group,
-  Modal,
-  Stack,
-  TagsInput,
-  Text,
-  TextInput,
-  Textarea,
-  Tooltip,
-} from "@mantine/core";
-import { notifications } from "@mantine/notifications";
+import { useMemo, useState, type ReactNode } from "react";
 import { IconRefresh, IconSparkles, IconTrash } from "@tabler/icons-react";
 import {
   buildPresetPromptContext,
@@ -20,6 +6,16 @@ import {
   type CharacterCardData,
   type Variable,
 } from "@ai-hub/shared";
+import {
+  ActionIcon,
+  Button,
+  Textarea,
+  Accordion,
+  Modal,
+  TextInput,
+  notifications,
+  TagsInput,
+} from "@/components/ui";
 import { getCharacter } from "@/features/characters/api";
 import { getPersona } from "@/features/personas/api";
 import { runGenerator } from "@/features/generators/api";
@@ -34,6 +30,7 @@ import {
   type ExtractedCharacterCard,
 } from "./characterGenerateShared";
 import { AlternateGreetingsEditor } from "./AlternateGreetingsEditor";
+import classes from "./ImportAiReviewModal.module.css";
 
 export type ImportAiReviewContext = {
   connectionId: string;
@@ -56,6 +53,11 @@ type ImportAiReviewModalProps = {
   onCancel: () => void;
   /** When true, hide remove-card controls so id↔card mapping stays stable. */
   lockCardCount?: boolean;
+  /**
+   * Trailing N cards are saved as new versions of `context.referenceCharacterIds`
+   * (import flow). Shown with a "New version" label in the accordion.
+   */
+  versionCardCount?: number;
   title?: string;
   confirmLabel?: string;
 };
@@ -112,6 +114,24 @@ function targetFieldForRebuild(kind: RebuildKind): string {
   return kind;
 }
 
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.field}>
+      <span className={classes.fieldLabel}>{label}</span>
+      {hint ? <p className={classes.fieldHint}>{hint}</p> : null}
+      {children}
+    </div>
+  );
+}
+
 export function ImportAiReviewModal({
   opened,
   cards,
@@ -121,6 +141,7 @@ export function ImportAiReviewModal({
   onConfirm,
   onCancel,
   lockCardCount = false,
+  versionCardCount = 0,
   title,
   confirmLabel,
 }: ImportAiReviewModalProps) {
@@ -135,9 +156,7 @@ export function ImportAiReviewModal({
 
   function updateCard(index: number, patch: Partial<CharacterCardData>) {
     onCardsChange(
-      cards.map((card, i) =>
-        i === index ? { ...card, ...patch } : card,
-      ),
+      cards.map((card, i) => (i === index ? { ...card, ...patch } : card)),
     );
   }
 
@@ -183,31 +202,15 @@ export function ImportAiReviewModal({
       ]);
 
       const note = batchConceptNotes.trim();
-      const roster = cards
+      const castRoster = cards
         .map(
           (card, index) =>
             `${index + 1}. ${card.name.trim() || `Character ${index + 1}`}`,
         )
         .join("\n");
 
-      const rebuildHint = [
-        `REBUILD CONCEPT for ALL ${cards.length} characters in one pass.`,
-        "Regenerate name, description, personality, and scenario for each.",
-        "Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.",
-        "Preserve distinct identities and relationships between characters; keep the same cast size and order.",
-        `Current roster (same order expected in output):\n${roster}`,
-        `Return exactly ${cards.length} objects in {"characters":[...]} — one per character, same order.`,
-        note ? `Extra direction: ${note}` : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-
-      const briefParts = [context.generatorBrief.trim(), rebuildHint].filter(
-        Boolean,
-      );
-
       const promptContext = buildPresetPromptContext({
-        generatorBrief: briefParts.join("\n\n"),
+        generatorBrief: context.generatorBrief.trim() || null,
         persona,
         referenceCharacterList: [
           ...libraryReferences,
@@ -216,18 +219,22 @@ export function ImportAiReviewModal({
         ],
         variables: {
           ...resolvePresetVariables(context.presetVariables),
-          char:
-            cards
-              .map((card) => card.name.trim())
-              .filter(Boolean)
-              .join(" / ") || "(unnamed cast)",
+          generation_mode: "rebuild",
+          rebuild_scope: "concept_batch",
+          rebuild_notes: note,
+          cast_size: String(cards.length),
+          cast_roster: castRoster,
+          char: cards
+            .map((card) => card.name.trim())
+            .filter(Boolean)
+            .join(" / "),
           target_field: "all card fields",
-          existing_description: "(see reference characters — rebuild concepts)",
-          existing_personality: "(see reference characters — rebuild concepts)",
-          existing_scenario: "(see reference characters — rebuild concepts)",
-          existing_first_mes: "(keep unless concept requires change)",
-          existing_mes_example: "(keep unless concept requires change)",
-          existing_alternate_greetings: "(keep unless concept requires change)",
+          existing_description: "",
+          existing_personality: "",
+          existing_scenario: "",
+          existing_first_mes: "",
+          existing_mes_example: "",
+          existing_alternate_greetings: "",
         },
       });
 
@@ -284,20 +291,11 @@ export function ImportAiReviewModal({
       ]);
 
       const note = conceptNotes[index]?.trim() ?? "";
-      const rebuildHint =
-        kind === "concept"
-          ? `REBUILD CONCEPT only for this character: regenerate name, description, personality, and scenario. Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concept.${note ? ` Extra direction: ${note}` : ""} Return a one-item {"characters":[...]} array.`
-          : kind === "all"
-            ? `REBUILD this entire character card from scratch using the reference card(s) and brief.${note ? ` Extra direction: ${note}` : ""} Return a one-item {"characters":[...]} array.`
-            : `Rebuild only the "${kind}" field for this character.`;
-
-      const briefParts = [
-        context.generatorBrief.trim(),
-        rebuildHint,
-      ].filter(Boolean);
+      const rebuildScope =
+        kind === "concept" ? "concept" : kind === "all" ? "all" : "field";
 
       const promptContext = buildPresetPromptContext({
-        generatorBrief: briefParts.join("\n\n"),
+        generatorBrief: context.generatorBrief.trim() || null,
         persona,
         referenceCharacterList: [
           ...libraryReferences,
@@ -306,13 +304,18 @@ export function ImportAiReviewModal({
         ],
         variables: {
           ...resolvePresetVariables(context.presetVariables),
-          char: card.name.trim() || "(unnamed)",
+          generation_mode: "rebuild",
+          rebuild_scope: rebuildScope,
+          rebuild_notes: note,
+          cast_size: "1",
+          cast_roster: `1. ${card.name.trim() || "Character 1"}`,
+          char: card.name.trim(),
           target_field: targetFieldForRebuild(kind),
-          existing_description: card.description.trim() || "(none yet)",
-          existing_personality: card.personality.trim() || "(none yet)",
-          existing_scenario: card.scenario.trim() || "(none yet)",
-          existing_first_mes: card.first_mes.trim() || "(none yet)",
-          existing_mes_example: card.mes_example.trim() || "(none yet)",
+          existing_description: card.description.trim(),
+          existing_personality: card.personality.trim(),
+          existing_scenario: card.scenario.trim(),
+          existing_first_mes: card.first_mes.trim(),
+          existing_mes_example: card.mes_example.trim(),
           existing_alternate_greetings: formatAlternateGreetingsForPrompt(
             card.alternate_greetings,
           ),
@@ -379,126 +382,132 @@ export function ImportAiReviewModal({
       opened={opened}
       onClose={onCancel}
       title={title ?? `Review AI characters (${cards.length})`}
-      centered
       size="xl"
       closeOnClickOutside={!busy}
       closeOnEscape={!busy}
     >
-      <Stack gap="md">
-        <Text size="sm" c="dimmed">
+      <div className={classes.stack}>
+        <p className={classes.muted}>
           Preview and edit generated cards before saving. Batch Rebuild Concept
           refreshes name / description / personality / scenario for every card
           in one pass; per-card Rebuild concept / Rebuild all work on a single
           character.
-        </Text>
+        </p>
 
-        <Stack gap="xs">
-          <Textarea
+        <div className={classes.section}>
+          <Field
             label="Batch rebuild notes (optional)"
-            description="Extra direction applied when rebuilding all concepts together."
-            autosize
-            minRows={2}
-            value={batchConceptNotes}
-            onChange={(event) =>
-              setBatchConceptNotes(event.currentTarget.value)
-            }
-            disabled={busy}
-          />
-          <Group>
+            hint="Extra direction applied when rebuilding all concepts together."
+          >
+            <Textarea
+              className={classes.textarea}
+              value={batchConceptNotes}
+              onChange={(event) =>
+                setBatchConceptNotes(event.currentTarget.value)
+              }
+              disabled={busy}
+            />
+          </Field>
+          <div className={classes.toolbarGroup}>
             <Button
+              type="button"
               variant="light"
+              size="sm"
               leftSection={<IconSparkles size={16} />}
-              loading={pendingKey === "batch:concept"}
               disabled={busy || cards.length === 0}
+              loading={pendingKey === "batch:concept"}
               onClick={() => void rebuildAllConcepts()}
             >
-              Rebuild Concept
-              {cards.length > 1 ? ` (${cards.length})` : ""}
+              {pendingKey === "batch:concept"
+                ? "Rebuilding…"
+                : `Rebuild Concept${cards.length > 1 ? ` (${cards.length})` : ""}`}
             </Button>
-          </Group>
-        </Stack>
+          </div>
+        </div>
 
-        <Accordion variant="separated" defaultValue={accordionDefault}>
+        <Accordion defaultValue={accordionDefault}>
           {cards.map((card, index) => {
             const pendingAll = pendingKey === `${index}:all`;
             const pendingConcept = pendingKey === `${index}:concept`;
+            const versionStart =
+              versionCardCount > 0 ? cards.length - versionCardCount : cards.length;
+            const isVersionCard =
+              versionCardCount > 0 && index >= versionStart;
             return (
               <Accordion.Item key={`card-${index}`} value={String(index)}>
                 <Accordion.Control>
-                  <Group justify="space-between" pr="sm" wrap="nowrap">
-                    <Text fw={600} lineClamp={1}>
-                      {card.name || `Character ${index + 1}`}
-                    </Text>
-                  </Group>
+                  <span className={classes.accordionTitle}>
+                    {isVersionCard
+                      ? `New version · ${card.name || `Character ${index + 1}`}`
+                      : card.name || `Character ${index + 1}`}
+                  </span>
                 </Accordion.Control>
                 <Accordion.Panel>
-                  <Stack gap="sm">
-                    <Group justify="space-between" wrap="wrap">
-                      <Group gap="xs">
+                  <div className={classes.cardPanel}>
+                    <div className={classes.cardToolbar}>
+                      <div className={classes.toolbarGroup}>
                         <Button
-                          size="xs"
+                          type="button"
                           variant="light"
+                          size="sm"
                           leftSection={<IconSparkles size={14} />}
-                          loading={pendingConcept}
                           disabled={busy}
+                          loading={pendingConcept}
                           onClick={() => void rebuild(index, "concept")}
                         >
-                          Rebuild concept
+                          {pendingConcept ? "Rebuilding…" : "Rebuild concept"}
                         </Button>
                         <Button
-                          size="xs"
+                          type="button"
                           variant="light"
+                          size="sm"
                           leftSection={<IconRefresh size={14} />}
-                          loading={pendingAll}
                           disabled={busy}
+                          loading={pendingAll}
                           onClick={() => void rebuild(index, "all")}
                         >
-                          Rebuild all
+                          {pendingAll ? "Rebuilding…" : "Rebuild all"}
                         </Button>
-                      </Group>
+                      </div>
                       {lockCardCount ? null : (
-                        <Tooltip label="Remove from import">
-                          <ActionIcon
-                            variant="subtle"
-                            color="red"
-                            disabled={busy || cards.length <= 1}
-                            onClick={() => removeCard(index)}
-                          >
-                            <IconTrash size={16} />
-                          </ActionIcon>
-                        </Tooltip>
+                        <ActionIcon type="button" variant="ghostDanger" title="Remove from import" aria-label="Remove from import" disabled={busy || cards.length <= 1} onClick={() => removeCard(index)}
+                        >
+                          <IconTrash size={16} />
+                        </ActionIcon>
                       )}
-                    </Group>
+                    </div>
 
-                    <Textarea
+                    <Field
                       label="Rebuild notes (optional)"
-                      description="Extra direction for Rebuild concept / Rebuild all."
-                      autosize
-                      minRows={2}
-                      value={conceptNotes[index] ?? ""}
-                      onChange={(event) => {
-                        const value = event.currentTarget.value;
-                        setConceptNotes((prev) => ({
-                          ...prev,
-                          [index]: value,
-                        }));
-                      }}
-                      disabled={busy}
-                    />
+                      hint="Extra direction for Rebuild concept / Rebuild all."
+                    >
+                      <Textarea
+                        className={classes.textarea}
+                        value={conceptNotes[index] ?? ""}
+                        onChange={(event) => {
+                          const value = event.currentTarget.value;
+                          setConceptNotes((prev) => ({
+                            ...prev,
+                            [index]: value,
+                          }));
+                        }}
+                        disabled={busy}
+                      />
+                    </Field>
 
-                    <TextInput
-                      label="Name"
-                      value={card.name}
-                      onChange={(event) =>
-                        updateCard(index, { name: event.currentTarget.value })
-                      }
-                      disabled={busy}
-                    />
+                    <Field label="Name">
+                      <TextInput
+                        value={card.name}
+                        onChange={(event) =>
+                          updateCard(index, { name: event.currentTarget.value })
+                        }
+                        disabled={busy}
+                      />
+                    </Field>
 
                     <FieldWithRebuild
                       label="Description"
                       value={card.description}
-                      minRows={3}
                       disabled={busy}
                       loading={pendingKey === `${index}:description`}
                       onChange={(value) =>
@@ -509,7 +518,6 @@ export function ImportAiReviewModal({
                     <FieldWithRebuild
                       label="Personality"
                       value={card.personality}
-                      minRows={2}
                       disabled={busy}
                       loading={pendingKey === `${index}:personality`}
                       onChange={(value) =>
@@ -520,7 +528,6 @@ export function ImportAiReviewModal({
                     <FieldWithRebuild
                       label="Scenario"
                       value={card.scenario}
-                      minRows={2}
                       disabled={busy}
                       loading={pendingKey === `${index}:scenario`}
                       onChange={(value) =>
@@ -531,7 +538,6 @@ export function ImportAiReviewModal({
                     <FieldWithRebuild
                       label="First message"
                       value={card.first_mes}
-                      minRows={3}
                       disabled={busy}
                       loading={pendingKey === `${index}:first_mes`}
                       onChange={(value) =>
@@ -542,7 +548,6 @@ export function ImportAiReviewModal({
                     <FieldWithRebuild
                       label="Example messages"
                       value={card.mes_example}
-                      minRows={3}
                       disabled={busy}
                       loading={pendingKey === `${index}:mes_example`}
                       onChange={(value) =>
@@ -553,64 +558,73 @@ export function ImportAiReviewModal({
                     <AlternateGreetingsEditor
                       value={card.alternate_greetings}
                       disabled={busy}
-                      minRows={3}
                       onChange={(value) =>
                         updateCard(index, { alternate_greetings: value })
                       }
                       action={
                         <Button
-                          size="xs"
                           variant="subtle"
-                          leftSection={<IconRefresh size={14} />}
-                          loading={pendingKey === `${index}:alternate_greetings`}
+                          type="button"
                           disabled={busy}
                           onClick={() =>
                             void rebuild(index, "alternate_greetings")
                           }
                         >
-                          Rebuild
+                          <IconRefresh size={14} />
+                          {pendingKey === `${index}:alternate_greetings`
+                            ? "Rebuilding…"
+                            : "Rebuild"}
                         </Button>
                       }
                     />
-                    <TagsInput
-                      label="Tags"
-                      value={card.tags}
-                      onChange={(tags) => updateCard(index, { tags })}
-                      disabled={busy}
-                    />
-                    <Textarea
-                      label="Creator notes"
-                      autosize
-                      minRows={2}
-                      value={card.creator_notes}
-                      onChange={(event) =>
-                        updateCard(index, {
-                          creator_notes: event.currentTarget.value,
-                        })
-                      }
-                      disabled={busy}
-                    />
-                  </Stack>
+                    <Field label="Tags">
+                      <TagsInput
+                        value={card.tags}
+                        onChange={(tags) => updateCard(index, { tags })}
+                        disabled={busy}
+                      />
+                    </Field>
+                    <Field label="Creator notes">
+                      <Textarea
+                        className={classes.textarea}
+                        value={card.creator_notes}
+                        onChange={(event) =>
+                          updateCard(index, {
+                            creator_notes: event.currentTarget.value,
+                          })
+                        }
+                        disabled={busy}
+                      />
+                    </Field>
+                  </div>
                 </Accordion.Panel>
               </Accordion.Item>
             );
           })}
         </Accordion>
 
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onCancel} disabled={busy}>
+        <div className={classes.actions}>
+          <Button
+            variant="default"
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+          >
             Cancel
           </Button>
           <Button
+            variant="primary"
+            type="button"
             onClick={onConfirm}
-            loading={confirming}
             disabled={pendingKey != null || cards.length === 0}
           >
-            {confirmLabel ??
-              `Save ${cards.length} character${cards.length === 1 ? "" : "s"}`}
+            {confirming
+              ? "Saving…"
+              : (confirmLabel ??
+                `Save ${cards.length} character${cards.length === 1 ? "" : "s"}`)}
           </Button>
-        </Group>
-      </Stack>
+        </div>
+      </div>
     </Modal>
   );
 }
@@ -619,37 +633,34 @@ function FieldWithRebuild(props: {
   label: string;
   description?: string;
   value: string;
-  minRows: number;
   disabled: boolean;
   loading: boolean;
   onChange: (value: string) => void;
   onRebuild: () => void;
 }) {
   return (
-    <Stack gap={4}>
-      <Group justify="space-between" align="flex-end" wrap="nowrap">
-        <Text size="sm" fw={500}>
-          {props.label}
-        </Text>
+    <div className={classes.field}>
+      <div className={classes.fieldHeader}>
+        <span className={classes.fieldLabel}>{props.label}</span>
         <Button
-          size="xs"
           variant="subtle"
-          leftSection={<IconRefresh size={14} />}
-          loading={props.loading}
+          type="button"
           disabled={props.disabled}
           onClick={props.onRebuild}
         >
-          Rebuild
+          <IconRefresh size={14} />
+          {props.loading ? "Rebuilding…" : "Rebuild"}
         </Button>
-      </Group>
+      </div>
+      {props.description ? (
+        <p className={classes.fieldHint}>{props.description}</p>
+      ) : null}
       <Textarea
-        description={props.description}
-        autosize
-        minRows={props.minRows}
+        className={classes.textarea}
         value={props.value}
         onChange={(event) => props.onChange(event.currentTarget.value)}
         disabled={props.disabled}
       />
-    </Stack>
+    </div>
   );
 }

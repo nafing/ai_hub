@@ -1,28 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActionIcon,
-  Avatar,
-  Box,
-  Button,
-  Center,
-  Combobox,
-  Group,
-  Loader,
-  Menu,
-  ScrollArea,
-  Stack,
-  Text,
-  Textarea,
-  Tooltip,
-  useCombobox,
-} from "@mantine/core";
-import { modals } from "@mantine/modals";
-import { notifications } from "@mantine/notifications";
-import {
+  IconMessage,
   IconPlayerStop,
+  IconRobot,
   IconSend,
   IconUsers,
 } from "@tabler/icons-react";
+import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   activeMessageText,
@@ -32,26 +16,35 @@ import {
   matchSlashCommand,
   parseMentions,
   primaryCharacterId,
+  visibleChatMessages,
+  visibleChatMessagesThrough,
   type Chat,
   type ChatMessage,
   type ChatStreamEvent,
   type GenerateChatInput,
   type SlashCommandAction,
 } from "@ai-hub/shared";
+import { ActionIcon, Button, Menu, Modal, Textarea, notifications } from "@/components/ui";
 import { useApplyRegex } from "@/features/regexes/use-apply-regex";
 import { characterAvatarSrc } from "@/features/characters/avatar-url";
 import { useCharacters } from "@/features/characters/queries";
 import { personaAvatarSrc } from "@/features/personas/avatar-url";
 import { usePersonas } from "@/features/personas/queries";
 import { api } from "@/lib/api";
-import { addChatMessage, streamGenerate, streamRegenerate } from "./api";
+import { addChatMessage, PresetVariablesCancelledError, streamGenerate, streamRegenerate } from "./api";
+import {
+  ChatAgentPanel,
+  chatAgentPanelHasActivity,
+} from "./ChatAgentPanel";
 import { ChatMessageBubble } from "./ChatMessageBubble";
 import { PeekPromptModal } from "./PeekPromptModal";
 import {
   chatKeys,
   useDeleteChatMessage,
+  useGetOrCreateCharacterDm,
   useUpdateChatMessage,
 } from "./queries";
+import classes from "./ChatSession.module.css";
 
 type ChatSessionProps = {
   chat: Chat;
@@ -63,9 +56,11 @@ type StreamSpeaker = {
 };
 
 export function ChatSession({ chat }: ChatSessionProps) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const updateMessage = useUpdateChatMessage();
   const deleteMessage = useDeleteChatMessage();
+  const openDmMutation = useGetOrCreateCharacterDm();
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
   const apiBase = String(api.defaults.baseURL ?? "/v1/api");
@@ -116,6 +111,20 @@ export function ChatSession({ chat }: ChatSessionProps) {
     return defaultPersona?.name.trim() || "You";
   }, [chat.settings.persona_id, personasQuery.data]);
 
+  const primaryCharName = useMemo(() => {
+    const primaryId = primaryCharacterId(chat.settings);
+    if (!primaryId) return "Character";
+    return characterNameById.get(primaryId) || "Character";
+  }, [chat.settings, characterNameById]);
+
+  const macroValues = useMemo(
+    () => ({
+      char: primaryCharName,
+      user: personaName,
+    }),
+    [primaryCharName, personaName],
+  );
+
   function speakerNameFor(message: ChatMessage): string {
     if (message.role === "user") return personaName;
     if (message.role === "system") return "System";
@@ -157,10 +166,19 @@ export function ChatSession({ chat }: ChatSessionProps) {
   );
   const [mentionFilter, setMentionFilter] = useState<string | null>(null);
   const [commandFilter, setCommandFilter] = useState<string | null>(null);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [peekMessageId, setPeekMessageId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ChatMessage | null>(null);
+  const [regenHideAfterId, setRegenHideAfterId] = useState<string | null>(null);
+  const [agentsOpen, setAgentsOpen] = useState(false);
+  const [agentStatus, setAgentStatus] = useState<{
+    slug: string;
+    name: string;
+    phase: string;
+  } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
-  const suggestCombobox = useCombobox();
 
   useEffect(() => {
     if (!streaming) setLocalMessages(chat.messages);
@@ -185,13 +203,16 @@ export function ChatSession({ chat }: ChatSessionProps) {
   }, [localMessages, streamText, streamSpeaker]);
 
   const displayMessages = useMemo(() => {
-    return localMessages.map((message, index, arr) => {
+    const branch = regenHideAfterId
+      ? visibleChatMessagesThrough(localMessages, regenHideAfterId)
+      : visibleChatMessages(localMessages);
+    return branch.map((message, index, arr) => {
       const depth = arr.length - 1 - index;
       const raw = activeMessageText(message);
       const displayText = applyToText(raw, { role: message.role }, depth).text;
       return { message, displayText };
     });
-  }, [localMessages, applyToText]);
+  }, [localMessages, applyToText, regenHideAfterId]);
 
   const mentionCharacters = useMemo(() => {
     // Lightweight stand-ins for parseMentions (needs data.name)
@@ -228,12 +249,46 @@ export function ChatSession({ chat }: ChatSessionProps) {
       description: cmd.description,
     }));
   }, [commandFilter, chat.mode]);
+
   const suggestMode =
     commandFilter !== null
       ? "command"
       : mentionFilter !== null
         ? "mention"
         : null;
+
+  const suggestionCount =
+    suggestMode === "command"
+      ? commandSuggestions.length
+      : suggestMode === "mention"
+        ? mentionSuggestions.length
+        : 0;
+
+  const showSuggestions =
+    suggestOpen && suggestMode !== null && suggestionCount > 0;
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [commandFilter, mentionFilter, suggestionCount]);
+
+  function closeSuggestions() {
+    setSuggestOpen(false);
+    setMentionFilter(null);
+    setCommandFilter(null);
+    setSelectedIndex(0);
+  }
+
+  function selectSuggestion(index: number) {
+    if (suggestMode === "command") {
+      const cmd = commandSuggestions[index];
+      if (cmd) updateDraftWithCommand(cmd.id);
+      return;
+    }
+    if (suggestMode === "mention") {
+      const character = mentionSuggestions[index];
+      if (character?.name) updateDraftWithMention(character.name);
+    }
+  }
 
   function applyStreamEvent(event: ChatStreamEvent) {
     if (event.type === "user_message") {
@@ -255,6 +310,18 @@ export function ChatSession({ chat }: ChatSessionProps) {
     }
     if (event.type === "thinking") {
       setStreamThinking((prev) => prev + event.delta);
+      return;
+    }
+    if (event.type === "agent_phase") {
+      setAgentStatus({
+        slug: event.slug,
+        name: event.name,
+        phase: event.phase,
+      });
+      return;
+    }
+    if (event.type === "agent_done") {
+      setAgentStatus(null);
       return;
     }
     if (event.type === "error") {
@@ -280,12 +347,20 @@ export function ChatSession({ chat }: ChatSessionProps) {
   }
 
   function canSend(text: string): boolean {
-    if (!text.trim() || streaming) return false;
-    if (matchSlashCommand(text.trim(), chat.mode === "conversation" ? "conversation" : "roleplay")) {
+    if (streaming) return false;
+    const trimmed = text.trim();
+    // Empty composer → impersonate (write as user persona).
+    if (!trimmed) return true;
+    if (
+      matchSlashCommand(
+        trimmed,
+        chat.mode === "conversation" ? "conversation" : "roleplay",
+      )
+    ) {
       return true;
     }
     if (!manualOrder) return true;
-    if (draftHasMention(text)) return true;
+    if (draftHasMention(trimmed)) return true;
     if (selectedCharacterId) return true;
     return false;
   }
@@ -295,12 +370,17 @@ export function ChatSession({ chat }: ChatSessionProps) {
     setStreamText("");
     setStreamThinking("");
     setStreamSpeaker(null);
+    setAgentStatus(null);
     const controller = new AbortController();
     abortRef.current = controller;
 
     try {
       await streamGenerate(chat.id, input, applyStreamEvent, controller.signal);
     } catch (error) {
+      if (error instanceof PresetVariablesCancelledError) {
+        if (input.userMessage) setDraft(input.userMessage);
+        return;
+      }
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         notifications.show({
           title: "Send failed",
@@ -314,6 +394,7 @@ export function ChatSession({ chat }: ChatSessionProps) {
       setStreamText("");
       setStreamThinking("");
       setStreamSpeaker(null);
+      setAgentStatus(null);
     }
   }
 
@@ -325,9 +406,6 @@ export function ChatSession({ chat }: ChatSessionProps) {
           message: action.message,
           color: "blue",
           autoClose: action.message.includes("\n") ? 12000 : 6000,
-          styles: {
-            description: { whiteSpace: "pre-wrap" },
-          },
         });
         continue;
       }
@@ -364,15 +442,21 @@ export function ChatSession({ chat }: ChatSessionProps) {
 
   async function handleSend() {
     const text = draft.trim();
-    if (!canSend(text)) return;
+    if (!canSend(draft)) return;
+
+    // Empty send = impersonate (same as /impersonate without direction).
+    if (!text) {
+      setDraft("");
+      closeSuggestions();
+      await runGenerate({ impersonate: true });
+      return;
+    }
 
     const mode = chat.mode === "conversation" ? "conversation" : "roleplay";
     const slashMatched = matchSlashCommand(text, mode);
 
     setDraft("");
-    setMentionFilter(null);
-    setCommandFilter(null);
-    suggestCombobox.closeDropdown();
+    closeSuggestions();
 
     if (slashMatched) {
       const lastMessage = localMessages[localMessages.length - 1];
@@ -434,6 +518,9 @@ export function ChatSession({ chat }: ChatSessionProps) {
         controller.signal,
       );
     } catch (error) {
+      if (error instanceof PresetVariablesCancelledError) {
+        return;
+      }
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         notifications.show({
           title: "Trigger failed",
@@ -450,17 +537,41 @@ export function ChatSession({ chat }: ChatSessionProps) {
     }
   }
 
+  async function handleOpenCharacterDm(characterId: string) {
+    if (streaming || openDmMutation.isPending) return;
+    try {
+      const dm = await openDmMutation.mutateAsync({
+        chatId: chat.id,
+        characterId,
+      });
+      await navigate({
+        to: "/chats/$chatId",
+        params: { chatId: dm.id },
+      });
+    } catch (error) {
+      notifications.show({
+        title: "Could not open DM",
+        message: error instanceof Error ? error.message : "Unknown error",
+        color: "red",
+      });
+    }
+  }
+
   async function handleRegenerate(messageId?: string) {
     if (streaming) return;
-    if (messageId) {
-      const target = localMessages.find((m) => m.id === messageId);
-      if (!target || (target.role !== "assistant" && target.role !== "user")) {
-        return;
-      }
-    } else if (!localMessages.some((m) => m.role === "assistant" || m.role === "user")) {
+    const visible = visibleChatMessages(localMessages);
+    const targetId =
+      messageId ??
+      [...visible]
+        .reverse()
+        .find((m) => m.role === "assistant" || m.role === "user")?.id;
+    if (!targetId) return;
+    const target = localMessages.find((m) => m.id === targetId);
+    if (!target || (target.role !== "assistant" && target.role !== "user")) {
       return;
     }
 
+    setRegenHideAfterId(targetId);
     setStreaming(true);
     setStreamText("");
     setStreamThinking("");
@@ -473,9 +584,12 @@ export function ChatSession({ chat }: ChatSessionProps) {
         chat.id,
         applyStreamEvent,
         controller.signal,
-        messageId,
+        targetId,
       );
     } catch (error) {
+      if (error instanceof PresetVariablesCancelledError) {
+        return;
+      }
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         notifications.show({
           title: "Regenerate failed",
@@ -485,6 +599,7 @@ export function ChatSession({ chat }: ChatSessionProps) {
       }
     } finally {
       setStreaming(false);
+      setRegenHideAfterId(null);
       abortRef.current = null;
       setStreamText("");
       setStreamThinking("");
@@ -526,87 +641,59 @@ export function ChatSession({ chat }: ChatSessionProps) {
   }
 
   function handleDelete(message: ChatMessage) {
-    const swipeCount = message.swipes.length;
-    const hasMultipleSwipes = swipeCount > 1;
+    setDeleteTarget(message);
+  }
 
-    modals.open({
-      title: "Delete",
-      children: (
-        <Stack gap="sm">
-          <Text size="sm" c="dimmed">
-            {hasMultipleSwipes
-              ? `This message has ${swipeCount} swipes. Choose what to remove.`
-              : "Remove this message from the chat."}
-          </Text>
-          <Stack gap="xs">
-            {hasMultipleSwipes ? (
-              <Button
-                variant="light"
-                color="red"
-                onClick={() => {
-                  modals.closeAll();
-                  updateMessage.mutate(
-                    {
-                      id: chat.id,
-                      messageId: message.id,
-                      input: { remove_active_swipe: true },
-                    },
-                    {
-                      onSuccess: (next) => {
-                        setLocalMessages(next.messages);
-                      },
-                      onError: (error) => {
-                        notifications.show({
-                          title: "Delete failed",
-                          message:
-                            error instanceof Error
-                              ? error.message
-                              : "Unknown error",
-                          color: "red",
-                        });
-                      },
-                    },
-                  );
-                }}
-              >
-                Delete active swipe ({message.swipe_id + 1}/{swipeCount})
-              </Button>
-            ) : null}
-            <Button
-              color="red"
-              onClick={() => {
-                modals.closeAll();
-                deleteMessage.mutate(
-                  { id: chat.id, messageId: message.id },
-                  {
-                    onSuccess: (next) => {
-                      setLocalMessages(next.messages);
-                    },
-                    onError: (error) => {
-                      notifications.show({
-                        title: "Delete failed",
-                        message:
-                          error instanceof Error
-                            ? error.message
-                            : "Unknown error",
-                        color: "red",
-                      });
-                    },
-                  },
-                );
-              }}
-            >
-              {hasMultipleSwipes
-                ? "Delete entire message (all swipes)"
-                : "Delete message"}
-            </Button>
-            <Button variant="default" onClick={() => modals.closeAll()}>
-              Cancel
-            </Button>
-          </Stack>
-        </Stack>
-      ),
-    });
+  function closeDeleteModal() {
+    setDeleteTarget(null);
+  }
+
+  function handleDeleteActiveSwipe() {
+    if (!deleteTarget) return;
+    const message = deleteTarget;
+    closeDeleteModal();
+    updateMessage.mutate(
+      {
+        id: chat.id,
+        messageId: message.id,
+        input: { remove_active_swipe: true },
+      },
+      {
+        onSuccess: (next) => {
+          setLocalMessages(next.messages);
+        },
+        onError: (error) => {
+          notifications.show({
+            title: "Delete failed",
+            message:
+              error instanceof Error ? error.message : "Unknown error",
+            color: "red",
+          });
+        },
+      },
+    );
+  }
+
+  function handleDeleteEntireMessage() {
+    if (!deleteTarget) return;
+    const message = deleteTarget;
+    closeDeleteModal();
+    deleteMessage.mutate(
+      { id: chat.id, messageId: message.id },
+      {
+        onSuccess: (next) => {
+          setLocalMessages(next.messages);
+        },
+        onError: (error) => {
+          notifications.show({
+            title: "Delete failed",
+            message:
+              error instanceof Error ? error.message : "Unknown error",
+            color: "red",
+          });
+        },
+      },
+    );
   }
 
   function updateDraftWithMention(name: string) {
@@ -616,9 +703,7 @@ export function ChatSession({ chat }: ChatSessionProps) {
     } else {
       setDraft(`${draft.slice(0, at)}@${name} `);
     }
-    setMentionFilter(null);
-    setCommandFilter(null);
-    suggestCombobox.closeDropdown();
+    closeSuggestions();
   }
 
   function updateDraftWithCommand(commandId: string) {
@@ -629,9 +714,7 @@ export function ChatSession({ chat }: ChatSessionProps) {
       ? trimmedStart.slice(match[0].length).replace(/^\s*/, "")
       : trimmedStart.replace(/^\//, "");
     setDraft(`${leading}/${commandId}${rest ? ` ${rest}` : " "}`);
-    setMentionFilter(null);
-    setCommandFilter(null);
-    suggestCombobox.closeDropdown();
+    closeSuggestions();
   }
 
   function onDraftChange(value: string) {
@@ -642,7 +725,7 @@ export function ChatSession({ chat }: ChatSessionProps) {
     if (slashMatch) {
       setCommandFilter(slashMatch[1] ?? "");
       setMentionFilter(null);
-      suggestCombobox.openDropdown();
+      setSuggestOpen(true);
       return;
     }
 
@@ -652,14 +735,15 @@ export function ChatSession({ chat }: ChatSessionProps) {
       if (!/\s/.test(after)) {
         setMentionFilter(after);
         setCommandFilter(null);
-        suggestCombobox.openDropdown();
+        setSuggestOpen(true);
         return;
       }
     }
 
     setMentionFilter(null);
     setCommandFilter(null);
-    suggestCombobox.closeDropdown();
+    setSuggestOpen(false);
+    setSelectedIndex(0);
   }
 
   const streamingCharacterId =
@@ -672,13 +756,20 @@ export function ChatSession({ chat }: ChatSessionProps) {
       swipes: [streamText],
       swipe_id: 0,
       character_id: streamingCharacterId,
+      parent_id: null,
+      parent_swipe_id: null,
       created_at: new Date().toISOString(),
     });
 
+  const deleteSwipeCount = deleteTarget?.swipes.length ?? 0;
+  const deleteHasMultipleSwipes = deleteSwipeCount > 1;
+  const agentsHaveActivity =
+    Boolean(agentStatus) || chatAgentPanelHasActivity(chat);
+
   return (
-    <Stack h="100%" gap={0}>
-      <ScrollArea style={{ flex: 1 }} viewportRef={viewportRef} p="md">
-        <Stack gap="sm">
+    <div className={classes.root}>
+      <div ref={viewportRef} className={classes.messages}>
+        <div className={classes.messageList}>
           {displayMessages.map(({ message, displayText }) => (
             <ChatMessageBubble
               key={message.id}
@@ -686,6 +777,7 @@ export function ChatSession({ chat }: ChatSessionProps) {
               displayText={displayText}
               speakerName={speakerNameFor(message)}
               avatarUrl={avatarFor(message)}
+              macroValues={macroValues}
               disabled={streaming}
               onSwipe={
                 message.role === "assistant" || message.role === "user"
@@ -712,6 +804,8 @@ export function ChatSession({ chat }: ChatSessionProps) {
                 swipe_id: 0,
                 thinking: streamThinking || null,
                 character_id: streamingCharacterId,
+                parent_id: null,
+                parent_swipe_id: null,
                 created_at: new Date().toISOString(),
               }}
               displayText={streamText}
@@ -721,28 +815,46 @@ export function ChatSession({ chat }: ChatSessionProps) {
                   ? characterAvatarById.get(streamingCharacterId) ?? null
                   : null
               }
+              macroValues={macroValues}
               isStreaming
             />
           ) : null}
 
           {streaming && !streamText && !streamThinking ? (
-            <Center py="md">
-              <Loader size="sm" />
+            <div className={classes.streamingStatus}>
+              <span className={classes.spinner} aria-hidden />
               {streamSpeaker ? (
-                <Text size="sm" c="dimmed" ml="sm">
+                <span className={classes.streamingLabel}>
                   {streamSpeaker.character_name}…
-                </Text>
+                </span>
+              ) : agentStatus ? (
+                <span className={classes.streamingLabel}>
+                  {agentStatus.name}…
+                </span>
               ) : null}
-            </Center>
+            </div>
           ) : null}
 
           {!displayMessages.length && !streaming ? (
-            <Text c="dimmed" size="sm" ta="center" py="xl">
-              Send a message to start.
-            </Text>
+            <p className={classes.emptyHint}>Send a message to start.</p>
           ) : null}
-        </Stack>
-      </ScrollArea>
+        </div>
+      </div>
+
+      <ChatAgentPanel
+        chat={chat}
+        opened={agentsOpen}
+        onClose={() => setAgentsOpen(false)}
+        disabled={streaming}
+        agentStatus={agentStatus}
+        onSendChoice={(text) => {
+          void runGenerate({ userMessage: text });
+        }}
+        onRunDirector={() => {
+          setAgentsOpen(false);
+          void runGenerate({ runDirector: true });
+        }}
+      />
 
       <PeekPromptModal
         opened={Boolean(peekMessageId)}
@@ -751,194 +863,272 @@ export function ChatSession({ chat }: ChatSessionProps) {
         messageId={peekMessageId ?? ""}
       />
 
-      <Box px="md" pb="md" pt="sm">
-        <Combobox
-          store={suggestCombobox}
-          onOptionSubmit={(value) => {
-            if (suggestMode === "command") {
-              updateDraftWithCommand(value);
-              return;
-            }
-            const character = chatCharacters.find((c) => c.id === value);
-            if (character?.name) updateDraftWithMention(character.name);
-          }}
-        >
-          <Combobox.Target>
-            <Group
-              gap={6}
-              wrap="nowrap"
-              px={10}
-              py={6}
-              style={{
-                borderRadius: 999,
-                border:
-                  "1px solid var(--mantine-color-dark-4, var(--mantine-color-default-border))",
-                background:
-                  "var(--mantine-color-dark-7, var(--mantine-color-body))",
-                alignItems: "center",
-              }}
-            >
-              <Textarea
-                flex={1}
-                variant="unstyled"
-                size="sm"
-                placeholder="Write your response, / for commands"
-                autosize
-                minRows={1}
-                maxRows={6}
-                value={draft}
-                disabled={streaming}
-                styles={{
-                  input: {
-                    paddingTop: 4,
-                    paddingBottom: 4,
-                    paddingLeft: 4,
-                    paddingRight: 4,
-                    minHeight: 28,
-                    lineHeight: 1.4,
-                  },
-                }}
-                onChange={(event) => onDraftChange(event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  if (suggestCombobox.dropdownOpened) {
-                    if (event.key === "ArrowDown") {
-                      event.preventDefault();
-                      suggestCombobox.selectNextOption();
-                      return;
-                    }
-                    if (event.key === "ArrowUp") {
-                      event.preventDefault();
-                      suggestCombobox.selectPreviousOption();
-                      return;
-                    }
-                    const hasOptions =
-                      suggestMode === "command"
-                        ? commandSuggestions.length > 0
-                        : mentionSuggestions.length > 0;
-                    if (event.key === "Enter" && hasOptions) {
-                      event.preventDefault();
-                      suggestCombobox.clickSelectedOption();
-                      return;
-                    }
-                    if (event.key === "Escape") {
-                      suggestCombobox.closeDropdown();
-                      setMentionFilter(null);
-                      setCommandFilter(null);
-                      return;
-                    }
-                  }
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    void handleSend();
-                  }
-                }}
-              />
+      <Modal
+        opened={Boolean(deleteTarget)}
+        onClose={closeDeleteModal}
+        title="Delete"
+        size="sm"
+      >
+        <div className={classes.deleteStack}>
+          <p className={classes.deleteHint}>
+            {deleteHasMultipleSwipes
+              ? `This message has ${deleteSwipeCount} swipes. Choose what to remove.`
+              : "Remove this message from the chat."}
+          </p>
+          <div className={classes.deleteActions}>
+            {deleteHasMultipleSwipes && deleteTarget ? (
+              <Button variant="danger" type="button"
+                onClick={handleDeleteActiveSwipe}>
+                Delete active swipe ({deleteTarget.swipe_id + 1}/{deleteSwipeCount})
+              </Button>
+            ) : null}
+            <Button variant="dangerSolid" type="button"
+              onClick={handleDeleteEntireMessage}>
+              {deleteHasMultipleSwipes
+                ? "Delete entire message (all swipes)"
+                : "Delete message"}
+            </Button>
+            <Button variant="default" type="button"
+              onClick={closeDeleteModal}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
-              {group ? (
-                <Menu shadow="md" width={220} position="top-end">
-                  <Menu.Target>
-                    <Tooltip label="Trigger character">
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        size="sm"
-                        radius="xl"
-                        aria-label="Trigger character"
-                        disabled={streaming}
-                      >
-                        <IconUsers size={16} />
-                      </ActionIcon>
-                    </Tooltip>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    <Menu.Label>Trigger character</Menu.Label>
-                    {characterSelectOptions.map((option) => (
-                      <Menu.Item
-                        key={option.value}
-                        leftSection={
-                          <Avatar
-                            src={
-                              characterAvatarById.get(option.value) || undefined
-                            }
-                            size={20}
-                            radius="xl"
-                          >
-                            {option.label.slice(0, 1).toUpperCase()}
-                          </Avatar>
-                        }
-                        disabled={streaming}
-                        onClick={() => {
-                          void handleTriggerResponse(option.value);
-                        }}
-                      >
-                        {option.label}
-                      </Menu.Item>
+      <div className={classes.composerWrap}>
+        <div className={classes.composerBar} data-glass-surface>
+          <div className={classes.composerInputWrap}>
+            {showSuggestions ? (
+              <ul
+                className={classes.suggestDropdown}
+                role="listbox"
+                aria-label={
+                  suggestMode === "command"
+                    ? "Slash commands"
+                    : "Character mentions"
+                }
+              >
+                {suggestMode === "command"
+                  ? commandSuggestions.map((cmd, index) => (
+                      <li key={cmd.id} role="presentation">
+                        <Button
+                          type="button"
+                          role="option"
+                          aria-selected={index === selectedIndex}
+                          variant="ghost"
+                          className={[
+                            classes.suggestOption,
+                            index === selectedIndex
+                              ? classes.suggestOptionSelected
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => updateDraftWithCommand(cmd.id)}
+                        >
+                          <span className={classes.suggestOptionCommand}>
+                            <span className={classes.suggestCommandLabel}>
+                              {cmd.label}
+                            </span>
+                            <span className={classes.suggestCommandDesc}>
+                              {cmd.description}
+                            </span>
+                          </span>
+                        </Button>
+                      </li>
+                    ))
+                  : mentionSuggestions.map((item, index) => (
+                      <li key={item.id} role="presentation">
+                        <Button
+                          type="button"
+                          role="option"
+                          aria-selected={index === selectedIndex}
+                          variant="ghost"
+                          className={[
+                            classes.suggestOption,
+                            index === selectedIndex
+                              ? classes.suggestOptionSelected
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() =>
+                            updateDraftWithMention(item.name || "Unnamed")
+                          }
+                        >
+                          @{item.name || "Unnamed"}
+                        </Button>
+                      </li>
                     ))}
-                  </Menu.Dropdown>
-                </Menu>
-              ) : null}
+              </ul>
+            ) : null}
 
-              {streaming ? (
-                <Tooltip label="Stop">
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    size="sm"
-                    radius="xl"
-                    aria-label="Stop"
-                    onClick={handleStop}
-                  >
-                    <IconPlayerStop size={16} />
-                  </ActionIcon>
-                </Tooltip>
-              ) : (
-                <Tooltip label="Send">
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
-                    size="sm"
-                    radius="xl"
-                    aria-label="Send"
-                    disabled={!canSend(draft)}
-                    onClick={() => void handleSend()}
-                  >
-                    <IconSend size={16} />
-                  </ActionIcon>
-                </Tooltip>
-              )}
-            </Group>
-          </Combobox.Target>
-          <Combobox.Dropdown
-            hidden={
-              suggestMode === null ||
-              (suggestMode === "command"
-                ? commandSuggestions.length === 0
-                : mentionSuggestions.length === 0)
+            <Textarea
+              className={classes.composerInput}
+              placeholder="Write your response, / for commands"
+              value={draft}
+              disabled={streaming}
+              onChange={(event) => onDraftChange(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (showSuggestions) {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setSelectedIndex((index) =>
+                      Math.min(index + 1, suggestionCount - 1),
+                    );
+                    return;
+                  }
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setSelectedIndex((index) => Math.max(index - 1, 0));
+                    return;
+                  }
+                  if (event.key === "Enter" && suggestionCount > 0) {
+                    event.preventDefault();
+                    selectSuggestion(selectedIndex);
+                    return;
+                  }
+                  if (event.key === "Escape") {
+                    closeSuggestions();
+                    return;
+                  }
+                }
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void handleSend();
+                }
+              }}
+            />
+          </div>
+
+          <ActionIcon
+            type="button"
+            variant={agentsOpen ? "primary" : "ghost"}
+            aria-label="Agents"
+            title="Agents"
+            className={
+              agentsHaveActivity ? classes.agentsButtonActive : undefined
             }
+            onClick={() => setAgentsOpen(true)}
           >
-            <Combobox.Options>
-              {suggestMode === "command"
-                ? commandSuggestions.map((cmd) => (
-                    <Combobox.Option value={cmd.id} key={cmd.id}>
-                      <Stack gap={0}>
-                        <Text size="sm" fw={600}>
-                          {cmd.label}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {cmd.description}
-                        </Text>
-                      </Stack>
-                    </Combobox.Option>
-                  ))
-                : mentionSuggestions.map((item) => (
-                    <Combobox.Option value={item.id} key={item.id}>
-                      @{item.name || "Unnamed"}
-                    </Combobox.Option>
-                  ))}
-            </Combobox.Options>
-          </Combobox.Dropdown>
-        </Combobox>
-      </Box>
-    </Stack>
+            <IconRobot size={16} />
+            {agentsHaveActivity ? (
+              <span className={classes.agentsBadge} aria-hidden />
+            ) : null}
+          </ActionIcon>
+
+          {chat.settings.allow_character_dms &&
+          characterSelectOptions.length > 0 ? (
+            <Menu>
+              <Menu.Target>
+                <ActionIcon
+                  type="button"
+                  variant="ghost"
+                  aria-label="Open character DM"
+                  title="Open character DM"
+                  disabled={streaming || openDmMutation.isPending}
+                >
+                  <IconMessage size={16} />
+                </ActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown className={classes.menuDropdownAbove}>
+                <Menu.Label>Character DMs</Menu.Label>
+                {characterSelectOptions.map((option) => {
+                  const avatarUrl =
+                    characterAvatarById.get(option.value) || null;
+                  return (
+                    <Menu.Item
+                      key={option.value}
+                      className={
+                        streaming || openDmMutation.isPending
+                          ? classes.menuItemDisabled
+                          : undefined
+                      }
+                      leftSection={
+                        <span className={classes.menuAvatar}>
+                          {avatarUrl ? (
+                            <img src={avatarUrl} alt="" />
+                          ) : (
+                            option.label.slice(0, 1).toUpperCase()
+                          )}
+                        </span>
+                      }
+                      onClick={() => {
+                        if (streaming || openDmMutation.isPending) return;
+                        void handleOpenCharacterDm(option.value);
+                      }}
+                    >
+                      {option.label}
+                    </Menu.Item>
+                  );
+                })}
+              </Menu.Dropdown>
+            </Menu>
+          ) : null}
+
+          {group ? (
+            <Menu>
+              <Menu.Target>
+                <ActionIcon type="button" variant="ghost" aria-label="Trigger character" title="Trigger character" disabled={streaming}>
+                  <IconUsers size={16} />
+                </ActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown className={classes.menuDropdownAbove}>
+                <Menu.Label>Trigger character</Menu.Label>
+                {characterSelectOptions.map((option) => {
+                  const avatarUrl =
+                    characterAvatarById.get(option.value) || null;
+                  return (
+                    <Menu.Item
+                      key={option.value}
+                      className={streaming ? classes.menuItemDisabled : undefined}
+                      leftSection={
+                        <span className={classes.menuAvatar}>
+                          {avatarUrl ? (
+                            <img src={avatarUrl} alt="" />
+                          ) : (
+                            option.label.slice(0, 1).toUpperCase()
+                          )}
+                        </span>
+                      }
+                      onClick={() => {
+                        if (streaming) return;
+                        void handleTriggerResponse(option.value);
+                      }}
+                    >
+                      {option.label}
+                    </Menu.Item>
+                  );
+                })}
+              </Menu.Dropdown>
+            </Menu>
+          ) : null}
+
+          {streaming ? (
+            <ActionIcon type="button" variant="ghostDanger" aria-label="Stop" title="Stop" onClick={handleStop}>
+              <IconPlayerStop size={16} />
+            </ActionIcon>
+          ) : (
+            <ActionIcon
+              type="button"
+              variant="ghost"
+              aria-label={draft.trim() ? "Send" : "Impersonate"}
+              title={
+                draft.trim()
+                  ? "Send"
+                  : "Impersonate (empty send writes as your persona)"
+              }
+              disabled={!canSend(draft)}
+              onClick={() => void handleSend()}
+            >
+              <IconSend size={16} />
+            </ActionIcon>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

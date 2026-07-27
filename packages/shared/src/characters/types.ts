@@ -79,9 +79,21 @@ export type CharacterCardV2 = {
 /**
  * Persisted hub character: card v2 + hub metadata.
  * `avatar` is an API path to the stored PNG (e.g. `/characters/{id}/avatar`), or null.
+ * `data` always mirrors the active version snapshot (used by chats / export).
  */
+export type CharacterVersion = {
+  id: string;
+  /** Label shown in the version Select (also written to data.character_version). */
+  label: string;
+  created_at: string;
+  updated_at: string;
+  data: CharacterCardData;
+};
+
 export type Character = CharacterCardV2 & {
   id: string;
   /** Public API path for the avatar image, or null when none. */
   avatar: string | null;
+  active_version_id: string;
+  versions: CharacterVersion[];
 };

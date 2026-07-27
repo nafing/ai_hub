@@ -12,6 +12,7 @@ import {
   CHAT_MODES,
   GROUP_CHAT_MODES,
   GROUP_RESPONSE_ORDERS,
+  type ChatAgentSettingsMap,
   type ChatMode,
   type GroupChatMode,
   type GroupResponseOrder,
@@ -29,11 +30,6 @@ class CreateChatSettingsDto {
   @IsOptional()
   character_ids?: string[];
 
-  /** @deprecated use character_ids */
-  @IsOptional()
-  @IsString()
-  character_id?: string | null;
-
   @IsOptional()
   @IsString()
   persona_id?: string | null;
@@ -46,7 +42,11 @@ class CreateChatSettingsDto {
 
   @IsOptional()
   @IsObject()
-  variables?: Record<string, string>;
+  agent_settings?: ChatAgentSettingsMap;
+
+  @IsOptional()
+  @IsObject()
+  variables?: Record<string, string | string[]>;
 
   @IsOptional()
   @IsIn(GROUP_CHAT_MODES)
@@ -63,6 +63,18 @@ class CreateChatSettingsDto {
   @IsOptional()
   @IsString()
   scenario_override?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_twatter_references?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_character_dms?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  character_dm_chat_ids?: Record<string, string>;
 }
 
 export class CreateChatDto {
@@ -81,4 +93,12 @@ export class CreateChatDto {
   @IsOptional()
   @IsNumber()
   greeting_index?: number;
+
+  @IsOptional()
+  @IsString()
+  parent_chat_id?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  skip_greeting?: boolean;
 }

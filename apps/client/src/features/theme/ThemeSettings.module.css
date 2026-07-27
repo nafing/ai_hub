@@ -1,0 +1,435 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+  max-width: 34rem;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.sectionLabel {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sectionLabelRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-text-muted);
+}
+
+.sectionHint {
+  margin: 0;
+  color: var(--color-text-dimmed);
+  font-size: 0.8rem;
+}
+
+.modeGroup {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  padding: 0.35rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.modeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.35rem;
+  padding: 0.4rem 0.55rem;
+  color: var(--color-text-dimmed);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.modeButton:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.modeButtonActive {
+  color: var(--color-primary);
+  border-color: var(--color-primary-ring);
+  background: var(--color-primary-soft);
+}
+
+.modeLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.presetGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.presetCard {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.45rem 0.65rem;
+  color: var(--color-text-dimmed);
+  text-align: left;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.presetCard:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.presetCardActive {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.presetSwatch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 0.4rem;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.presetName {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.accentRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.swatch {
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.swatch:hover {
+  transform: scale(1.06);
+}
+
+.swatchActive {
+  box-shadow:
+    0 0 0 2px var(--color-bg),
+    0 0 0 4px var(--color-primary);
+}
+
+.customButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 1.9rem;
+  padding: 0.3rem 0.75rem;
+  color: var(--color-text-dimmed);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.customButtonActive {
+  color: var(--color-primary);
+  border-color: var(--color-primary-ring);
+  background: var(--color-primary-soft);
+}
+
+.hslBox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.hslRow {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) 2.6rem;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.hslLabel {
+  color: var(--color-text-dimmed);
+  font-size: 0.8rem;
+}
+
+.hslValue {
+  color: var(--color-text);
+  font-size: 0.78rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.slider {
+  width: 100%;
+  accent-color: var(--color-primary);
+}
+
+.baseGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.85rem 0.5rem;
+}
+
+.baseItem {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 0;
+  height: auto;
+  padding: 0.2rem;
+  color: var(--color-text-muted);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+}
+
+.baseSwatch {
+  display: block;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.baseItemActive .baseSwatch {
+  box-shadow:
+    0 0 0 2px var(--color-bg),
+    0 0 0 4px #ffffff;
+}
+
+.baseLabel {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.editingLabel {
+  margin: 0;
+  color: var(--color-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.svBox {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1.55 / 1;
+  border-radius: var(--radius-md);
+  cursor: crosshair;
+  touch-action: none;
+  background:
+    linear-gradient(to top, #000, transparent),
+    linear-gradient(to right, #fff, transparent),
+    hsl(var(--picker-h), 100%, 50%);
+  border: 1px solid var(--color-border);
+}
+
+.svThumb {
+  position: absolute;
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.hueTrack {
+  position: relative;
+  height: 0.85rem;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    to right,
+    #ff0000,
+    #ffff00,
+    #00ff00,
+    #00ffff,
+    #0000ff,
+    #ff00ff,
+    #ff0000
+  );
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.hueThumb {
+  position: absolute;
+  top: 50%;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.rgbRow {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, 1fr);
+  gap: 0.45rem;
+}
+
+.rgbField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.rgbLabel {
+  color: var(--color-text-muted);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rgbInput {
+  min-height: 2rem;
+}
+
+.resetButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.15rem;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.resetButton:hover {
+  background: var(--color-surface-hover);
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.controlRow {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) 3rem;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.checkboxRow input {
+  accent-color: var(--color-primary);
+  width: 1rem;
+  height: 1rem;
+}
+
+@media (max-width: 640px) {
+  .presetGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .baseGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .hslRow,
+  .controlRow {
+    grid-template-columns: 4.8rem minmax(0, 1fr) 2.4rem;
+  }
+}

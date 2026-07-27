@@ -4,6 +4,7 @@ import {
   createCharacter,
   deleteCharacter,
   deleteCharacterAvatar,
+  deleteCharacterVersion,
   duplicateCharacter,
   getCharacter,
   listCharacters,
@@ -69,6 +70,25 @@ export function useDeleteCharacter() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: characterKeys.list() });
       void queryClient.invalidateQueries({ queryKey: lorebookKeys.all });
+    },
+  });
+}
+
+export function useDeleteCharacterVersion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      versionId,
+    }: {
+      id: string;
+      versionId: string;
+    }) => deleteCharacterVersion(id, versionId),
+    onSuccess: (character) => {
+      void queryClient.invalidateQueries({ queryKey: characterKeys.list() });
+      void queryClient.invalidateQueries({
+        queryKey: characterKeys.detail(character.id),
+      });
     },
   });
 }

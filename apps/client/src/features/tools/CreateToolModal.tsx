@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Button, Group, Modal, TextInput } from "@mantine/core";
-import { notifications } from "@mantine/notifications";
 import { useNavigate } from "@tanstack/react-router";
 import { defaultTool } from "@ai-hub/shared";
+import { Button, Modal, TextInput, notifications } from "@/components/ui";
 import { useCreateTool } from "./queries";
+import classes from "./CreateToolModal.module.css";
 
 type CreateToolModalProps = {
   opened: boolean;
@@ -49,37 +49,37 @@ export function CreateToolModal({ opened, onClose }: CreateToolModalProps) {
   }
 
   return (
-    <Modal opened={opened} onClose={handleClose} title="New tool" centered>
+    <Modal opened={opened} onClose={handleClose} title="New tool" size="sm">
       <form
         onSubmit={(event) => {
           event.preventDefault();
           void handleCreate();
         }}
       >
-        <TextInput
-          label="Name"
-          description="LLM function name (snake_case). Must be unique."
-          placeholder="my_custom_tool"
-          data-autofocus
-          required
-          value={name}
-          onChange={(event) => setName(event.currentTarget.value)}
-          styles={{
-            input: { fontFamily: "var(--mantine-font-family-monospace)" },
-          }}
-        />
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" type="button" onClick={handleClose}>
+        <label className={classes.field}>
+          <span className={classes.fieldLabel}>Name</span>
+          <p className={classes.fieldHint}>
+            LLM function name (snake_case). Must be unique.
+          </p>
+          <TextInput
+            className={classes.mono}
+            placeholder="my_custom_tool"
+            required
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+          />
+        </label>
+        <div className={classes.actions}>
+          <Button variant="default" type="button"
+            onClick={handleClose}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            loading={createMutation.isPending}
-            disabled={!name.trim()}
-          >
-            Create
+          <Button variant="primary" type="submit"
+            disabled={!name.trim() || createMutation.isPending}>
+            {createMutation.isPending ? "Creating…" : "Create"}
           </Button>
-        </Group>
+        </div>
       </form>
     </Modal>
   );

@@ -1,19 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
 import {
-  Button,
-  Checkbox,
-  Group,
-  Modal,
-  MultiSelect,
-  Select,
-  SimpleGrid,
-  Stack,
-  Text,
-  Textarea,
-} from "@mantine/core";
-import { Dropzone, MIME_TYPES } from "@mantine/dropzone";
-import { notifications } from "@mantine/notifications";
-import { IconPhoto, IconUpload, IconX } from "@tabler/icons-react";
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from "react";
+import { IconPhoto, IconUpload } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -26,6 +19,16 @@ import {
   type CharacterCardV2,
   type CreateLorebookInput,
 } from "@ai-hub/shared";
+import {
+  Button,
+  Textarea,
+  Modal,
+  MultiSelect,
+  notifications,
+  Select,
+  Switch,
+  RuntimeText,
+} from "@/components/ui";
 import { useConnections } from "@/features/connections/queries";
 import { getPersona } from "@/features/personas/api";
 import { usePersonas } from "@/features/personas/queries";
@@ -47,6 +50,7 @@ import {
   usePresets,
 } from "@/features/presets/queries";
 import { ImportLorebookModal } from "@/features/lorebooks/ImportLorebookModal";
+import classes from "./ImportCharacterModal.module.css";
 
 type ImportCharacterModalProps = {
   opened: boolean;
@@ -74,12 +78,42 @@ function hasCharacterBook(
   return Boolean(book && typeof book === "object" && !Array.isArray(book));
 }
 
+function isAcceptedCharacterFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".json") || name.endsWith(".png")) return true;
+  if (file.type === "image/png") return true;
+  if (file.type.includes("json")) return true;
+  return false;
+}
+
+function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.field}>
+      <span className={classes.fieldLabel}>{label}</span>
+      {hint ? <p className={classes.fieldHint}>{hint}</p> : null}
+      {children}
+      {error ? <p className={classes.fieldError}>{error}</p> : null}
+    </div>
+  );
+}
+
 export function ImportCharacterModal({
   opened,
   onClose,
 }: ImportCharacterModalProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
   const connectionsQuery = useConnections();
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
@@ -89,6 +123,7 @@ export function ImportCharacterModal({
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [importWithAi, setImportWithAi] = useState(false);
   const [generatorBrief, setGeneratorBrief] = useState("");
   const [connectionId, setConnectionId] = useState<string | null>(null);
@@ -206,6 +241,7 @@ export function ImportCharacterModal({
     clearAiReview();
     setParsing(false);
     setImporting(false);
+    setDragOver(false);
     resetAiControls();
     onClose();
   }
@@ -217,9 +253,7 @@ export function ImportCharacterModal({
     });
   }
 
-  async function handleDrop(files: File[]) {
-    const file = files[0];
-    if (!file) return;
+  async function handleFile(file: File) {
     setParsing(true);
     clearPreview();
     try {
@@ -249,6 +283,23 @@ export function ImportCharacterModal({
     }
   }
 
+  function onDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setDragOver(false);
+    if (importing || parsing) return;
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    if (!isAcceptedCharacterFile(file)) {
+      notifications.show({
+        title: "Unsupported file",
+        message: "Drop a .json or .png character card.",
+        color: "red",
+      });
+      return;
+    }
+    void handleFile(file);
+  }
+
   async function runAiImport(baseData: CharacterCardData): Promise<{
     cards: CharacterCardData[];
   }> {
@@ -260,36 +311,26 @@ export function ImportCharacterModal({
       throw new Error("Select a Character Generator preset.");
     }
 
-    const importHint = [
-      "IMPORT WITH AI:",
-      "The Reference Characters section includes the imported source card first, then any additional library characters selected as context.",
-      'If that card or the brief describes TWO OR MORE distinct characters (separate names/identities), you MUST return multiple objects in {"characters":[...]} — one card each.',
-      "Do not collapse a duo/group into a single card.",
-      "If only one distinct character is present, return a one-item characters array.",
-    ].join(" ");
-
     const userBrief = generatorBrief.trim();
     const [persona, libraryReferences] = await Promise.all([
       personaId ? getPersona(personaId) : Promise.resolve(null),
       Promise.all(referenceCharacterIds.map((id) => getCharacter(id))),
     ]);
     const promptContext = buildPresetPromptContext({
-      generatorBrief: userBrief
-        ? `${userBrief}\n\n${importHint}`
-        : `${importHint} No extra brief was provided — split or refine using the reference card alone.`,
+      generatorBrief: userBrief || null,
       persona,
       referenceCharacterList: [{ data: baseData }, ...libraryReferences],
       variables: {
         ...resolvePresetVariables(preset.variables),
-        char: baseData.name.trim() || "(unnamed — may be one of several)",
+        generation_mode: "import",
+        char: baseData.name.trim(),
         target_field: "all card fields",
-        existing_description: "(none yet — build from reference / brief)",
-        existing_personality: "(none yet — build from reference / brief)",
-        existing_scenario: "(none yet — build from reference / brief)",
-        existing_first_mes: "(none yet — build from reference / brief)",
-        existing_mes_example: "(none yet — build from reference / brief)",
-        existing_alternate_greetings:
-          "(none yet — build from reference / brief)",
+        existing_description: "",
+        existing_personality: "",
+        existing_scenario: "",
+        existing_first_mes: "",
+        existing_mes_example: "",
+        existing_alternate_greetings: "",
       },
     });
 
@@ -331,11 +372,11 @@ export function ImportCharacterModal({
 
     const createdList = [];
     for (let index = 0; index < cardsToCreate.length; index += 1) {
-      const created = await createCharacter(
+      let created = await createCharacter(
         defaultCharacter({ data: cardsToCreate[index]! }),
       );
       if (index === 0 && preview.avatarFile) {
-        await uploadCharacterAvatar(
+        created = await uploadCharacterAvatar(
           created.id,
           preview.avatarFile,
           preview.fileName,
@@ -434,6 +475,39 @@ export function ImportCharacterModal({
       Boolean(presetId) &&
       Boolean(presetDetailQuery.data));
 
+  const connectionError = connectionsQuery.isError
+    ? "Failed to load connections"
+    : !connectionsQuery.isLoading && !connectionsQuery.data?.length
+      ? "Create a connection first"
+      : undefined;
+
+  const presetError = presetsQuery.isError
+    ? "Failed to load presets"
+    : presetDetailQuery.isError
+      ? "Failed to load preset details"
+      : !presetsQuery.isLoading && !presetOptions.length
+        ? "No presets available"
+        : undefined;
+
+  const personaError = personasQuery.isError
+    ? "Failed to load personas"
+    : undefined;
+
+  const referenceCharactersError = charactersQuery.isError
+    ? "Failed to load characters"
+    : undefined;
+
+  const primaryBusy =
+    importing || parsing || (importWithAi && presetDetailQuery.isLoading);
+
+  const primaryLabel = importing
+    ? importWithAi
+      ? "Generating…"
+      : "Importing…"
+    : importWithAi
+      ? "Generate with AI"
+      : "Import";
+
   return (
     <>
       <Modal
@@ -443,69 +517,82 @@ export function ImportCharacterModal({
         centered
         size="lg"
       >
-        <Stack gap="sm">
-          <Dropzone
-            onDrop={(files) => void handleDrop(files)}
-            onReject={() => {
-              notifications.show({
-                title: "Unsupported file",
-                message: "Drop a .json or .png character card.",
-                color: "red",
-              });
+        <div className={classes.body}>
+          <label
+            className={[
+              classes.dropzone,
+              dragOver ? classes.dropzoneActive : "",
+              parsing || importing ? classes.dropzoneDisabled : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDragOver(true);
             }}
-            accept={[MIME_TYPES.png, "application/json", "text/json"]}
-            maxFiles={1}
-            loading={parsing}
-            disabled={importing}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
           >
-            <Group
-              justify="center"
-              gap="md"
-              mih={120}
-              style={{ pointerEvents: "none" }}
-            >
-              <Dropzone.Accept>
+            <input
+              ref={inputRef}
+              className={classes.fileInput}
+              type="file"
+              accept="image/png,.png,application/json,.json,text/json"
+              disabled={parsing || importing}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                if (!isAcceptedCharacterFile(file)) {
+                  notifications.show({
+                    title: "Unsupported file",
+                    message: "Drop a .json or .png character card.",
+                    color: "red",
+                  });
+                  return;
+                }
+                void handleFile(file);
+              }}
+            />
+            <span className={classes.dropIcon}>
+              {parsing ? (
+                <span className={classes.spinner} aria-hidden />
+              ) : dragOver ? (
                 <IconUpload size={32} stroke={1.5} />
-              </Dropzone.Accept>
-              <Dropzone.Reject>
-                <IconX size={32} stroke={1.5} />
-              </Dropzone.Reject>
-              <Dropzone.Idle>
+              ) : (
                 <IconPhoto size={32} stroke={1.5} />
-              </Dropzone.Idle>
-              <div>
-                <Text size="sm" inline>
-                  Drop a character card (.json or .png)
-                </Text>
-                <Text size="xs" c="dimmed" inline mt={4}>
-                  PNG cards use the embedded `chara` / `ccv3` chunk. The image
-                  is stored on the server as the avatar. Embedded
-                  `character_book` is imported as a linked lorebook.
-                </Text>
-              </div>
-            </Group>
-          </Dropzone>
+              )}
+            </span>
+            <span className={classes.dropTitle}>
+              {parsing
+                ? "Reading file…"
+                : "Drop a character card (.json or .png)"}
+            </span>
+            <span className={classes.dropHint}>
+              PNG cards use the embedded `chara` / `ccv3` chunk. The image is
+              stored on the server as the avatar. Embedded `character_book` is
+              imported as a linked lorebook. Click to browse.
+            </span>
+          </label>
 
           {preview ? (
-            <Group gap="sm" wrap="nowrap" align="start">
+            <div className={classes.previewRow}>
               {preview.previewUrl ? (
                 <img
                   src={preview.previewUrl}
                   alt=""
-                  width={56}
-                  height={56}
-                  style={{
-                    objectFit: "cover",
-                    borderRadius: 6,
-                    flexShrink: 0,
-                  }}
+                  className={classes.previewAvatar}
                 />
               ) : null}
-              <div style={{ minWidth: 0 }}>
-                <Text size="sm" fw={600} lineClamp={1}>
+              <div className={classes.previewBody}>
+                <p className={classes.previewName}>
                   {preview.card.data.name || "untitled"}
-                </Text>
-                <Text size="xs" c="dimmed" lineClamp={2}>
+                </p>
+                <p className={classes.previewMeta}>
                   {preview.fileName} · {preview.source.toUpperCase()}
                   {preview.card.data.creator
                     ? ` · by ${preview.card.data.creator}`
@@ -513,151 +600,143 @@ export function ImportCharacterModal({
                   {hasCharacterBook(preview.card.data.character_book)
                     ? ` · character_book (${bookEntryCount ?? 0} entries)`
                     : ""}
-                </Text>
+                </p>
               </div>
-            </Group>
+            </div>
           ) : null}
 
-          <Checkbox
+          <Switch
+            variant="card"
+            checked={importWithAi}
+            onChange={setImportWithAi}
+            disabled={importing || aiReviewOpen}
             label="Import with AI"
             description="Runs the Character Generator, then opens a preview where you can rebuild concept or individual fields before saving. Multi-character cards become separate previews."
-            checked={importWithAi}
-            onChange={(event) => setImportWithAi(event.currentTarget.checked)}
-            disabled={importing || aiReviewOpen}
           />
 
           {importWithAi ? (
             <>
-              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                <Select
+              <div className={classes.grid}>
+                <Field
                   label="Connection"
-                  description="Defaults to the active connection."
-                  placeholder={
-                    connectionsQuery.isLoading
-                      ? "Loading connections…"
-                      : "Select connection"
-                  }
-                  data={(connectionsQuery.data ?? []).map((connection) => ({
-                    value: connection.id,
-                    label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
-                  }))}
-                  value={resolvedConnectionId}
-                  onChange={setConnectionId}
-                  searchable
-                  clearable={false}
-                  allowDeselect={false}
-                  disabled={importing || !connectionsQuery.data?.length}
-                  error={
-                    connectionsQuery.isError
-                      ? "Failed to load connections"
-                      : !connectionsQuery.isLoading &&
-                          !connectionsQuery.data?.length
-                        ? "Create a connection first"
-                        : undefined
-                  }
-                />
-                <Select
+                  hint="Defaults to the active connection."
+                  error={connectionError}
+                >
+                  <Select
+                    data={(connectionsQuery.data ?? []).map((connection) => ({
+                      value: connection.id,
+                      label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
+                    }))}
+                    value={resolvedConnectionId ?? ""}
+                    onChange={(value) => setConnectionId(value || null)}
+                    placeholder={
+                      connectionsQuery.isLoading
+                        ? "Loading connections…"
+                        : "Select connection"
+                    }
+                    searchable
+                    disabled={importing || !connectionsQuery.data?.length}
+                    error={Boolean(connectionError)}
+                  />
+                </Field>
+
+                <Field
                   label="Preset"
-                  description="Prefer Character Generator presets."
-                  placeholder={
-                    presetsQuery.isLoading
-                      ? "Loading presets…"
-                      : "Select preset"
-                  }
-                  data={presetOptions}
-                  value={presetId}
-                  onChange={setPresetId}
-                  searchable
-                  clearable={false}
-                  allowDeselect={false}
-                  disabled={importing || !presetOptions.length}
-                  error={
-                    presetsQuery.isError
-                      ? "Failed to load presets"
-                      : presetDetailQuery.isError
-                        ? "Failed to load preset details"
-                        : !presetsQuery.isLoading && !presetOptions.length
-                          ? "No presets available"
-                          : undefined
-                  }
-                />
-                <Select
+                  hint="Prefer Character Generator presets."
+                  error={presetError}
+                >
+                  <Select
+                    data={presetOptions}
+                    value={presetId ?? ""}
+                    onChange={(value) => setPresetId(value || null)}
+                    placeholder={
+                      presetsQuery.isLoading
+                        ? "Loading presets…"
+                        : "Select preset"
+                    }
+                    searchable
+                    disabled={importing || !presetOptions.length}
+                    error={Boolean(presetError)}
+                  />
+                </Field>
+
+                <Field
                   label="Persona"
-                  description="Optional — fills `{{user}}` and the Persona marker."
-                  placeholder={
-                    personasQuery.isLoading
-                      ? "Loading personas…"
-                      : "Select persona"
+                  hint={
+                    <RuntimeText text="Optional — fills {{user}} and the Persona marker." />
                   }
-                  data={(personasQuery.data ?? []).map((persona) => ({
-                    value: persona.id,
-                    label: `${persona.name || "untitled"}${persona.is_default ? " (default)" : ""}`,
-                  }))}
-                  value={personaId}
-                  onChange={setPersonaId}
-                  searchable
-                  clearable
-                  disabled={importing || !personasQuery.data?.length}
-                  error={
-                    personasQuery.isError
-                      ? "Failed to load personas"
-                      : undefined
-                  }
-                />
+                  error={personaError}
+                >
+                  <Select
+                    data={(personasQuery.data ?? []).map((persona) => ({
+                      value: persona.id,
+                      label: `${persona.name || "untitled"}${persona.is_default ? " (default)" : ""}`,
+                    }))}
+                    value={personaId ?? ""}
+                    onChange={(value) => setPersonaId(value || null)}
+                    placeholder={
+                      personasQuery.isLoading
+                        ? "Loading personas…"
+                        : "Select persona"
+                    }
+                    searchable
+                    clearable
+                    disabled={importing || !personasQuery.data?.length}
+                    error={Boolean(personaError)}
+                  />
+                </Field>
 
-                <MultiSelect
+                <Field
                   label="Reference characters"
-                  description="Optional — extra library cards added after the imported source in the Reference Characters marker."
-                  placeholder={
-                    charactersQuery.isLoading
-                      ? "Loading characters…"
-                      : "Select characters"
-                  }
-                  clearable
-                  data={characterOptions}
-                  value={referenceCharacterIds}
-                  onChange={setReferenceCharacterIds}
-                  disabled={importing || !characterOptions.length}
-                  error={
-                    charactersQuery.isError
-                      ? "Failed to load characters"
-                      : undefined
-                  }
-                />
-              </SimpleGrid>
+                  hint="Optional — library cards used as AI context only (not saved as new characters or versions)."
+                  error={referenceCharactersError}
+                >
+                  <MultiSelect
+                    data={characterOptions}
+                    value={referenceCharacterIds}
+                    onChange={setReferenceCharacterIds}
+                    placeholder={
+                      charactersQuery.isLoading
+                        ? "Loading characters…"
+                        : "Select characters"
+                    }
+                    clearable
+                    disabled={importing || !characterOptions.length}
+                    error={Boolean(referenceCharactersError)}
+                  />
+                </Field>
+              </div>
 
-              <Textarea
+              <Field
                 label="Generator brief"
-                description="Optional — fills the Generator Brief marker."
-                autosize
-                minRows={4}
-                value={generatorBrief}
-                onChange={(event) =>
-                  setGeneratorBrief(event.currentTarget.value)
-                }
-                placeholder="e.g. Adapt this card into a softer rival for my persona, or expand into a duo of twins…"
-                disabled={importing}
-              />
+                hint="Optional — fills the Generator Brief marker."
+              >
+                <Textarea
+                  className={classes.textarea}
+                  value={generatorBrief}
+                  onChange={(event) =>
+                    setGeneratorBrief(event.currentTarget.value)
+                  }
+                  placeholder="e.g. Adapt this card into a softer rival for my persona, or expand into a duo of twins…"
+                  disabled={importing}
+                />
+              </Field>
             </>
           ) : null}
-        </Stack>
+        </div>
 
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" type="button" onClick={handleClose}>
+        <div className={classes.actions}>
+          <Button variant="default" type="button"
+            onClick={handleClose}>
             Cancel
           </Button>
-          <Button
+          <Button variant="primary" type="button"
+            disabled={!preview || !aiReady || primaryBusy}
             onClick={() => void handleImport()}
-            loading={
-              importing ||
-              parsing ||
-              (importWithAi && presetDetailQuery.isLoading)
-            }
-            disabled={!preview || !aiReady}
           >
-            {importWithAi ? "Generate with AI" : "Import"}
+            {primaryLabel}
           </Button>
-        </Group>
+        </div>
       </Modal>
 
       {aiReviewContext ? (

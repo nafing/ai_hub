@@ -1,0 +1,16 @@
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.italic {
+  font-style: italic;
+}
+
+.dialogue {
+  color: var(--color-speech);
+}

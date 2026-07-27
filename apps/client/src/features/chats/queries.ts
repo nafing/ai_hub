@@ -1,16 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateChatInput,
-  CreateChatMessageInput,
   UpdateChatInput,
   UpdateChatMessageInput,
 } from "@ai-hub/shared";
 import {
-  addChatMessage,
   createChat,
   deleteChat,
   deleteChatMessage,
   getChat,
+  getOrCreateCharacterDm,
   listChats,
   updateChat,
   updateChatMessage,
@@ -47,6 +46,26 @@ export function useCreateChat() {
   });
 }
 
+export function useGetOrCreateCharacterDm() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      chatId,
+      characterId,
+    }: {
+      chatId: string;
+      characterId: string;
+    }) => getOrCreateCharacterDm(chatId, characterId),
+    onSuccess: (dm, variables) => {
+      void queryClient.invalidateQueries({ queryKey: chatKeys.list() });
+      void queryClient.setQueryData(chatKeys.detail(dm.id), dm);
+      void queryClient.invalidateQueries({
+        queryKey: chatKeys.detail(variables.chatId),
+      });
+    },
+  });
+}
+
 export function useUpdateChat() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -64,23 +83,6 @@ export function useDeleteChat() {
   return useMutation({
     mutationFn: (id: string) => deleteChat(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: chatKeys.list() });
-    },
-  });
-}
-
-export function useAddChatMessage() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      id,
-      input,
-    }: {
-      id: string;
-      input: CreateChatMessageInput;
-    }) => addChatMessage(id, input),
-    onSuccess: (chat) => {
-      void queryClient.setQueryData(chatKeys.detail(chat.id), chat);
       void queryClient.invalidateQueries({ queryKey: chatKeys.list() });
     },
   });

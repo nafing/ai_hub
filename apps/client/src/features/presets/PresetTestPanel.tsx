@@ -1,20 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueries } from "@tanstack/react-query";
-import {
-  Accordion,
-  Badge,
-  Button,
-  Code,
-  Group,
-  MultiSelect,
-  Select,
-  SimpleGrid,
-  Stack,
-  Text,
-  Textarea,
-  TextInput,
-} from "@mantine/core";
-import { notifications } from "@mantine/notifications";
 import { IconPlayerPlay } from "@tabler/icons-react";
 import {
   buildPresetPromptContext,
@@ -26,6 +11,16 @@ import {
   type PresetCategory,
   type PresetVariableValues,
 } from "@ai-hub/shared";
+import {
+  Button,
+  Textarea,
+  Accordion,
+  MultiSelect,
+  Select,
+  TextInput,
+  notifications,
+  RuntimeText,
+} from "@/components/ui";
 import { useConnections } from "@/features/connections/queries";
 import { getCharacter } from "@/features/characters/api";
 import { useCharacter, useCharacters } from "@/features/characters/queries";
@@ -34,6 +29,7 @@ import { lorebookKeys, useLorebooks } from "@/features/lorebooks/queries";
 import { usePersona, usePersonas } from "@/features/personas/queries";
 import { useTestPreset } from "./queries";
 import type { TestPresetResult } from "./api";
+import classes from "./PresetTestPanel.module.css";
 
 type PresetTestPanelProps = {
   presetId: string;
@@ -55,34 +51,53 @@ function isGeneratorCategory(category: PresetCategory): boolean {
 }
 
 function usesReferenceCharacters(category: PresetCategory): boolean {
-  return (
-    category === "persona_generator" || category === "character_generator"
-  );
+  return category === "persona_generator" || category === "character_generator";
 }
 
 const PERSONA_TARGET_FIELDS = [
-  { value: "description", label: "description" },
-  { value: "personality", label: "personality" },
   {
     value: "description and personality",
     label: "description and personality",
   },
+  { value: "description", label: "description" },
+  { value: "personality", label: "personality" },
 ];
 
 const CHARACTER_TARGET_FIELDS = [
+  { value: "all card fields", label: "all card fields" },
   { value: "description", label: "description" },
   { value: "personality", label: "personality" },
   { value: "scenario", label: "scenario" },
   { value: "first_mes", label: "first_mes" },
   { value: "mes_example", label: "mes_example" },
   { value: "alternate_greetings", label: "alternate_greetings" },
-  { value: "all card fields", label: "all card fields" },
 ];
 
 function defaultTargetField(category: PresetCategory): string {
   if (category === "character_generator") return "all card fields";
-  if (category === "persona_generator") return "description";
+  if (category === "persona_generator") return "description and personality";
   return "description";
+}
+
+function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.field}>
+      <span className={classes.fieldLabel}>{label}</span>
+      {hint ? <span className={classes.fieldHint}>{hint}</span> : null}
+      {children}
+      {error ? <span className={classes.fieldError}>{error}</span> : null}
+    </div>
+  );
 }
 
 export function PresetTestPanel({
@@ -118,7 +133,7 @@ export function PresetTestPanel({
   const [chatSummary, setChatSummary] = useState("");
   const [personaNameOverride, setPersonaNameOverride] = useState("");
   const [charNameOverride, setCharNameOverride] = useState("");
-  const [targetField, setTargetField] = useState<string | null>(
+  const [targetField, setTargetField] = useState<string>(
     defaultTargetField(category),
   );
   const [existingDescription, setExistingDescription] = useState("");
@@ -187,10 +202,8 @@ export function PresetTestPanel({
         next.user = personaNameOverride.trim();
       }
       if (targetField) next.target_field = targetField;
-      next.existing_description =
-        existingDescription.trim() || "(none yet)";
-      next.existing_personality =
-        existingPersonality.trim() || "(none yet)";
+      next.existing_description = existingDescription.trim();
+      next.existing_personality = existingPersonality.trim();
     }
 
     if (category === "character_generator") {
@@ -198,16 +211,12 @@ export function PresetTestPanel({
         next.char = charNameOverride.trim();
       }
       if (targetField) next.target_field = targetField;
-      next.existing_description =
-        existingDescription.trim() || "(none yet)";
-      next.existing_personality =
-        existingPersonality.trim() || "(none yet)";
-      next.existing_scenario = existingScenario.trim() || "(none yet)";
-      next.existing_first_mes = existingFirstMes.trim() || "(none yet)";
-      next.existing_mes_example =
-        existingMesExample.trim() || "(none yet)";
-      next.existing_alternate_greetings =
-        existingAlternateGreetings.trim() || "(none yet)";
+      next.existing_description = existingDescription.trim();
+      next.existing_personality = existingPersonality.trim();
+      next.existing_scenario = existingScenario.trim();
+      next.existing_first_mes = existingFirstMes.trim();
+      next.existing_mes_example = existingMesExample.trim();
+      next.existing_alternate_greetings = existingAlternateGreetings.trim();
     }
 
     return next;
@@ -229,14 +238,11 @@ export function PresetTestPanel({
     () =>
       buildPresetPromptContext({
         character:
-          category === "persona_generator" ||
-          category === "character_generator"
+          category === "persona_generator" || category === "character_generator"
             ? null
             : (characterQuery.data ?? null),
         persona:
-          category === "persona_generator"
-            ? null
-            : (personaQuery.data ?? null),
+          category === "persona_generator" ? null : (personaQuery.data ?? null),
         variables: runtimeVariables,
         generatorBrief: isGeneratorCategory(category)
           ? generatorBrief || null
@@ -279,12 +285,7 @@ export function PresetTestPanel({
     return resolvedUser
       ? [...promptMessages, { role: "user" as const, content: resolvedUser }]
       : promptMessages;
-  }, [
-    values.wrap_format,
-    values.sections,
-    promptContext,
-    userMessage,
-  ]);
+  }, [values.wrap_format, values.sections, promptContext, userMessage]);
 
   async function handleRun() {
     try {
@@ -330,351 +331,385 @@ export function PresetTestPanel({
     label: character.name || "untitled",
   }));
 
+  const connectionError = connectionsQuery.isError
+    ? "Failed to load connections"
+    : !connectionsQuery.isLoading && !connectionsQuery.data?.length
+      ? "Create a connection first"
+      : undefined;
+
   return (
-    <Stack gap="md">
-      <Text size="sm" c="dimmed">
+    <div className={classes.stack}>
+      <p className={classes.muted}>
         Test the current (unsaved) draft as a {categoryLabel} preset. Controls
         below match this category&apos;s markers and placeholders (same context
         as Generate with AI where applicable).
-      </Text>
+      </p>
 
-      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-        <Select
+      <div className={`${classes.grid} ${classes.grid2}`}>
+        <Field
           label="Connection"
-          description="Defaults to the active connection."
-          placeholder={
-            connectionsQuery.isLoading
-              ? "Loading connections…"
-              : "Default connection"
-          }
-          data={(connectionsQuery.data ?? []).map((connection) => ({
-            value: connection.id,
-            label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
-          }))}
-          value={resolvedConnectionId}
-          onChange={setConnectionId}
-          searchable
-          clearable={false}
-          allowDeselect={false}
-          disabled={!connectionsQuery.data?.length}
-          error={
-            connectionsQuery.isError
-              ? "Failed to load connections"
-              : !connectionsQuery.isLoading && !connectionsQuery.data?.length
-                ? "Create a connection first"
-                : undefined
-          }
-        />
+          hint="Defaults to the active connection."
+          error={connectionError}
+        >
+          <Select
+            placeholder={
+              connectionsQuery.isLoading
+                ? "Loading connections…"
+                : "Default connection"
+            }
+            data={(connectionsQuery.data ?? []).map((connection) => ({
+              value: connection.id,
+              label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
+            }))}
+            value={resolvedConnectionId ?? ""}
+            onChange={setConnectionId}
+            searchable
+            disabled={!connectionsQuery.data?.length}
+            error={Boolean(connectionError)}
+          />
+        </Field>
 
         {category === "persona_generator" ? (
-          <TextInput
-            label="Persona name"
-            description="Fills `{{user}}`."
-            value={personaNameOverride}
-            onChange={(event) =>
-              setPersonaNameOverride(event.currentTarget.value)
-            }
-            placeholder="Test persona"
-          />
+          <Field label="Persona name" hint={<RuntimeText text="Fills {{user}}." />}>
+            <TextInput
+              value={personaNameOverride}
+              onChange={(event) =>
+                setPersonaNameOverride(event.currentTarget.value)
+              }
+              placeholder="Test persona"
+            />
+          </Field>
         ) : (
-          <Select
+          <Field
             label="Persona"
-            description="Fills `{{user}}` and the Persona marker."
-            placeholder={
-              personasQuery.isLoading ? "Loading personas…" : "Select persona"
-            }
-            data={(personasQuery.data ?? []).map((persona) => ({
-              value: persona.id,
-              label: `${persona.name || "untitled"}${persona.is_default ? " (default)" : ""}`,
-            }))}
-            value={personaId}
-            onChange={setPersonaId}
-            searchable
-            clearable
-            disabled={!personasQuery.data?.length}
+            hint={<RuntimeText text="Fills {{user}} and the Persona marker." />}
             error={
               personasQuery.isError ? "Failed to load personas" : undefined
             }
-          />
+          >
+            <Select
+              placeholder={
+                personasQuery.isLoading ? "Loading personas…" : "Select persona"
+              }
+              data={(personasQuery.data ?? []).map((persona) => ({
+                value: persona.id,
+                label: `${persona.name || "untitled"}${persona.is_default ? " (default)" : ""}`,
+              }))}
+              value={personaId ?? ""}
+              onChange={(value) => setPersonaId(value || null)}
+              searchable
+              clearable
+              disabled={!personasQuery.data?.length}
+              error={personasQuery.isError}
+            />
+          </Field>
         )}
 
         {category === "character_generator" ? (
-          <TextInput
-            label="Character name"
-            description="Fills `{{char}}`."
-            value={charNameOverride}
-            onChange={(event) =>
-              setCharNameOverride(event.currentTarget.value)
-            }
-            placeholder="Test character"
-          />
+          <Field label="Character name" hint={<RuntimeText text="Fills {{char}}." />}>
+            <TextInput
+              value={charNameOverride}
+              onChange={(event) =>
+                setCharNameOverride(event.currentTarget.value)
+              }
+              placeholder="Test character"
+            />
+          </Field>
         ) : null}
 
         {category === "persona_generator" ? (
-          <Select
-            label="Target field"
-            description="Fills `{{target_field}}`."
-            data={PERSONA_TARGET_FIELDS}
-            value={targetField}
-            onChange={setTargetField}
-            allowDeselect={false}
-          />
+          <Field label="Target field" hint={<RuntimeText text="Fills {{target_field}}." />}>
+            <Select
+              data={PERSONA_TARGET_FIELDS}
+              value={targetField}
+              onChange={setTargetField}
+            />
+          </Field>
         ) : null}
 
         {category === "character_generator" ? (
-          <Select
-            label="Target field"
-            description="Fills `{{target_field}}`."
-            data={CHARACTER_TARGET_FIELDS}
-            value={targetField}
-            onChange={setTargetField}
-            allowDeselect={false}
-            searchable
-          />
+          <Field label="Target field" hint={<RuntimeText text="Fills {{target_field}}." />}>
+            <Select
+              data={CHARACTER_TARGET_FIELDS}
+              value={targetField}
+              onChange={setTargetField}
+              searchable
+            />
+          </Field>
         ) : null}
 
         {category === "lorebook_generator" || isChatCategory(category) ? (
-          <Select
+          <Field
             label="Character"
-            description={
-              category === "lorebook_generator"
-                ? "Fills Character Info (optional related card)."
-                : "Fills `{{char}}`, Character Info, and Dialogue Examples."
+            hint={
+              category === "lorebook_generator" ? (
+                "Fills Character Info (optional related card)."
+              ) : (
+                <RuntimeText text="Fills {{char}}, Character Info, and Dialogue Examples." />
+              )
             }
-            placeholder={
-              charactersQuery.isLoading
-                ? "Loading characters…"
-                : "Select character"
-            }
-            data={characterOptions}
-            value={characterId}
-            onChange={setCharacterId}
-            searchable
-            clearable
-            disabled={!charactersQuery.data?.length}
             error={
               charactersQuery.isError ? "Failed to load characters" : undefined
             }
-          />
+          >
+            <Select
+              placeholder={
+                charactersQuery.isLoading
+                  ? "Loading characters…"
+                  : "Select character"
+              }
+              data={characterOptions}
+              value={characterId ?? ""}
+              onChange={(value) => setCharacterId(value || null)}
+              searchable
+              clearable
+              disabled={!charactersQuery.data?.length}
+              error={charactersQuery.isError}
+            />
+          </Field>
         ) : null}
 
         {usesReferenceCharacters(category) ? (
-          <MultiSelect
+          <Field
             label="Reference characters"
-            description="Fills the Reference Characters marker."
-            placeholder={
-              charactersQuery.isLoading
-                ? "Loading characters…"
-                : "Select characters"
-            }
-            clearable
-            data={characterOptions}
-            value={referenceCharacterIds}
-            onChange={setReferenceCharacterIds}
-            disabled={!charactersQuery.data?.length}
+            hint="Fills the Reference Characters marker."
             error={
               charactersQuery.isError ? "Failed to load characters" : undefined
             }
-          />
+          >
+            <MultiSelect
+              placeholder={
+                charactersQuery.isLoading
+                  ? "Loading characters…"
+                  : "Select characters"
+              }
+              clearable
+              data={characterOptions}
+              value={referenceCharacterIds}
+              onChange={setReferenceCharacterIds}
+              disabled={!charactersQuery.data?.length}
+              error={charactersQuery.isError}
+            />
+          </Field>
         ) : null}
 
         {isChatCategory(category) ? (
-          <MultiSelect
+          <Field
             label="Lorebooks"
-            description="Fills Lorebook markers (enabled entries)."
-            placeholder={
-              lorebooksQuery.isLoading
-                ? "Loading lorebooks…"
-                : "Select lorebooks"
-            }
-            searchable
-            clearable
-            data={(lorebooksQuery.data ?? []).map((book) => ({
-              value: book.id,
-              label: `${book.name || "untitled"}${book.enabled === false ? " (disabled)" : ""}`,
-            }))}
-            value={lorebookIds}
-            onChange={setLorebookIds}
-            disabled={!lorebooksQuery.data?.length}
+            hint="Fills Lorebook markers (enabled entries)."
             error={
               lorebooksQuery.isError ? "Failed to load lorebooks" : undefined
             }
-          />
+          >
+            <MultiSelect
+              placeholder={
+                lorebooksQuery.isLoading
+                  ? "Loading lorebooks…"
+                  : "Select lorebooks"
+              }
+              searchable
+              clearable
+              data={(lorebooksQuery.data ?? []).map((book) => ({
+                value: book.id,
+                label: `${book.name || "untitled"}${book.enabled === false ? " (disabled)" : ""}`,
+              }))}
+              value={lorebookIds}
+              onChange={setLorebookIds}
+              disabled={!lorebooksQuery.data?.length}
+              error={lorebooksQuery.isError}
+            />
+          </Field>
         ) : null}
-      </SimpleGrid>
+      </div>
 
       {isGeneratorCategory(category) ? (
-        <Textarea
-          label="Generator brief"
-          description="Fills the Generator Brief marker."
-          autosize
-          minRows={3}
-          value={generatorBrief}
-          onChange={(event) => setGeneratorBrief(event.currentTarget.value)}
-          placeholder="Concept / setting dump for the generator…"
-        />
+        <Field label="Generator brief" hint="Fills the Generator Brief marker.">
+          <Textarea
+            className={classes.textarea}
+            value={generatorBrief}
+            onChange={(event) => setGeneratorBrief(event.currentTarget.value)}
+            placeholder="Concept / setting dump for the generator…"
+          />
+        </Field>
       ) : null}
 
       {category === "persona_generator" ? (
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-          <Textarea
+        <div className={`${classes.grid} ${classes.grid2}`}>
+          <Field
             label="Existing description"
-            description="Fills `{{existing_description}}`."
-            autosize
-            minRows={2}
-            value={existingDescription}
-            onChange={(event) =>
-              setExistingDescription(event.currentTarget.value)
-            }
-            placeholder="(none yet)"
-          />
-          <Textarea
+            hint={<RuntimeText text="Fills {{existing_description}}." />}
+          >
+            <Textarea
+              className={classes.textarea}
+              value={existingDescription}
+              onChange={(event) =>
+                setExistingDescription(event.currentTarget.value)
+              }
+              placeholder="(none yet)"
+            />
+          </Field>
+          <Field
             label="Existing personality"
-            description="Fills `{{existing_personality}}`."
-            autosize
-            minRows={2}
-            value={existingPersonality}
-            onChange={(event) =>
-              setExistingPersonality(event.currentTarget.value)
-            }
-            placeholder="(none yet)"
-          />
-        </SimpleGrid>
+            hint={<RuntimeText text="Fills {{existing_personality}}." />}
+          >
+            <Textarea
+              className={classes.textarea}
+              value={existingPersonality}
+              onChange={(event) =>
+                setExistingPersonality(event.currentTarget.value)
+              }
+              placeholder="(none yet)"
+            />
+          </Field>
+        </div>
       ) : null}
 
       {category === "character_generator" ? (
-        <Accordion variant="separated">
+        <Accordion>
           <Accordion.Item value="existing">
             <Accordion.Control>
               Existing card fields (optional)
             </Accordion.Control>
             <Accordion.Panel>
-              <Stack gap="md">
-                <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-                  <Textarea
+              <div className={classes.stack}>
+                <div className={`${classes.grid} ${classes.grid2}`}>
+                  <Field
                     label="Existing description"
-                    description="Fills `{{existing_description}}`."
-                    autosize
-                    minRows={2}
-                    value={existingDescription}
-                    onChange={(event) =>
-                      setExistingDescription(event.currentTarget.value)
-                    }
-                    placeholder="(none yet)"
-                  />
-                  <Textarea
+                    hint={<RuntimeText text="Fills {{existing_description}}." />}
+                  >
+                    <Textarea
+                      className={classes.textarea}
+                      value={existingDescription}
+                      onChange={(event) =>
+                        setExistingDescription(event.currentTarget.value)
+                      }
+                      placeholder="(none yet)"
+                    />
+                  </Field>
+                  <Field
                     label="Existing personality"
-                    description="Fills `{{existing_personality}}`."
-                    autosize
-                    minRows={2}
-                    value={existingPersonality}
-                    onChange={(event) =>
-                      setExistingPersonality(event.currentTarget.value)
-                    }
-                    placeholder="(none yet)"
-                  />
-                  <Textarea
+                    hint={<RuntimeText text="Fills {{existing_personality}}." />}
+                  >
+                    <Textarea
+                      className={classes.textarea}
+                      value={existingPersonality}
+                      onChange={(event) =>
+                        setExistingPersonality(event.currentTarget.value)
+                      }
+                      placeholder="(none yet)"
+                    />
+                  </Field>
+                  <Field
                     label="Existing scenario"
-                    description="Fills `{{existing_scenario}}`."
-                    autosize
-                    minRows={2}
-                    value={existingScenario}
-                    onChange={(event) =>
-                      setExistingScenario(event.currentTarget.value)
-                    }
-                    placeholder="(none yet)"
-                  />
-                  <Textarea
+                    hint={<RuntimeText text="Fills {{existing_scenario}}." />}
+                  >
+                    <Textarea
+                      className={classes.textarea}
+                      value={existingScenario}
+                      onChange={(event) =>
+                        setExistingScenario(event.currentTarget.value)
+                      }
+                      placeholder="(none yet)"
+                    />
+                  </Field>
+                  <Field
                     label="Existing first_mes"
-                    description="Fills `{{existing_first_mes}}`."
-                    autosize
-                    minRows={2}
-                    value={existingFirstMes}
-                    onChange={(event) =>
-                      setExistingFirstMes(event.currentTarget.value)
-                    }
-                    placeholder="(none yet)"
-                  />
-                  <Textarea
+                    hint={<RuntimeText text="Fills {{existing_first_mes}}." />}
+                  >
+                    <Textarea
+                      className={classes.textarea}
+                      value={existingFirstMes}
+                      onChange={(event) =>
+                        setExistingFirstMes(event.currentTarget.value)
+                      }
+                      placeholder="(none yet)"
+                    />
+                  </Field>
+                  <Field
                     label="Existing mes_example"
-                    description="Fills `{{existing_mes_example}}`."
-                    autosize
-                    minRows={2}
-                    value={existingMesExample}
-                    onChange={(event) =>
-                      setExistingMesExample(event.currentTarget.value)
-                    }
-                    placeholder="(none yet)"
-                  />
-                  <Textarea
+                    hint={<RuntimeText text="Fills {{existing_mes_example}}." />}
+                  >
+                    <Textarea
+                      className={classes.textarea}
+                      value={existingMesExample}
+                      onChange={(event) =>
+                        setExistingMesExample(event.currentTarget.value)
+                      }
+                      placeholder="(none yet)"
+                    />
+                  </Field>
+                  <Field
                     label="Existing alternate greetings"
-                    description="Fills `{{existing_alternate_greetings}}`."
-                    autosize
-                    minRows={2}
-                    value={existingAlternateGreetings}
-                    onChange={(event) =>
-                      setExistingAlternateGreetings(
-                        event.currentTarget.value,
-                      )
-                    }
-                    placeholder="(none yet)"
-                  />
-                </SimpleGrid>
-              </Stack>
+                    hint={<RuntimeText text="Fills {{existing_alternate_greetings}}." />}
+                  >
+                    <Textarea
+                      className={classes.textarea}
+                      value={existingAlternateGreetings}
+                      onChange={(event) =>
+                        setExistingAlternateGreetings(event.currentTarget.value)
+                      }
+                      placeholder="(none yet)"
+                    />
+                  </Field>
+                </div>
+              </div>
             </Accordion.Panel>
           </Accordion.Item>
         </Accordion>
       ) : null}
 
       {isChatCategory(category) ? (
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-          <Textarea
-            label="Chat summary"
-            description="Fills the Chat Summary marker."
-            autosize
-            minRows={3}
-            value={chatSummary}
-            onChange={(event) => setChatSummary(event.currentTarget.value)}
-            placeholder="Earlier arc summary…"
-          />
-          <Textarea
-            label="Chat history"
-            description="Fills the Chat History marker."
-            autosize
-            minRows={3}
-            value={chatHistory}
-            onChange={(event) => setChatHistory(event.currentTarget.value)}
-            placeholder={"{{user}}: …\n{{char}}: …"}
-          />
-        </SimpleGrid>
+        <div className={`${classes.grid} ${classes.grid2}`}>
+          <Field label="Chat summary" hint="Fills the Chat Summary marker.">
+            <Textarea
+              className={classes.textarea}
+              value={chatSummary}
+              onChange={(event) => setChatSummary(event.currentTarget.value)}
+              placeholder="Earlier arc summary…"
+            />
+          </Field>
+          <Field label="Chat history" hint="Fills the Chat History marker.">
+            <Textarea
+              className={classes.textarea}
+              value={chatHistory}
+              onChange={(event) => setChatHistory(event.currentTarget.value)}
+              placeholder={"{{user}}: …\n{{char}}: …"}
+            />
+          </Field>
+        </div>
       ) : null}
 
-      <Textarea
+      <Field
         label="Extra user message"
-        description={
-          isGeneratorCategory(category)
-            ? "Optional — appended after the preset (many generators already include a user section)."
-            : "Appended after the preset prompt as a user turn. Supports `{{user}}` / `{{char}}`."
+        hint={
+          isGeneratorCategory(category) ? (
+            "Optional — appended after the preset (many generators already include a user section)."
+          ) : (
+            <RuntimeText text="Appended after the preset prompt as a user turn. Supports {{user}} / {{char}}." />
+          )
         }
-        autosize
-        minRows={2}
-        value={userMessage}
-        onChange={(event) => setUserMessage(event.currentTarget.value)}
-      />
+      >
+        <Textarea
+          className={classes.textarea}
+          value={userMessage}
+          onChange={(event) => setUserMessage(event.currentTarget.value)}
+        />
+      </Field>
 
-      <Group>
+      <div>
         <Button
           type="button"
+          variant="primary"
           leftSection={<IconPlayerPlay size={16} />}
-          onClick={() => void handleRun()}
           loading={testMutation.isPending}
-          disabled={!resolvedConnectionId}
+          onClick={() => void handleRun()}
+          disabled={!resolvedConnectionId || testMutation.isPending}
         >
-          Run test
+          {testMutation.isPending ? "Running…" : "Run test"}
         </Button>
-      </Group>
+      </div>
 
-      <Accordion variant="separated" defaultValue="preview">
+      <Accordion defaultValue="preview">
         <Accordion.Item value="preview">
           <Accordion.Control>
             Prompt preview ({previewMessages.length} messages)
@@ -687,68 +722,65 @@ export function PresetTestPanel({
         {result ? (
           <Accordion.Item value="result">
             <Accordion.Control>
-              Result
-              {result.model ? (
-                <Badge ml="xs" size="sm" variant="light">
-                  {result.model}
-                </Badge>
-              ) : null}
+              <span className={classes.resultControl}>
+                Result
+                {result.model ? (
+                  <span className={classes.badge}>{result.model}</span>
+                ) : null}
+              </span>
             </Accordion.Control>
             <Accordion.Panel>
-              <Stack gap="md">
+              <div className={classes.stack}>
                 {result.thinking ? (
-                  <Stack gap={4}>
-                    <Text size="sm" fw={600}>
-                      Thinking
-                    </Text>
-                    <Code block style={{ whiteSpace: "pre-wrap" }}>
-                      {result.thinking}
-                    </Code>
-                  </Stack>
+                  <div className={classes.block}>
+                    <span className={classes.blockTitle}>Thinking</span>
+                    <pre className={classes.code}>{result.thinking}</pre>
+                  </div>
                 ) : null}
-                <Stack gap={4}>
-                  <Text size="sm" fw={600}>
-                    Reply
-                  </Text>
-                  <Code block style={{ whiteSpace: "pre-wrap" }}>
-                    {result.content || result.reply || "(empty)"}
-                  </Code>
-                </Stack>
+                <div className={classes.block}>
+                  <span className={classes.blockTitle}>Reply</span>
+                  <pre className={classes.code}>
+                    <RuntimeText
+                      as="span"
+                      text={result.content || result.reply || "(empty)"}
+                    />
+                  </pre>
+                </div>
                 {result.finishReason ? (
-                  <Text size="xs" c="dimmed">
+                  <p className={classes.finishReason}>
                     finish_reason: {result.finishReason}
-                  </Text>
+                  </p>
                 ) : null}
-              </Stack>
+              </div>
             </Accordion.Panel>
           </Accordion.Item>
         ) : null}
       </Accordion>
-    </Stack>
+    </div>
   );
 }
 
 function MessageList({ messages }: { messages: LlmChatMessage[] }) {
   if (messages.length === 0) {
     return (
-      <Text size="sm" c="dimmed">
+      <p className={classes.muted}>
         No messages yet. Add sections or a user message.
-      </Text>
+      </p>
     );
   }
 
   return (
-    <Stack gap="sm">
+    <div className={classes.messageList}>
       {messages.map((message, index) => (
-        <Stack key={`${message.role}-${index}`} gap={4}>
-          <Badge size="sm" variant="outline" w="fit-content">
+        <div key={`${message.role}-${index}`} className={classes.block}>
+          <span className={`${classes.badge} ${classes.badgeOutline}`}>
             {message.role}
-          </Badge>
-          <Code block style={{ whiteSpace: "pre-wrap" }}>
-            {message.content}
-          </Code>
-        </Stack>
+          </span>
+          <pre className={classes.code}>
+            <RuntimeText as="span" text={message.content} />
+          </pre>
+        </div>
       ))}
-    </Stack>
+    </div>
   );
 }

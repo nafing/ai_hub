@@ -2,6 +2,7 @@ import path from "node:path";
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { LancedbModule } from "./lancedb/lancedb.module";
 import { LlmModule } from "./llm/llm.module";
 import {
   ConnectionsModule,
@@ -40,6 +41,7 @@ import {
     CharactersModule,
     LorebooksModule,
     PersonasModule,
+    LancedbModule,
     ChatsModule,
     LlmModule,
   ],

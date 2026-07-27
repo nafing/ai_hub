@@ -4,4 +4,9 @@ export type {
   UpdatePersonaInput,
   PersonaListItem,
 } from "./api";
-export { defaultPersona, normalizePersona } from "./defaults";
+export { defaultPersona, normalizePersona, toPersonaExport } from "./defaults";
+export {
+  parsePersonaJson,
+  parsePersonaImportFile,
+  PersonaImportError,
+} from "./import";

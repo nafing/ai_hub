@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Button, Group, Modal, TextInput } from "@mantine/core";
-import { notifications } from "@mantine/notifications";
 import { useNavigate } from "@tanstack/react-router";
 import { defaultRegexScript } from "@ai-hub/shared";
+import { Button, Modal, TextInput, notifications } from "@/components/ui";
 import { useCreateRegex } from "./queries";
+import classes from "./CreateRegexModal.module.css";
 
 type CreateRegexModalProps = {
   opened: boolean;
@@ -49,34 +49,36 @@ export function CreateRegexModal({ opened, onClose }: CreateRegexModalProps) {
   }
 
   return (
-    <Modal opened={opened} onClose={handleClose} title="New regex" centered>
+    <Modal opened={opened} onClose={handleClose} title="New regex" size="sm">
       <form
         onSubmit={(event) => {
           event.preventDefault();
           void handleCreate();
         }}
       >
-        <TextInput
-          label="Name"
-          description="e.g. Strip markdown italics, Remove OOC, Censor list."
-          placeholder="My regex script"
-          data-autofocus
-          required
-          value={name}
-          onChange={(event) => setName(event.currentTarget.value)}
-        />
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" type="button" onClick={handleClose}>
+        <label className={classes.field}>
+          <span className={classes.fieldLabel}>Name</span>
+          <p className={classes.fieldHint}>
+            e.g. Strip markdown italics, Remove OOC, Censor list.
+          </p>
+          <TextInput
+            placeholder="My regex script"
+            required
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+          />
+        </label>
+        <div className={classes.actions}>
+          <Button variant="default" type="button"
+            onClick={handleClose}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            loading={createMutation.isPending}
-            disabled={!name.trim()}
-          >
-            Create
+          <Button variant="primary" type="submit"
+            disabled={!name.trim() || createMutation.isPending}>
+            {createMutation.isPending ? "Creating…" : "Create"}
           </Button>
-        </Group>
+        </div>
       </form>
     </Modal>
   );

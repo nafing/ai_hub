@@ -7,9 +7,14 @@ import {
   Patch,
   Post,
 } from "@nestjs/common";
-import type { Lorebook, LorebookListItem } from "@ai-hub/shared";
+import type {
+  LoreIndexStatus,
+  Lorebook,
+  LorebookListItem,
+} from "@ai-hub/shared";
 import { LorebooksService } from "./lorebooks.service";
 import { CreateLorebookDto } from "./dto/create-lorebook.dto";
+import { SearchLorebookDto } from "./dto/search-lorebook.dto";
 import { UpdateLorebookDto } from "./dto/update-lorebook.dto";
 
 @Controller("lorebooks")
@@ -21,9 +26,29 @@ export class LorebooksController {
     return this.lorebooksService.findAll();
   }
 
+  @Get("index-status")
+  indexStatus(): Promise<LoreIndexStatus> {
+    return this.lorebooksService.getIndexStatus();
+  }
+
+  @Post("reindex")
+  reindex(): Promise<{ lorebooks: number; entries: number }> {
+    return this.lorebooksService.reindexAll();
+  }
+
+  @Post("search")
+  search(@Body() body: SearchLorebookDto): Promise<{ result: string }> {
+    return this.lorebooksService.searchLorebook(body);
+  }
+
   @Get(":id")
   findOne(@Param("id") id: string): Promise<Lorebook> {
     return this.lorebooksService.findOne(id);
+  }
+
+  @Post(":id/reindex")
+  reindexOne(@Param("id") id: string): Promise<{ ok: boolean }> {
+    return this.lorebooksService.reindexOne(id);
   }
 
   @Post()

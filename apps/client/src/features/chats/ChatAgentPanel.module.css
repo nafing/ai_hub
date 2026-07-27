@@ -1,0 +1,176 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.modalTitle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.status {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--app-muted);
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--app-muted);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--app-muted);
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid var(--app-border);
+  background: color-mix(in srgb, var(--app-surface) 88%, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+
+.choice:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.choice strong {
+  font-size: 0.82rem;
+}
+
+.choice span {
+  font-size: 0.78rem;
+  color: var(--app-muted);
+}
+
+.list,
+.echoList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.card {
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid var(--app-border);
+  background: color-mix(in srgb, var(--app-surface) 90%, transparent);
+}
+
+.cardTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.meta {
+  font-size: 0.75rem;
+  color: var(--app-muted);
+}
+
+.muted {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+  color: var(--app-muted);
+}
+
+.error {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--app-danger, #c44);
+}
+
+.diff {
+  margin: 0.35rem 0 0;
+  padding: 0.45rem;
+  max-height: 8rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 0.72rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--app-bg) 70%, transparent);
+}
+
+.actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.fieldRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+}
+
+.echoList li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
+  font-size: 0.78rem;
+}
+
+.echoList strong {
+  font-size: 0.75rem;
+}
+
+.dmLink {
+  color: var(--app-accent, var(--app-fg));
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.dmLink:hover {
+  text-decoration: underline;
+}

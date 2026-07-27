@@ -1,15 +1,19 @@
 import {
   IsBoolean,
   IsIn,
+  IsInt,
   IsObject,
   IsOptional,
   IsString,
+  Max,
+  Min,
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
 import {
   GROUP_CHAT_MODES,
   GROUP_RESPONSE_ORDERS,
+  type ChatAgentSettingsMap,
   type GroupChatMode,
   type GroupResponseOrder,
 } from "@ai-hub/shared";
@@ -26,11 +30,6 @@ class UpdateChatSettingsDto {
   @IsOptional()
   character_ids?: string[];
 
-  /** @deprecated use character_ids */
-  @IsOptional()
-  @IsString()
-  character_id?: string | null;
-
   @IsOptional()
   @IsString()
   persona_id?: string | null;
@@ -43,7 +42,11 @@ class UpdateChatSettingsDto {
 
   @IsOptional()
   @IsObject()
-  variables?: Record<string, string>;
+  agent_settings?: ChatAgentSettingsMap;
+
+  @IsOptional()
+  @IsObject()
+  variables?: Record<string, string | string[]>;
 
   @IsOptional()
   @IsIn(GROUP_CHAT_MODES)
@@ -60,6 +63,43 @@ class UpdateChatSettingsDto {
   @IsOptional()
   @IsString()
   scenario_override?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  memory_enabled?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  history_depth?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  memory_top_k?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(64)
+  @Max(8000)
+  memory_token_budget?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_twatter_references?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_character_dms?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  character_dm_chat_ids?: Record<string, string>;
 }
 
 export class UpdateChatDto {

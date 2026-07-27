@@ -22,3 +22,20 @@ export type {
   AgentListItem,
 } from "./api";
 export { DEFAULT_AGENTS } from "./default-agents";
+export type { ChatAgentSetting, ChatAgentSettingsMap } from "./runtime";
+export {
+  shouldRunAgentByInterval,
+  countAssistantMessages,
+  resolveAgentPromptTemplate,
+  resolveAgentRuntimeSettings,
+  resolveAgentRunInterval,
+  resolveAgentPromptTemplateId,
+  fillAgentPromptTemplate,
+  parseAgentTextRewrite,
+  tryParseJsonObject,
+  tryParseJsonValue,
+  formatAgentInjectSections,
+  agentAllowedForMode,
+  isTextRewriteAgent,
+  phaseLabel,
+} from "./runtime";

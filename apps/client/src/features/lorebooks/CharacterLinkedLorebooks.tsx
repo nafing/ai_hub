@@ -1,18 +1,4 @@
-import { useMemo, useState } from "react";
-import {
-  ActionIcon,
-  Badge,
-  Box,
-  Button,
-  Card,
-  Center,
-  Group,
-  Loader,
-  Select,
-  Stack,
-  Text,
-} from "@mantine/core";
-import { notifications } from "@mantine/notifications";
+import { useMemo, useState, type ReactNode } from "react";
 import { IconLinkOff } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import {
@@ -20,7 +6,9 @@ import {
   type LorebookListItem,
   type UpdateLorebookInput,
 } from "@ai-hub/shared";
+import { ActionIcon, Button, Select, notifications } from "@/components/ui";
 import { useLorebooks, useUpdateLorebook } from "./queries";
+import classes from "./CharacterLinkedLorebooks.module.css";
 
 type LinkedLorebooksPanelProps = {
   /** Entity id stored in lorebook `linked_characters` or `linked_personas`. */
@@ -28,6 +16,21 @@ type LinkedLorebooksPanelProps = {
   linkField: "linked_characters" | "linked_personas";
   entityLabel: "character" | "persona";
 };
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.field}>
+      <span className={classes.fieldLabel}>{label}</span>
+      {children}
+    </div>
+  );
+}
 
 export function LinkedLorebooksPanel({
   entityId,
@@ -106,55 +109,58 @@ export function LinkedLorebooksPanel({
 
   if (isLoading) {
     return (
-      <Center py="md">
-        <Loader size="sm" />
-      </Center>
+      <div className={classes.loadingWrap}>
+        <span className={classes.spinner} aria-label="Loading lorebooks" />
+      </div>
     );
   }
 
   if (isError) {
-    return <Text c="red">Failed to load lorebooks.</Text>;
+    return <p className={classes.error}>Failed to load lorebooks.</p>;
   }
 
   return (
-    <Stack gap="md">
-      <Text size="sm" c="dimmed">
-        Link hub lorebooks to this {entityLabel} via `{linkField}`.
-      </Text>
+    <div className={classes.stack}>
+      <p className={classes.muted}>
+        Link hub lorebooks to this {entityLabel} via{" "}
+        <code className={classes.inlineCode}>{linkField}</code>.
+      </p>
 
-      <Group align="flex-end" wrap="nowrap" gap="sm">
-        <Select
-          style={{ flex: 1 }}
-          label="Link lorebook"
-          placeholder={
-            unlinkedOptions.length > 0
-              ? "Select a lorebook"
-              : lorebooks.length === 0
-                ? "No lorebooks yet"
-                : "All lorebooks are linked"
-          }
-          searchable
-          clearable
-          data={unlinkedOptions}
-          value={selectedToLink}
-          onChange={setSelectedToLink}
-          disabled={unlinkedOptions.length === 0 || pendingId != null}
-        />
-        <Button
+      <div className={classes.linkRow}>
+        <div className={classes.linkField}>
+          <Field label="Link lorebook">
+            <Select
+              placeholder={
+                unlinkedOptions.length > 0
+                  ? "Select a lorebook"
+                  : lorebooks.length === 0
+                    ? "No lorebooks yet"
+                    : "All lorebooks are linked"
+              }
+              searchable
+              clearable
+              data={unlinkedOptions}
+              value={selectedToLink ?? ""}
+              onChange={(value) => setSelectedToLink(value || null)}
+              disabled={unlinkedOptions.length === 0 || pendingId != null}
+            />
+          </Field>
+        </div>
+        <Button variant="default" type="button"
           onClick={() => void handleLink()}
           disabled={!selectedToLink || pendingId != null}
-          loading={pendingId != null && pendingId === selectedToLink}
         >
+          {pendingId != null && pendingId === selectedToLink ? (
+            <span className={classes.spinner} aria-hidden />
+          ) : null}
           Link
         </Button>
-      </Group>
+      </div>
 
       {linked.length === 0 ? (
-        <Text size="sm" c="dimmed">
-          No lorebooks linked yet.
-        </Text>
+        <p className={classes.muted}>No lorebooks linked yet.</p>
       ) : (
-        <Stack gap="sm">
+        <div className={classes.list}>
           {linked.map((lorebook) => (
             <LinkedLorebookRow
               key={lorebook.id}
@@ -164,9 +170,9 @@ export function LinkedLorebooksPanel({
               onUnlink={() => void setLinked(lorebook, false)}
             />
           ))}
-        </Stack>
+        </div>
       )}
-    </Stack>
+    </div>
   );
 }
 
@@ -182,75 +188,39 @@ function LinkedLorebookRow({
   onUnlink: () => void;
 }) {
   return (
-    <Card withBorder padding={0}>
-      <Box p="md">
-        <Group justify="space-between" align="start" wrap="nowrap">
+    <article className={classes.card}>
+      <div className={classes.cardBody}>
+        <div className={classes.cardTop}>
           <Link
             to="/lorebooks/$lorebookId"
             params={{ lorebookId: lorebook.id }}
-            style={{
-              textDecoration: "none",
-              color: "inherit",
-              display: "block",
-              minWidth: 0,
-              flex: 1,
-            }}
+            className={classes.cardLink}
           >
-            <Text fw={600} lineClamp={1}>
-              {lorebook.name || "untitled"}
-            </Text>
-            <Text size="sm" c="dimmed" lineClamp={2} mt={4}>
+            <h3 className={classes.cardName}>{lorebook.name || "untitled"}</h3>
+            <p className={classes.cardDescription}>
               {lorebook.description || "No description"}
-            </Text>
+            </p>
           </Link>
-          <ActionIcon
-            size="sm"
-            variant="subtle"
-            color="red"
-            aria-label="Unlink lorebook"
-            title="Unlink"
-            loading={unlinking}
-            disabled={disabled && !unlinking}
-            onClick={onUnlink}
-          >
-            <IconLinkOff size={16} />
+          <ActionIcon type="button" variant="default" aria-label="Unlink lorebook" title="Unlink" disabled={disabled && !unlinking} loading={unlinking} onClick={onUnlink}>
+            {!unlinking ? <IconLinkOff size={16} /> : null}
           </ActionIcon>
-        </Group>
-        <Group gap={6} mt="sm">
-          <Badge size="sm" variant="light">
+        </div>
+        <div className={classes.badges}>
+          <span className={classes.badge}>
             {LOREBOOK_CATEGORY_LABELS[lorebook.category]}
-          </Badge>
-          <Badge size="sm" variant="light">
+          </span>
+          <span className={classes.badge}>
             {lorebook.entry_count}{" "}
             {lorebook.entry_count === 1 ? "entry" : "entries"}
-          </Badge>
+          </span>
           {!lorebook.enabled ? (
-            <Badge size="sm" variant="outline" color="gray">
-              disabled
-            </Badge>
+            <span className={classes.badgeMuted}>disabled</span>
           ) : null}
           {lorebook.global ? (
-            <Badge size="sm" variant="outline">
-              global
-            </Badge>
+            <span className={classes.badgeOutline}>global</span>
           ) : null}
-        </Group>
-      </Box>
-    </Card>
-  );
-}
-
-/** @deprecated Prefer LinkedLorebooksPanel — kept for existing character imports. */
-export function CharacterLinkedLorebooks({
-  characterId,
-}: {
-  characterId: string;
-}) {
-  return (
-    <LinkedLorebooksPanel
-      entityId={characterId}
-      linkField="linked_characters"
-      entityLabel="character"
-    />
+        </div>
+      </div>
+    </article>
   );
 }

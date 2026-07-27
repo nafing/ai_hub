@@ -1,8 +1,5 @@
-import { useEffect, useState } from "react";
-import { Button, Group, Modal, Stack, Text } from "@mantine/core";
-import { Dropzone } from "@mantine/dropzone";
-import { notifications } from "@mantine/notifications";
-import { IconFileTypeJs, IconUpload, IconX } from "@tabler/icons-react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
+import { IconFileTypeJs, IconUpload } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -11,8 +8,10 @@ import {
   type CreateLorebookInput,
   type Lorebook,
 } from "@ai-hub/shared";
+import { Button, Modal, notifications } from "@/components/ui";
 import { createLorebook } from "./api";
 import { lorebookKeys } from "./queries";
+import classes from "./ImportLorebookModal.module.css";
 
 type ImportLorebookModalProps = {
   opened: boolean;
@@ -44,9 +43,11 @@ export function ImportLorebookModal({
 }: ImportLorebookModalProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const isPreset = Boolean(initialLorebook);
 
@@ -55,6 +56,7 @@ export function ImportLorebookModal({
       setPreview(null);
       setParsing(false);
       setImporting(false);
+      setDragOver(false);
       return;
     }
     if (initialLorebook) {
@@ -69,12 +71,11 @@ export function ImportLorebookModal({
     setPreview(null);
     setParsing(false);
     setImporting(false);
+    setDragOver(false);
     onClose();
   }
 
-  async function handleDrop(files: File[]) {
-    const file = files[0];
-    if (!file) return;
+  async function handleFile(file: File) {
     setParsing(true);
     setPreview(null);
     try {
@@ -93,6 +94,27 @@ export function ImportLorebookModal({
     } finally {
       setParsing(false);
     }
+  }
+
+  function onDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setDragOver(false);
+    if (importing || parsing || isPreset) return;
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    if (
+      file.type &&
+      !file.type.includes("json") &&
+      !file.name.toLowerCase().endsWith(".json")
+    ) {
+      notifications.show({
+        title: "Unsupported file",
+        message: "Drop a .json lorebook / character_book export.",
+        color: "red",
+      });
+      return;
+    }
+    void handleFile(file);
   }
 
   async function handleImport() {
@@ -126,88 +148,90 @@ export function ImportLorebookModal({
   }
 
   return (
-    <Modal
-      opened={opened}
-      onClose={handleClose}
-      title={title}
-      centered
-      size="lg"
-    >
-      <Stack gap="sm">
+    <Modal opened={opened} onClose={handleClose} title={title} size="lg">
+      <div className={classes.body}>
         {!isPreset ? (
-          <Dropzone
-            onDrop={(files) => void handleDrop(files)}
-            onReject={() => {
-              notifications.show({
-                title: "Unsupported file",
-                message: "Drop a .json lorebook / character_book export.",
-                color: "red",
-              });
+          <label
+            className={[
+              classes.dropzone,
+              dragOver ? classes.dropzoneActive : "",
+              parsing || importing ? classes.dropzoneDisabled : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDragOver(true);
             }}
-            accept={["application/json", "text/json"]}
-            maxFiles={1}
-            loading={parsing}
-            disabled={importing}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
           >
-            <Group
-              justify="center"
-              gap="md"
-              mih={120}
-              style={{ pointerEvents: "none" }}
-            >
-              <Dropzone.Accept>
-                <IconUpload size={32} stroke={1.5} />
-              </Dropzone.Accept>
-              <Dropzone.Reject>
-                <IconX size={32} stroke={1.5} />
-              </Dropzone.Reject>
-              <Dropzone.Idle>
-                <IconFileTypeJs size={32} stroke={1.5} />
-              </Dropzone.Idle>
-              <div>
-                <Text size="sm" inline>
-                  Drop a lorebook JSON
-                </Text>
-                <Text size="xs" c="dimmed" inline mt={4}>
-                  Accepts character_book, standalone lorebook, or SillyTavern
-                  World Info exports.
-                </Text>
-              </div>
-            </Group>
-          </Dropzone>
+            <input
+              ref={inputRef}
+              className={classes.fileInput}
+              type="file"
+              accept="application/json,.json"
+              disabled={parsing || importing}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void handleFile(file);
+              }}
+            />
+            <span className={classes.dropIcon}>
+              {parsing ? (
+                <span className={classes.spinner} aria-hidden />
+              ) : dragOver ? (
+                <IconUpload size={28} stroke={1.5} />
+              ) : (
+                <IconFileTypeJs size={28} stroke={1.5} />
+              )}
+            </span>
+            <span className={classes.dropTitle}>
+              {parsing ? "Reading file…" : "Drop a lorebook JSON"}
+            </span>
+            <span className={classes.dropHint}>
+              Accepts character_book, standalone lorebook, or SillyTavern World
+              Info exports. Click to browse.
+            </span>
+          </label>
         ) : (
-          <Text size="sm" c="dimmed">
-            This character card includes an embedded lorebook
-            (`character_book`). Import it as a hub lorebook linked to the
-            character — the embedded book will not be stored on the card.
-          </Text>
+          <p className={classes.presetHint}>
+            This character card includes an embedded lorebook (
+            <code>character_book</code>). Import it as a hub lorebook linked to
+            the character — the embedded book will not be stored on the card.
+          </p>
         )}
 
         {preview ? (
-          <Text size="sm">
+          <p className={classes.preview}>
             Loaded <strong>{preview.lorebook.name || "untitled"}</strong> from{" "}
             {preview.fileName} — {preview.lorebook.entries.length}{" "}
             {preview.lorebook.entries.length === 1 ? "entry" : "entries"}
             {preview.lorebook.linked_characters.length > 0
-              ? ` · linked to character`
+              ? " · linked to character"
               : ""}
             .
-          </Text>
+          </p>
         ) : null}
-      </Stack>
+      </div>
 
-      <Group justify="flex-end" mt="md">
-        <Button variant="default" type="button" onClick={handleClose}>
+      <div className={classes.actions}>
+        <Button variant="default" type="button"
+          onClick={handleClose}>
           {isPreset ? "Skip" : "Cancel"}
         </Button>
-        <Button
+        <Button variant="primary" type="button"
+          disabled={!preview || importing || parsing}
           onClick={() => void handleImport()}
-          loading={importing || parsing}
-          disabled={!preview}
         >
-          Import lorebook
+          {importing ? "Importing…" : "Import lorebook"}
         </Button>
-      </Group>
+      </div>
     </Modal>
   );
 }

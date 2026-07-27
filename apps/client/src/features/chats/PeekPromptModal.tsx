@@ -1,14 +1,8 @@
 import { useEffect, useState } from "react";
-import {
-  Code,
-  Loader,
-  Modal,
-  ScrollArea,
-  Stack,
-  Text,
-} from "@mantine/core";
 import type { PeekPromptResult } from "@ai-hub/shared";
+import { Modal, RuntimeText } from "@/components/ui";
 import { peekChatPrompt } from "./api";
+import classes from "./PeekPromptModal.module.css";
 
 type PeekPromptModalProps = {
   opened: boolean;
@@ -39,7 +33,9 @@ export function PeekPromptModal({
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load prompt");
+          setError(
+            err instanceof Error ? err.message : "Failed to load prompt",
+          );
         }
       })
       .finally(() => {
@@ -55,33 +51,115 @@ export function PeekPromptModal({
       opened={opened}
       onClose={onClose}
       title={
-        result
-          ? `Peek prompt — ${result.character_name}`
-          : "Peek prompt"
+        result ? `Peek prompt — ${result.character_name}` : "Peek prompt"
       }
       size="xl"
     >
       {loading ? (
-        <Loader size="sm" />
+        <div className={classes.loading}>
+          <div className={classes.spinner} aria-label="Loading" />
+        </div>
       ) : error ? (
-        <Text c="red" size="sm">
-          {error}
-        </Text>
+        <p className={classes.error}>{error}</p>
       ) : result ? (
-        <ScrollArea.Autosize mah="70vh">
-          <Stack gap="md">
+        <div className={classes.scroll}>
+          <div className={classes.stack}>
+            <section className={classes.loreSection}>
+              <div className={classes.loreHeader}>
+                <p className={classes.role}>Lore retrieval</p>
+                <p className={classes.loreMeta}>
+                  {(result.lore_hits ?? []).length} hit
+                  {(result.lore_hits ?? []).length === 1 ? "" : "s"}
+                  {(result.lore_token_estimate ?? 0) > 0
+                    ? ` · ~${result.lore_token_estimate} tok`
+                    : null}
+                </p>
+              </div>
+              {(result.lore_hits ?? []).length === 0 ? (
+                <p className={classes.loreEmpty}>
+                  No lore entries selected for this turn.
+                </p>
+              ) : (
+                <ul className={classes.loreList}>
+                  {(result.lore_hits ?? []).map((hit, index) => (
+                    <li
+                      key={`${hit.lorebook_id}-${hit.entry_name}-${index}`}
+                      className={classes.loreItem}
+                    >
+                      <div className={classes.loreItemTop}>
+                        <span className={classes.loreName}>
+                          {hit.entry_name}
+                        </span>
+                        <span className={classes.loreSource}>{hit.source}</span>
+                      </div>
+                      <p className={classes.loreBook}>{hit.lorebook_name}</p>
+                      {hit.preview ? (
+                        <pre className={classes.lorePreview}>
+                          <RuntimeText
+                            as="span"
+                            text={hit.preview}
+                            values={{ char: result.character_name }}
+                          />
+                        </pre>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section className={classes.loreSection}>
+              <div className={classes.loreHeader}>
+                <p className={classes.role}>Chat memory</p>
+                <p className={classes.loreMeta}>
+                  {(result.memory_hits ?? []).length} hit
+                  {(result.memory_hits ?? []).length === 1 ? "" : "s"}
+                  {(result.memory_token_estimate ?? 0) > 0
+                    ? ` · ~${result.memory_token_estimate} tok`
+                    : null}
+                </p>
+              </div>
+              {(result.memory_hits ?? []).length === 0 ? (
+                <p className={classes.loreEmpty}>
+                  No older messages retrieved for this turn.
+                </p>
+              ) : (
+                <ul className={classes.loreList}>
+                  {(result.memory_hits ?? []).map((hit) => (
+                    <li key={hit.message_id} className={classes.loreItem}>
+                      <div className={classes.loreItemTop}>
+                        <span className={classes.loreName}>{hit.role}</span>
+                        <span className={classes.loreSource}>vector</span>
+                      </div>
+                      {hit.preview ? (
+                        <pre className={classes.lorePreview}>
+                          <RuntimeText
+                            as="span"
+                            text={hit.preview}
+                            values={{ char: result.character_name }}
+                          />
+                        </pre>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
             {result.messages.map((message, index) => (
-              <Stack key={`${message.role}-${index}`} gap={4}>
-                <Text size="xs" tt="uppercase" c="dimmed" fw={600}>
-                  {message.role}
-                </Text>
-                <Code block style={{ whiteSpace: "pre-wrap" }}>
-                  {message.content}
-                </Code>
-              </Stack>
+              <div key={`${message.role}-${index}`} className={classes.block}>
+                <p className={classes.role}>{message.role}</p>
+                <pre className={classes.code}>
+                  <RuntimeText
+                    as="span"
+                    text={message.content}
+                    values={{ char: result.character_name }}
+                  />
+                </pre>
+              </div>
             ))}
-          </Stack>
-        </ScrollArea.Autosize>
+          </div>
+        </div>
       ) : null}
     </Modal>
   );

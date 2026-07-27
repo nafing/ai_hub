@@ -1,19 +1,5 @@
-import {
-  ActionIcon,
-  Badge,
-  Box,
-  Card,
-  Center,
-  Group,
-  Loader,
-  SimpleGrid,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import { modals } from "@mantine/modals";
-import { notifications } from "@mantine/notifications";
+import { useState } from "react";
+import { motion } from "motion/react";
 import { IconCopy, IconPlus, IconTrash } from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
@@ -22,50 +8,49 @@ import {
   type RegexApplyTo,
   type RegexTarget,
 } from "@ai-hub/shared";
+import { ActionIcon, Button, Modal, notifications } from "@/components/ui";
 import { CreateRegexModal } from "@/features/regexes/CreateRegexModal";
 import {
   useDeleteRegex,
   useDuplicateRegex,
   useRegexes,
 } from "@/features/regexes/queries";
+import classes from "./index.module.css";
 
 export const Route = createFileRoute("/_app/regexes/")({
   component: RouteComponent,
 });
 
+type DeleteTarget = {
+  id: string;
+  name: string;
+};
+
 function RouteComponent() {
-  const [createOpened, { open: openCreate, close: closeCreate }] =
-    useDisclosure(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+
   const { data, isLoading, isError } = useRegexes();
   const deleteMutation = useDeleteRegex();
   const duplicateMutation = useDuplicateRegex();
 
-  function confirmDelete(id: string, name: string) {
-    modals.openConfirmModal({
-      title: "Delete regex",
-      children: (
-        <Text size="sm">
-          Delete <strong>{name || "this regex"}</strong>? This cannot be undone.
-        </Text>
-      ),
-      labels: { confirm: "Delete", cancel: "Cancel" },
-      confirmProps: { color: "red" },
-      onConfirm: () => {
-        deleteMutation.mutate(id, {
-          onSuccess: () => {
-            notifications.show({
-              title: "Deleted",
-              message: "Regex script removed.",
-              color: "green",
-            });
-          },
-          onError: (error) => {
-            notifications.show({
-              title: "Delete failed",
-              message: error instanceof Error ? error.message : "Unknown error",
-              color: "red",
-            });
-          },
+  function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    const { id } = deleteTarget;
+    setDeleteTarget(null);
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        notifications.show({
+          title: "Deleted",
+          message: "Regex script removed.",
+          color: "green",
+        });
+      },
+      onError: (error) => {
+        notifications.show({
+          title: "Delete failed",
+          message: error instanceof Error ? error.message : "Unknown error",
+          color: "red",
         });
       },
     });
@@ -91,120 +76,136 @@ function RouteComponent() {
   }
 
   return (
-    <Stack>
-      <CreateRegexModal opened={createOpened} onClose={closeCreate} />
-
-      <Box
-        pos="sticky"
-        top="var(--app-shell-header-offset, 0px)"
-        bg="var(--mantine-color-body)"
-        style={{ zIndex: "calc(var(--mantine-z-index-app) - 1)" }}
-        py="xs"
-      >
-        <Group justify="space-between" align="start" wrap="nowrap">
-          <Title order={2}>Regexes</Title>
-          <Group gap="xs" wrap="nowrap">
-            <ActionIcon
-              variant="default"
-              aria-label="New regex"
-              onClick={openCreate}
-            >
-              <IconPlus />
-            </ActionIcon>
-          </Group>
-        </Group>
-        <Text c="dimmed">
+    <div className={classes.page}>
+      <header className={classes.header}>
+        <div className={classes.headerRow}>
+          <h2 className={classes.title}>Regexes</h2>
+          <ActionIcon type="button" variant="default" aria-label="New regex" onClick={() => setCreateOpen(true)}
+          >
+            <IconPlus size={16} />
+          </ActionIcon>
+        </div>
+        <p className={classes.subtitle}>
           Find/replace scripts for AI output and user input (display and/or
           prompt).
-        </Text>
-      </Box>
+        </p>
+      </header>
 
       {isLoading ? (
-        <Center py="xl">
-          <Loader />
-        </Center>
+        <div className={classes.loading}>
+          <div className={classes.spinner} aria-label="Loading" />
+        </div>
       ) : null}
 
-      {isError ? <Text c="red">Failed to load regexes.</Text> : null}
+      {isError ? (
+        <p className={classes.statusError}>Failed to load regexes.</p>
+      ) : null}
 
       {!isLoading && !isError && (data?.length ?? 0) === 0 ? (
-        <Text c="dimmed">No regex scripts yet. Create one to get started.</Text>
+        <p className={classes.status}>
+          No regex scripts yet. Create one to get started.
+        </p>
       ) : null}
 
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
+      <div className={classes.grid}>
         {data?.map((script) => (
-          <Card key={script.id} withBorder padding={0}>
+          <motion.div
+            key={script.id}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.16 }}
+          >
             <Link
               to="/regexes/$regexId"
               params={{ regexId: script.id }}
-              style={{
-                textDecoration: "none",
-                color: "inherit",
-                display: "block",
-              }}
+              className={classes.card}
             >
-              <Box p="md">
-                <Group justify="space-between" align="start" wrap="nowrap">
-                  <div style={{ minWidth: 0 }}>
-                    <Text size="lg" fw={600} lineClamp={1}>
-                      {script.name || "Untitled"}
-                    </Text>
-                    <Text size="xs" c="dimmed" ff="monospace" lineClamp={1}>
-                      /{script.find_regex || "…"}/ →{" "}
-                      {script.replace_with || "(empty)"}
-                    </Text>
-                  </div>
-                  <Group gap="xs" wrap="nowrap">
-                    <ActionIcon
-                      size="sm"
-                      variant="subtle"
-                      aria-label="Duplicate"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        handleDuplicate(script.id);
-                      }}
-                      loading={duplicateMutation.isPending}
-                    >
-                      <IconCopy />
-                    </ActionIcon>
-                    <ActionIcon
-                      size="sm"
-                      variant="subtle"
-                      color="red"
-                      aria-label="Delete"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        confirmDelete(script.id, script.name);
-                      }}
-                      loading={deleteMutation.isPending}
-                    >
-                      <IconTrash />
-                    </ActionIcon>
-                  </Group>
-                </Group>
-                <Group gap={6} mt="sm">
-                  <Badge size="sm" variant="light" color={script.enabled ? "green" : "gray"}>
-                    {script.enabled ? "On" : "Off"}
-                  </Badge>
-                  <Badge size="sm" variant="outline">
-                    #{script.order}
-                  </Badge>
-                  <Badge size="sm" variant="outline">
-                    {REGEX_APPLY_TO_LABELS[script.apply_to as RegexApplyTo]}
-                  </Badge>
-                  {script.targets.map((target) => (
-                    <Badge key={target} size="sm" variant="dot">
-                      {REGEX_TARGET_LABELS[target as RegexTarget]}
-                    </Badge>
-                  ))}
-                </Group>
-              </Box>
+              <div className={classes.cardTop}>
+                <div className={classes.cardText}>
+                  <p className={classes.cardName}>
+                    {script.name || "Untitled"}
+                  </p>
+                  <p className={classes.cardPattern}>
+                    /{script.find_regex || "…"}/ →{" "}
+                    {script.replace_with || "(empty)"}
+                  </p>
+                </div>
+                <div className={classes.cardActions}>
+                  <ActionIcon type="button" variant="ghost" aria-label="Duplicate" disabled={duplicateMutation.isPending} onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      handleDuplicate(script.id);
+                    }}
+                  >
+                    <IconCopy size={15} />
+                  </ActionIcon>
+                  <ActionIcon type="button" variant="ghostDanger" aria-label="Delete" disabled={deleteMutation.isPending} onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setDeleteTarget({
+                        id: script.id,
+                        name: script.name,
+                      });
+                    }}
+                  >
+                    <IconTrash size={15} />
+                  </ActionIcon>
+                </div>
+              </div>
+
+              <div className={classes.badges}>
+                <span
+                  className={[
+                    classes.badge,
+                    script.enabled ? classes.badgeOn : classes.badgeOff,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {script.enabled ? "On" : "Off"}
+                </span>
+                <span className={classes.badgeOutline}>#{script.order}</span>
+                <span className={classes.badgeOutline}>
+                  {REGEX_APPLY_TO_LABELS[script.apply_to as RegexApplyTo]}
+                </span>
+                {script.targets.map((target) => (
+                  <span key={target} className={classes.badgeDot}>
+                    {REGEX_TARGET_LABELS[target as RegexTarget]}
+                  </span>
+                ))}
+              </div>
             </Link>
-          </Card>
+          </motion.div>
         ))}
-      </SimpleGrid>
-    </Stack>
+      </div>
+
+      <CreateRegexModal
+        opened={createOpen}
+        onClose={() => setCreateOpen(false)}
+      />
+
+      <Modal
+        opened={deleteTarget != null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete regex"
+        size="sm"
+      >
+        <p className={classes.modalBody}>
+          Delete <strong>{deleteTarget?.name || "this regex"}</strong>? This
+          cannot be undone.
+        </p>
+        <div className={classes.modalActions}>
+          <Button variant="default" type="button"
+            onClick={() => setDeleteTarget(null)}
+          >
+            Cancel
+          </Button>
+          <Button variant="dangerSolid" type="button"
+            onClick={handleConfirmDelete}>
+            Delete
+          </Button>
+        </div>
+      </Modal>
+    </div>
   );
 }

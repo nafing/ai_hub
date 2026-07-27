@@ -1,23 +1,16 @@
+import { useState } from "react";
+import { motion } from "motion/react";
 import {
-  ActionIcon,
-  Badge,
-  Box,
-  Card,
-  Center,
-  Group,
-  Loader,
-  SimpleGrid,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import { modals } from "@mantine/modals";
-import { notifications } from "@mantine/notifications";
-import { IconCopy, IconPlus, IconRefresh, IconTrash, IconUpload } from "@tabler/icons-react";
+  IconCopy,
+  IconPlus,
+  IconRefresh,
+  IconTrash,
+  IconUpload,
+} from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { CharacterListItem } from "@ai-hub/shared";
 import { api } from "@/lib/api";
+import { ActionIcon, Button, Modal, notifications, RuntimeText } from "@/components/ui";
 import { CreateCharacterModal } from "@/features/characters/CreateCharacterModal";
 import { ImportCharacterModal } from "@/features/characters/ImportCharacterModal";
 import { RegenerateCharactersModal } from "@/features/characters/RegenerateCharactersModal";
@@ -27,49 +20,44 @@ import {
   useDeleteCharacter,
   useDuplicateCharacter,
 } from "@/features/characters/queries";
+import classes from "./index.module.css";
 
 export const Route = createFileRoute("/_app/characters/")({
   component: RouteComponent,
 });
 
+type DeleteTarget = {
+  id: string;
+  name: string;
+};
+
 function RouteComponent() {
-  const [createOpened, { open: openCreate, close: closeCreate }] =
-    useDisclosure(false);
-  const [importOpened, { open: openImport, close: closeImport }] =
-    useDisclosure(false);
-  const [regenerateOpened, { open: openRegenerate, close: closeRegenerate }] =
-    useDisclosure(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [regenerateOpen, setRegenerateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+
   const { data, isLoading, isError } = useCharacters();
   const deleteMutation = useDeleteCharacter();
   const duplicateMutation = useDuplicateCharacter();
 
-  function confirmDelete(id: string, name: string) {
-    modals.openConfirmModal({
-      title: "Delete character",
-      children: (
-        <Text size="sm">
-          Delete <strong>{name || "this character"}</strong>? This cannot be
-          undone.
-        </Text>
-      ),
-      labels: { confirm: "Delete", cancel: "Cancel" },
-      confirmProps: { color: "red" },
-      onConfirm: () => {
-        deleteMutation.mutate(id, {
-          onSuccess: () => {
-            notifications.show({
-              title: "Deleted",
-              message: "Character removed.",
-              color: "green",
-            });
-          },
-          onError: (error) => {
-            notifications.show({
-              title: "Delete failed",
-              message: error instanceof Error ? error.message : "Unknown error",
-              color: "red",
-            });
-          },
+  function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    const { id } = deleteTarget;
+    setDeleteTarget(null);
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        notifications.show({
+          title: "Deleted",
+          message: "Character removed.",
+          color: "green",
+        });
+      },
+      onError: (error) => {
+        notifications.show({
+          title: "Delete failed",
+          message: error instanceof Error ? error.message : "Unknown error",
+          color: "red",
         });
       },
     });
@@ -95,96 +83,113 @@ function RouteComponent() {
   }
 
   return (
-    <Stack>
-      <CreateCharacterModal opened={createOpened} onClose={closeCreate} />
-      <ImportCharacterModal opened={importOpened} onClose={closeImport} />
-      <RegenerateCharactersModal
-        opened={regenerateOpened}
-        onClose={closeRegenerate}
-      />
-
-      <Box
-        pos="sticky"
-        top="var(--app-shell-header-offset, 0px)"
-        bg="var(--mantine-color-body)"
-        style={{ zIndex: "calc(var(--mantine-z-index-app) - 1)" }}
-        py="xs"
-      >
-        <Group justify="space-between" align="start" wrap="nowrap">
-          <Title order={2}>Characters</Title>
-          <Group gap="xs" wrap="nowrap">
-            <ActionIcon
-              variant="default"
-              aria-label="Regenerate characters"
-              onClick={openRegenerate}
+    <div className={classes.page}>
+      <header className={classes.header}>
+        <div className={classes.headerRow}>
+          <h2 className={classes.title}>Characters</h2>
+          <div className={classes.headerActions}>
+            <ActionIcon type="button" variant="default" aria-label="Regenerate characters" onClick={() => setRegenerateOpen(true)}
             >
-              <IconRefresh />
+              <IconRefresh size={16} />
             </ActionIcon>
-            <ActionIcon
-              variant="default"
-              aria-label="Import character card"
-              onClick={openImport}
+            <ActionIcon type="button" variant="default" aria-label="Import character card" onClick={() => setImportOpen(true)}
             >
-              <IconUpload />
+              <IconUpload size={16} />
             </ActionIcon>
-            <ActionIcon
-              variant="default"
-              aria-label="New character"
-              onClick={openCreate}
+            <ActionIcon type="button" variant="default" aria-label="New character" onClick={() => setCreateOpen(true)}
             >
-              <IconPlus />
+              <IconPlus size={16} />
             </ActionIcon>
-          </Group>
-        </Group>
-        <Text c="dimmed">
+          </div>
+        </div>
+        <p className={classes.subtitle}>
           Characters. Create, edit, duplicate, regenerate, or import JSON/PNG.
-        </Text>
-      </Box>
+        </p>
+      </header>
 
       {isLoading ? (
-        <Center py="xl">
-          <Loader />
-        </Center>
+        <div className={classes.loading}>
+          <div className={classes.spinner} aria-label="Loading" />
+        </div>
       ) : null}
 
-      {isError ? <Text c="red">Failed to load characters.</Text> : null}
-
-      {!isLoading && !isError ? (
-        (data ?? []).length === 0 ? (
-          <Text c="dimmed" size="sm">
-            No characters yet. Create one with +.
-          </Text>
-        ) : (
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-            {(data ?? []).map((character) => (
-              <CharacterCard
-                key={character.id}
-                character={character}
-                onDuplicate={handleDuplicate}
-                onDelete={confirmDelete}
-                duplicateLoading={duplicateMutation.isPending}
-                deleteLoading={deleteMutation.isPending}
-              />
-            ))}
-          </SimpleGrid>
-        )
+      {isError ? (
+        <p className={classes.statusError}>Failed to load characters.</p>
       ) : null}
-    </Stack>
+
+      {!isLoading && !isError && (data?.length ?? 0) === 0 ? (
+        <p className={classes.status}>No characters yet. Create one with +.</p>
+      ) : null}
+
+      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
+        <div className={classes.grid}>
+          {(data ?? []).map((character, index) => (
+            <CharacterCard
+              key={character.id}
+              character={character}
+              index={index}
+              onDuplicate={handleDuplicate}
+              onDelete={(id, name) => setDeleteTarget({ id, name })}
+              duplicatePending={duplicateMutation.isPending}
+              deletePending={deleteMutation.isPending}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <CreateCharacterModal
+        opened={createOpen}
+        onClose={() => setCreateOpen(false)}
+      />
+      <ImportCharacterModal
+        opened={importOpen}
+        onClose={() => setImportOpen(false)}
+      />
+      <RegenerateCharactersModal
+        opened={regenerateOpen}
+        onClose={() => setRegenerateOpen(false)}
+      />
+
+      <Modal
+        opened={deleteTarget != null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete character"
+        size="sm"
+      >
+        <p className={classes.modalBody}>
+          Delete <strong>{deleteTarget?.name || "this character"}</strong>? This
+          cannot be undone.
+        </p>
+        <div className={classes.modalActions}>
+          <Button variant="default" type="button"
+            onClick={() => setDeleteTarget(null)}
+          >
+            Cancel
+          </Button>
+          <Button variant="dangerSolid" type="button"
+            onClick={handleConfirmDelete}>
+            Delete
+          </Button>
+        </div>
+      </Modal>
+    </div>
   );
 }
 
 function CharacterCard({
   character,
+  index,
   onDuplicate,
   onDelete,
-  duplicateLoading,
-  deleteLoading,
+  duplicatePending,
+  deletePending,
 }: {
   character: CharacterListItem;
+  index: number;
   onDuplicate: (id: string) => void;
   onDelete: (id: string, name: string) => void;
-  duplicateLoading: boolean;
-  deleteLoading: boolean;
+  duplicatePending: boolean;
+  deletePending: boolean;
 }) {
   const avatarSrc = characterAvatarSrc(
     character.avatar,
@@ -192,102 +197,85 @@ function CharacterCard({
   );
 
   return (
-    <Card withBorder padding={0}>
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.16, delay: Math.min(index, 12) * 0.02 }}
+    >
       <Link
         to="/characters/$characterId"
         params={{ characterId: character.id }}
-        style={{
-          textDecoration: "none",
-          color: "inherit",
-          display: "block",
-        }}
+        className={classes.card}
       >
-        <Box p="md">
-          <Group justify="space-between" align="start" wrap="nowrap">
-            <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-              {avatarSrc ? (
-                <Box
-                  w={48}
-                  h={48}
-                  style={{
-                    flexShrink: 0,
-                    borderRadius: 6,
-                    overflow: "hidden",
-                    background: "var(--mantine-color-default-hover)",
-                  }}
-                >
-                  <img
-                    src={avatarSrc}
-                    alt=""
-                    width={48}
-                    height={48}
-                    style={{ objectFit: "cover", display: "block" }}
-                  />
-                </Box>
+        <div className={classes.cardTop}>
+          <div className={classes.cardIdentity}>
+            {avatarSrc ? (
+              <span className={classes.avatar}>
+                <img src={avatarSrc} alt="" width={48} height={48} />
+              </span>
+            ) : (
+              <span className={classes.avatarFallback} aria-hidden>
+                {(character.name || "?").slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            <div className={classes.cardText}>
+              <p className={classes.cardName}>
+                {character.name || "untitled"}
+              </p>
+              {character.creator ? (
+                <p className={classes.cardCreator}>by {character.creator}</p>
               ) : null}
-              <div style={{ minWidth: 0 }}>
-                <Text size="lg" fw={600} lineClamp={1}>
-                  {character.name || "untitled"}
-                </Text>
-                {character.creator ? (
-                  <Text size="xs" c="dimmed" lineClamp={1}>
-                    by {character.creator}
-                  </Text>
-                ) : null}
-                <Text size="sm" c="dimmed" lineClamp={2} mt={4}>
-                  {character.description || "No description"}
-                </Text>
-              </div>
-            </Group>
-            <Group gap="xs" wrap="nowrap">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                aria-label="Duplicate"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onDuplicate(character.id);
-                }}
-                loading={duplicateLoading}
-              >
-                <IconCopy />
-              </ActionIcon>
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                color="red"
-                aria-label="Delete"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onDelete(character.id, character.name);
-                }}
-                loading={deleteLoading}
-              >
-                <IconTrash />
-              </ActionIcon>
-            </Group>
-          </Group>
-          <Group gap={6} mt="sm">
-            {character.character_version ? (
-              <Badge size="sm" variant="outline">
-                v{character.character_version}
-              </Badge>
-            ) : null}
-            {character.tags.slice(0, 4).map((tag) => (
-              <Badge key={tag} size="sm" variant="light">
-                {tag}
-              </Badge>
-            ))}
-            {character.tags.length > 4 ? (
-              <Badge size="sm" variant="light">
-                +{character.tags.length - 4}
-              </Badge>
-            ) : null}
-          </Group>
-        </Box>
+              <p className={classes.cardDescription}>
+                {character.description ? (
+                  <RuntimeText
+                    values={{ char: character.name || "untitled" }}
+                    highlightUnresolved={false}
+                  >
+                    {character.description}
+                  </RuntimeText>
+                ) : (
+                  "No description"
+                )}
+              </p>
+            </div>
+          </div>
+          <div className={classes.cardActions}>
+            <ActionIcon type="button" variant="ghost" aria-label="Duplicate" disabled={duplicatePending} onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDuplicate(character.id);
+              }}
+            >
+              <IconCopy size={15} />
+            </ActionIcon>
+            <ActionIcon type="button" variant="ghostDanger" aria-label="Delete" disabled={deletePending} onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDelete(character.id, character.name);
+              }}
+            >
+              <IconTrash size={15} />
+            </ActionIcon>
+          </div>
+        </div>
+        <div className={classes.badges}>
+          {character.character_version ? (
+            <span className={classes.badgeOutline}>
+              v{character.character_version}
+            </span>
+          ) : null}
+          {character.tags.slice(0, 4).map((tag) => (
+            <span key={tag} className={classes.badgeSoft}>
+              {tag}
+            </span>
+          ))}
+          {character.tags.length > 4 ? (
+            <span className={classes.badgeSoft}>
+              +{character.tags.length - 4}
+            </span>
+          ) : null}
+        </div>
       </Link>
-    </Card>
+    </motion.div>
   );
 }

@@ -1,5 +1,6 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { LancedbModule } from "../../lancedb/lancedb.module";
 import { CharacterEntity } from "../characters/character.entity";
 import { PersonaEntity } from "../personas/persona.entity";
 import { LorebookEntity } from "./lorebook.entity";
@@ -13,6 +14,7 @@ import { LorebooksService } from "./lorebooks.service";
       CharacterEntity,
       PersonaEntity,
     ]),
+    forwardRef(() => LancedbModule),
   ],
   controllers: [LorebooksController],
   providers: [LorebooksService],

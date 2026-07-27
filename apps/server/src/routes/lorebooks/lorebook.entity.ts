@@ -41,4 +41,8 @@ export class LorebookEntity {
 
   @Column("simple-json", { default: "[]" })
   entries!: LorebookEntry[];
+
+  /** True when LanceDB index may be stale for this lorebook. */
+  @Column("boolean", { default: true })
+  index_dirty!: boolean;
 }

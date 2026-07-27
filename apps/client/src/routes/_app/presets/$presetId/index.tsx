@@ -1,33 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Box,
-  Button,
-  Center,
-  Group,
-  Loader,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import { modals } from "@mantine/modals";
-import { notifications } from "@mantine/notifications";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   selectedVariableValues,
+  toPresetExport,
   type PresetVariableValues,
   type Variable,
 } from "@ai-hub/shared";
+import { Button, Modal, notifications } from "@/components/ui";
 import {
   PresetForm,
   type PresetFormHandle,
 } from "@/features/presets/PresetForm";
+import { PresetMacrosModal } from "@/features/presets/PresetMacrosModal";
 import { SetupVariablesModal } from "@/features/presets/SetupVariablesModal";
+import { persistPresetVariableSelection } from "@/features/presets/persistPresetVariableSelection";
 import {
   useDeletePreset,
   usePreset,
   useUpdatePreset,
+  presetKeys,
 } from "@/features/presets/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import classes from "./index.module.css";
 
 const FORM_ID = "preset-edit-form";
 
@@ -38,12 +32,14 @@ export const Route = createFileRoute("/_app/presets/$presetId/")({
 function RouteComponent() {
   const { presetId } = Route.useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data, isLoading, isError } = usePreset(presetId);
   const updateMutation = useUpdatePreset();
   const deleteMutation = useDeletePreset();
   const formRef = useRef<PresetFormHandle>(null);
-  const [variablesOpened, { open: openVariables, close: closeVariables }] =
-    useDisclosure(false);
+  const [variablesOpen, setVariablesOpen] = useState(false);
+  const [macrosOpen, setMacrosOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [modalVariables, setModalVariables] = useState<Variable[]>([]);
   const [variableValues, setVariableValues] = useState<PresetVariableValues>(
     {},
@@ -52,114 +48,156 @@ function RouteComponent() {
   useEffect(() => {
     if (!data) return;
     setVariableValues(selectedVariableValues(data.variables));
+
+    // Keep form `selected` in sync when Setup Variables is applied via
+    // Run Test / generators (PresetCommandBridge), otherwise the open form
+    // stays stale and Save would overwrite the DB with empty selections.
+    const form = formRef.current;
+    if (!form) return;
+    const current = form.getValues();
+    const selectedById = new Map(
+      data.variables.map((variable) => [variable.id, variable.selected ?? []]),
+    );
+    let changed = false;
+    const next = current.variables.map((variable) => {
+      if (!selectedById.has(variable.id)) return variable;
+      const selected = selectedById.get(variable.id)!;
+      const prev = variable.selected ?? [];
+      if (
+        selected.length === prev.length &&
+        selected.every((entry, index) => entry === prev[index])
+      ) {
+        return variable;
+      }
+      changed = true;
+      return { ...variable, selected: [...selected] };
+    });
+    if (changed) form.setVariables(next);
   }, [data]);
 
-  function confirmDelete() {
-    modals.openConfirmModal({
-      title: "Delete preset",
-      children: (
-        <Text size="sm">
-          Delete <strong>{data?.name || "this preset"}</strong>? This cannot be
-          undone.
-        </Text>
-      ),
-      labels: { confirm: "Delete", cancel: "Cancel" },
-      confirmProps: { color: "red" },
-      onConfirm: () => {
-        deleteMutation.mutate(presetId, {
-          onSuccess: () => {
-            notifications.show({
-              title: "Deleted",
-              message: "Preset removed.",
-              color: "green",
-            });
-            void navigate({ to: "/presets" });
-          },
-          onError: (error) => {
-            notifications.show({
-              title: "Delete failed",
-              message: error instanceof Error ? error.message : "Unknown error",
-              color: "red",
-            });
-          },
+  function handleOpenVariables() {
+    const values = formRef.current?.getValues();
+    setModalVariables(values?.variables ?? data?.variables ?? []);
+    setVariablesOpen(true);
+  }
+
+  function handleOpenMacros() {
+    const values = formRef.current?.getValues();
+    setModalVariables(values?.variables ?? data?.variables ?? []);
+    setMacrosOpen(true);
+  }
+
+  async function handleApplyVariables(variables: Variable[]) {
+    formRef.current?.setVariables(variables);
+    setVariableValues(selectedVariableValues(variables));
+    setVariablesOpen(false);
+    try {
+      const saved = await persistPresetVariableSelection(presetId, variables);
+      queryClient.setQueryData(presetKeys.detail(saved.id), saved);
+      void queryClient.invalidateQueries({ queryKey: presetKeys.all });
+      notifications.show({
+        title: "Variables saved",
+        message: "Selected values are stored on this preset.",
+        color: "green",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "Save failed",
+        message: error instanceof Error ? error.message : "Unknown error",
+        color: "red",
+      });
+    }
+  }
+
+  function handleExport() {
+    if (!data) return;
+    const payload = toPresetExport(data);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${data.name || "preset"}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleConfirmDelete() {
+    setDeleteOpen(false);
+    deleteMutation.mutate(presetId, {
+      onSuccess: () => {
+        notifications.show({
+          title: "Deleted",
+          message: "Preset removed.",
+          color: "green",
+        });
+        void navigate({ to: "/presets" });
+      },
+      onError: (error) => {
+        notifications.show({
+          title: "Delete failed",
+          message: error instanceof Error ? error.message : "Unknown error",
+          color: "red",
         });
       },
     });
   }
 
-  function handleOpenVariables() {
-    const values = formRef.current?.getValues();
-    setModalVariables(values?.variables ?? data?.variables ?? []);
-    openVariables();
-  }
-
-  function handleApplyVariables(variables: Variable[]) {
-    formRef.current?.setVariables(variables);
-    setVariableValues(selectedVariableValues(variables));
-    notifications.show({
-      title: "Variables applied",
-      message: "Prompt preview will use the selected values.",
-      color: "green",
-    });
-  }
-
   if (isLoading) {
     return (
-      <Center py="xl">
-        <Loader />
-      </Center>
+      <div className={classes.loading}>
+        <div className={classes.spinner} aria-label="Loading" />
+      </div>
     );
   }
 
   if (isError || !data) {
-    return <Text c="red">Preset not found.</Text>;
+    return <p className={classes.error}>Preset not found.</p>;
   }
 
   const { id, ...formValues } = data;
 
   return (
-    <Stack>
-      <SetupVariablesModal
-        opened={variablesOpened}
-        onClose={closeVariables}
-        variables={modalVariables}
-        onApply={handleApplyVariables}
-      />
+    <div className={classes.page}>
+      <header className={classes.header}>
+        <div>
+          <h2 className={classes.title}>{data.name || "Edit preset"}</h2>
+          <p className={classes.subtitle}>Update prompt preset settings.</p>
+        </div>
+        <div className={classes.actions}>
+          <Button variant="default" type="button" onClick={handleOpenMacros}>
+            Macros
+          </Button>
+          <Button
+            variant="default"
+            type="button"
+            onClick={handleOpenVariables}
+          >
+            Setup Variables
+          </Button>
+          <Button variant="default" type="button" onClick={handleExport}>
+            Export
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            form={FORM_ID}
+            disabled={updateMutation.isPending}
+          >
+            {updateMutation.isPending ? "Saving…" : "Save"}
+          </Button>
+          <Button
+            variant="danger"
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            disabled={deleteMutation.isPending}
+          >
+            {deleteMutation.isPending ? "Deleting…" : "Delete"}
+          </Button>
+        </div>
+      </header>
 
-      <Box
-        pos="sticky"
-        top="var(--app-shell-header-offset, 0px)"
-        bg="var(--mantine-color-body)"
-        style={{ zIndex: "calc(var(--mantine-z-index-app) - 1)" }}
-        py="xs"
-      >
-        <Stack gap="xs">
-          <div>
-            <Title order={2}>{data.name || "Edit preset"}</Title>
-            <Text c="dimmed">Update prompt preset settings.</Text>
-          </div>
-          <Group gap="xs">
-            <Button variant="default" onClick={handleOpenVariables}>
-              Setup Variables
-            </Button>
-            <Button
-              type="submit"
-              form={FORM_ID}
-              loading={updateMutation.isPending}
-            >
-              Save
-            </Button>
-            <Button
-              color="red"
-              variant="light"
-              onClick={confirmDelete}
-              loading={deleteMutation.isPending}
-            >
-              Delete
-            </Button>
-          </Group>
-        </Stack>
-      </Box>
       <PresetForm
         key={id}
         ref={formRef}
@@ -185,6 +223,42 @@ function RouteComponent() {
           }
         }}
       />
-    </Stack>
+
+      <SetupVariablesModal
+        opened={variablesOpen}
+        onClose={() => setVariablesOpen(false)}
+        variables={modalVariables}
+        onApply={handleApplyVariables}
+      />
+
+      <PresetMacrosModal
+        opened={macrosOpen}
+        onClose={() => setMacrosOpen(false)}
+        variables={modalVariables}
+      />
+
+      <Modal
+        opened={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title="Delete preset"
+        size="sm"
+      >
+        <p className={classes.modalBody}>
+          Delete <strong>{data.name || "this preset"}</strong>? This cannot be
+          undone.
+        </p>
+        <div className={classes.modalActions}>
+          <Button variant="default" type="button"
+            onClick={() => setDeleteOpen(false)}
+          >
+            Cancel
+          </Button>
+          <Button variant="danger" type="button"
+            onClick={handleConfirmDelete}>
+            Delete
+          </Button>
+        </div>
+      </Modal>
+    </div>
   );
 }

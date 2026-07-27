@@ -1,15 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import type { Variable } from "@ai-hub/shared";
 import {
   Button,
-  Group,
   Modal,
   MultiSelect,
   Select,
-  Stack,
-  Text,
   TextInput,
-} from "@mantine/core";
-import type { Variable } from "@ai-hub/shared";
+  RuntimeText,
+} from "@/components/ui";
+import classes from "./SetupVariablesModal.module.css";
 
 type SetupVariablesModalProps = {
   opened: boolean;
@@ -17,6 +16,24 @@ type SetupVariablesModalProps = {
   variables: Variable[];
   onApply: (variables: Variable[]) => void;
 };
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.field}>
+      <span className={classes.fieldLabel}>{label}</span>
+      {hint ? <span className={classes.fieldHint}>{hint}</span> : null}
+      {children}
+    </div>
+  );
+}
 
 export function SetupVariablesModal({
   opened,
@@ -32,7 +49,9 @@ export function SetupVariablesModal({
     }
   }, [opened, variables]);
 
-  const usable = draft.filter((variable) => variable.variable_name.trim());
+  const usable = draft.filter((variable) =>
+    Boolean(variable?.variable_name?.trim()),
+  );
 
   function setSelected(variableId: string, selected: string[]) {
     setDraft((current) =>
@@ -44,27 +63,20 @@ export function SetupVariablesModal({
 
   function handleApply() {
     onApply(draft);
-    onClose();
   }
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title="Setup Variables"
-      centered
-      size="lg"
-    >
-      <Stack gap="md">
-        <Text size="sm" c="dimmed">
-          Choose the active values injected into {"{{variable}}"} placeholders.
-          Apply updates the form — save the preset to persist them.
-        </Text>
+    <Modal opened={opened} onClose={onClose} title="Setup Variables" size="lg">
+      <div className={classes.stack}>
+        <p className={classes.muted}>
+          Choose the active values injected into{" "}
+          <RuntimeText text="{{variable}}" /> placeholders.
+        </p>
 
         {usable.length === 0 ? (
-          <Text size="sm" c="dimmed">
-            No named variables yet. Add variables in the Sections tab first.
-          </Text>
+          <p className={classes.muted}>
+            No named variables on this preset yet.
+          </p>
         ) : (
           usable.map((variable) => (
             <VariableSelectedField
@@ -75,17 +87,37 @@ export function SetupVariablesModal({
           ))
         )}
 
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
+        <div className={classes.actions}>
+          <Button variant="default" type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleApply} disabled={usable.length === 0}>
+          <Button
+            variant="primary"
+            type="button"
+            onClick={handleApply}
+            disabled={usable.length === 0}
+          >
             Apply
           </Button>
-        </Group>
-      </Stack>
+        </div>
+      </div>
     </Modal>
   );
+}
+
+/** Map stored selected entries (id / value / part suffix) to option ids. */
+function selectedOptionIds(variable: Variable): string[] {
+  return (variable.selected ?? [])
+    .map((entry) => {
+      const match = variable.options.find(
+        (option) =>
+          option.id === entry ||
+          option.value === entry ||
+          option.id.endsWith(`:${entry}`),
+      );
+      return match?.id ?? entry;
+    })
+    .filter(Boolean);
 }
 
 function VariableSelectedField({
@@ -96,56 +128,62 @@ function VariableSelectedField({
   onChange: (selected: string[]) => void;
 }) {
   const label = variable.question || variable.variable_name;
-  const description = `{{${variable.variable_name}}}`;
+  const description = (
+    <RuntimeText text={`{{${variable.variable_name}}}`} />
+  );
   const options = variable.options
     .map((option) => {
-      const value = option.value.trim() || option.label.trim();
-      if (!value) return null;
+      if (!option.id) return null;
       return {
-        value,
-        label: option.label.trim() || option.value.trim() || value,
+        value: option.id,
+        label:
+          option.label.trim() ||
+          option.value.trim() ||
+          option.id,
       };
     })
     .filter((option): option is { value: string; label: string } =>
       Boolean(option),
     );
+  const selectedIds = selectedOptionIds(variable);
+
   if (variable.multi_select) {
     return (
-      <MultiSelect
-        label={label}
-        description={description}
-        data={options}
-        value={variable.selected ?? []}
-        onChange={onChange}
-        searchable
-        clearable
-      />
+      <Field label={label} hint={description}>
+        <MultiSelect
+          data={options}
+          value={selectedIds}
+          onChange={onChange}
+          searchable
+          clearable
+        />
+      </Field>
     );
   }
 
   if (options.length > 0) {
     return (
-      <Select
-        label={label}
-        description={description}
-        data={options}
-        value={variable.selected?.[0] ?? null}
-        onChange={(value) => onChange(value ? [value] : [])}
-        searchable
-        clearable
-      />
+      <Field label={label} hint={description}>
+        <Select
+          data={options}
+          value={selectedIds[0] ?? ""}
+          onChange={(value) => onChange(value ? [value] : [])}
+          searchable
+          clearable
+        />
+      </Field>
     );
   }
 
   return (
-    <TextInput
-      label={label}
-      description={description}
-      value={variable.selected?.[0] ?? ""}
-      onChange={(event) => {
-        const value = event.currentTarget.value;
-        onChange(value ? [value] : []);
-      }}
-    />
+    <Field label={label} hint={description}>
+      <TextInput
+        value={variable.selected?.[0] ?? ""}
+        onChange={(event) => {
+          const value = event.currentTarget.value;
+          onChange(value ? [value] : []);
+        }}
+      />
+    </Field>
   );
 }

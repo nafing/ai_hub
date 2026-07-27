@@ -1,25 +1,12 @@
-import { useMemo } from "react";
-import {
-  ActionIcon,
-  Box,
-  Card,
-  Center,
-  Group,
-  Loader,
-  SimpleGrid,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import { modals } from "@mantine/modals";
-import { notifications } from "@mantine/notifications";
+import { useMemo, useState } from "react";
+import { motion } from "motion/react";
 import {
   IconCopy,
   IconPlus,
   IconStar,
   IconStarFilled,
   IconTrash,
+  IconUpload,
 } from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
@@ -28,21 +15,31 @@ import {
   type PresetCategory,
   type PresetListItem,
 } from "@ai-hub/shared";
+import { ActionIcon, Button, Modal, notifications } from "@/components/ui";
 import { CreatePresetModal } from "@/features/presets/CreatePresetModal";
+import { ImportPresetModal } from "@/features/presets/ImportPresetModal";
 import {
   useDeletePreset,
   useDuplicatePreset,
   usePresets,
   useUpdatePreset,
 } from "@/features/presets/queries";
+import classes from "./index.module.css";
 
 export const Route = createFileRoute("/_app/presets/")({
   component: RouteComponent,
 });
 
+type DeleteTarget = {
+  id: string;
+  name: string;
+};
+
 function RouteComponent() {
-  const [createOpened, { open: openCreate, close: closeCreate }] =
-    useDisclosure(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+
   const { data, isLoading, isError } = usePresets();
   const deleteMutation = useDeletePreset();
   const duplicateMutation = useDuplicatePreset();
@@ -64,33 +61,23 @@ function RouteComponent() {
     })).filter((group) => group.presets.length > 0);
   }, [data]);
 
-  function confirmDelete(id: string, name: string) {
-    modals.openConfirmModal({
-      title: "Delete preset",
-      children: (
-        <Text size="sm">
-          Delete <strong>{name || "this preset"}</strong>? This cannot be
-          undone.
-        </Text>
-      ),
-      labels: { confirm: "Delete", cancel: "Cancel" },
-      confirmProps: { color: "red" },
-      onConfirm: () => {
-        deleteMutation.mutate(id, {
-          onSuccess: () => {
-            notifications.show({
-              title: "Deleted",
-              message: "Preset removed.",
-              color: "green",
-            });
-          },
-          onError: (error) => {
-            notifications.show({
-              title: "Delete failed",
-              message: error instanceof Error ? error.message : "Unknown error",
-              color: "red",
-            });
-          },
+  function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    const { id } = deleteTarget;
+    setDeleteTarget(null);
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        notifications.show({
+          title: "Deleted",
+          message: "Preset removed.",
+          color: "green",
+        });
+      },
+      onError: (error) => {
+        notifications.show({
+          title: "Delete failed",
+          message: error instanceof Error ? error.message : "Unknown error",
+          color: "red",
         });
       },
     });
@@ -131,133 +118,176 @@ function RouteComponent() {
   }
 
   return (
-    <Stack>
-      <CreatePresetModal opened={createOpened} onClose={closeCreate} />
-
-      <Box
-        pos="sticky"
-        top="var(--app-shell-header-offset, 0px)"
-        bg="var(--mantine-color-body)"
-        style={{ zIndex: "calc(var(--mantine-z-index-app) - 1)" }}
-        py="xs"
-      >
-        <Group justify="space-between" align="start" wrap="nowrap">
-          <Title order={2}>Presets</Title>
-          <Group gap="xs" wrap="nowrap">
+    <div className={classes.page}>
+      <header className={classes.header}>
+        <div className={classes.headerRow}>
+          <h2 className={classes.title}>Presets</h2>
+          <div className={classes.headerActions}>
             <ActionIcon
+              type="button"
+              variant="default"
+              aria-label="Import preset"
+              onClick={() => setImportOpen(true)}
+            >
+              <IconUpload size={16} />
+            </ActionIcon>
+            <ActionIcon
+              type="button"
               variant="default"
               aria-label="New preset"
-              onClick={openCreate}
+              onClick={() => setCreateOpen(true)}
             >
-              <IconPlus />
+              <IconPlus size={16} />
             </ActionIcon>
-          </Group>
-        </Group>
-        <Text c="dimmed">Manage prompt presets for chats.</Text>
-      </Box>
+          </div>
+        </div>
+        <p className={classes.subtitle}>Manage prompt presets for chats.</p>
+      </header>
 
       {isLoading ? (
-        <Center py="xl">
-          <Loader />
-        </Center>
+        <div className={classes.loading}>
+          <div className={classes.spinner} aria-label="Loading" />
+        </div>
       ) : null}
 
-      {isError ? <Text c="red">Failed to load presets.</Text> : null}
+      {isError ? (
+        <p className={classes.statusError}>Failed to load presets.</p>
+      ) : null}
 
       {!isLoading && !isError && (data?.length ?? 0) === 0 ? (
-        <Text c="dimmed">No presets yet. Create one to get started.</Text>
+        <p className={classes.status}>
+          No presets yet. Create one to get started.
+        </p>
       ) : null}
 
       {grouped.map(({ category, presets }) => (
-        <Stack key={category} gap="sm">
-          <Title order={4}>{PRESET_CATEGORY_LABELS[category]}</Title>
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
+        <section key={category} className={classes.group}>
+          <h3 className={classes.groupTitle}>
+            {PRESET_CATEGORY_LABELS[category]}
+          </h3>
+          <div className={classes.grid}>
             {presets.map((preset) => (
-              <Card key={preset.id} withBorder padding={0}>
+              <motion.div
+                key={preset.id}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.16 }}
+              >
                 <Link
                   to="/presets/$presetId"
                   params={{ presetId: preset.id }}
-                  style={{
-                    textDecoration: "none",
-                    color: "inherit",
-                    display: "block",
-                  }}
+                  className={classes.card}
                 >
-                  <Box p="md">
-                    <Group justify="space-between" align="start" wrap="nowrap">
-                      <Text size="lg" fw={600} lineClamp={1}>
-                        {preset.name || "Untitled"}
-                      </Text>
-                      <Group gap="xs" wrap="nowrap">
-                        <ActionIcon
-                          size="sm"
-                          variant="subtle"
-                          color={preset.is_default ? "yellow" : "gray"}
-                          aria-label={
-                            preset.is_default
-                              ? "Default preset"
-                              : "Set as default"
-                          }
-                          disabled={preset.is_default}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            handleSetDefault(preset.id);
-                          }}
-                          loading={
-                            updateMutation.isPending &&
-                            updateMutation.variables?.id === preset.id
-                          }
-                        >
-                          {preset.is_default ? (
-                            <IconStarFilled />
-                          ) : (
-                            <IconStar />
-                          )}
-                        </ActionIcon>
-                        <ActionIcon
-                          size="sm"
-                          variant="subtle"
-                          aria-label="Duplicate"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            handleDuplicate(preset.id);
-                          }}
-                          loading={duplicateMutation.isPending}
-                        >
-                          <IconCopy />
-                        </ActionIcon>
-                        <ActionIcon
-                          size="sm"
-                          variant="subtle"
-                          color="red"
-                          aria-label="Delete"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            confirmDelete(preset.id, preset.name);
-                          }}
-                          loading={deleteMutation.isPending}
-                        >
-                          <IconTrash />
-                        </ActionIcon>
-                      </Group>
-                    </Group>
-                    <Text size="sm" c="dimmed" lineClamp={2}>
-                      {preset.description || "No description"}
-                    </Text>
-                    <Text size="xs" c="dimmed" mt={4}>
-                      {preset.wrap_format} · {preset.sections_count} sections ·{" "}
-                      {preset.variables_count} variables
-                    </Text>
-                  </Box>
+                  <div className={classes.cardTop}>
+                    <p className={classes.cardName}>
+                      {preset.name || "Untitled"}
+                    </p>
+                    <div className={classes.cardActions}>
+                      <ActionIcon
+                        type="button"
+                        variant={preset.is_default ? "light" : "ghost"}
+                        className={
+                          preset.is_default ? classes.starActive : undefined
+                        }
+                        aria-label={
+                          preset.is_default
+                            ? "Default preset"
+                            : "Set as default"
+                        }
+                        disabled={
+                          preset.is_default ||
+                          (updateMutation.isPending &&
+                            updateMutation.variables?.id === preset.id)
+                        }
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleSetDefault(preset.id);
+                        }}
+                      >
+                        {preset.is_default ? (
+                          <IconStarFilled size={15} />
+                        ) : (
+                          <IconStar size={15} />
+                        )}
+                      </ActionIcon>
+                      <ActionIcon
+                        type="button"
+                        variant="ghost"
+                        aria-label="Duplicate"
+                        disabled={duplicateMutation.isPending}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleDuplicate(preset.id);
+                        }}
+                      >
+                        <IconCopy size={15} />
+                      </ActionIcon>
+                      <ActionIcon
+                        type="button"
+                        variant="ghostDanger"
+                        aria-label="Delete"
+                        disabled={deleteMutation.isPending}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setDeleteTarget({
+                            id: preset.id,
+                            name: preset.name,
+                          });
+                        }}
+                      >
+                        <IconTrash size={15} />
+                      </ActionIcon>
+                    </div>
+                  </div>
+                  <p className={classes.cardDescription}>
+                    {preset.description || "No description"}
+                  </p>
+                  <p className={classes.cardMeta}>
+                    {preset.wrap_format} · {preset.sections_count} sections ·{" "}
+                    {preset.variables_count} variables
+                  </p>
                 </Link>
-              </Card>
+              </motion.div>
             ))}
-          </SimpleGrid>
-        </Stack>
+          </div>
+        </section>
       ))}
-    </Stack>
+
+      <CreatePresetModal
+        opened={createOpen}
+        onClose={() => setCreateOpen(false)}
+      />
+
+      <ImportPresetModal
+        opened={importOpen}
+        onClose={() => setImportOpen(false)}
+      />
+
+      <Modal
+        opened={deleteTarget != null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete preset"
+        size="sm"
+      >
+        <p className={classes.modalBody}>
+          Delete <strong>{deleteTarget?.name || "this preset"}</strong>? This
+          cannot be undone.
+        </p>
+        <div className={classes.modalActions}>
+          <Button variant="default" type="button"
+            onClick={() => setDeleteTarget(null)}
+          >
+            Cancel
+          </Button>
+          <Button variant="dangerSolid" type="button"
+            onClick={handleConfirmDelete}>
+            Delete
+          </Button>
+        </div>
+      </Modal>
+    </div>
   );
 }

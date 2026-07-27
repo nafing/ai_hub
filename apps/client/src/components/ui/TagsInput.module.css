@@ -1,0 +1,82 @@
+.root {
+  width: 100%;
+  min-width: 0;
+}
+
+.control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.root:focus-within .control {
+  border-color: var(--color-primary);
+}
+
+.root[data-disabled] .control {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  max-width: 100%;
+  padding: 0.15rem 0.3rem 0.15rem 0.5rem;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+}
+
+.pillLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pillRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  color: inherit;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  cursor: pointer;
+}
+
+.pillRemove:hover {
+  background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.input {
+  flex: 1;
+  min-width: 6rem;
+  min-height: 1.65rem;
+  padding: 0.15rem 0.35rem;
+  color: var(--color-text);
+  border: 0;
+  background: transparent;
+  outline: none;
+  font: inherit;
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+}

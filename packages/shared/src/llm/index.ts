@@ -1,2 +1,2 @@
-export type { ChatMessage, ChatMessageRole } from "./types";
+export type { ChatMessage, ChatMessageRole, LlmToolCall } from "./types";
 export { extractThinking } from "./extract-thinking";

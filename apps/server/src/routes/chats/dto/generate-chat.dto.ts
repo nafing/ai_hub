@@ -20,4 +20,8 @@ export class GenerateChatDto {
   @IsOptional()
   @IsString()
   continueMessageId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  runDirector?: boolean;
 }

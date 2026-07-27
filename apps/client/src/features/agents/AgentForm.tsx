@@ -1,18 +1,4 @@
-import { useMemo, useState } from "react";
-import {
-  Code,
-  MultiSelect,
-  NumberInput,
-  Select,
-  Stack,
-  Switch,
-  TagsInput,
-  Text,
-  TextInput,
-  Textarea,
-  Title,
-} from "@mantine/core";
-import { isNotEmpty, useForm } from "@mantine/form";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   AGENT_CATEGORIES,
   AGENT_EXECUTIONS,
@@ -20,7 +6,17 @@ import {
   isValidAgentSlug,
   type CreateAgentInput,
 } from "@ai-hub/shared";
+import {
+  Textarea,
+  MultiSelect,
+  Select,
+  TagsInput,
+  TextInput,
+  NumberInput,
+  Switch,
+} from "@/components/ui";
 import { useTools } from "@/features/tools/queries";
+import classes from "./AgentForm.module.css";
 
 export type AgentFormValues = CreateAgentInput;
 
@@ -32,8 +28,33 @@ type AgentFormProps = {
   onSubmit: (values: AgentFormValues) => Promise<void> | void;
 };
 
+type FieldErrors = Partial<
+  Record<"name" | "slug" | "default_settings" | "prompt_templates", string>
+>;
+
 function formatJson(value: unknown): string {
   return JSON.stringify(value ?? {}, null, 2);
+}
+
+function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.field}>
+      <span className={classes.fieldLabel}>{label}</span>
+      {hint ? <p className={classes.fieldHint}>{hint}</p> : null}
+      {children}
+      {error ? <p className={classes.fieldError}>{error}</p> : null}
+    </div>
+  );
 }
 
 export function AgentForm({
@@ -52,257 +73,349 @@ export function AgentForm({
     [tools],
   );
 
-  const form = useForm<AgentFormValues>({
-    mode: "uncontrolled",
-    initialValues,
-    validate: {
-      name: isNotEmpty("Name is required"),
-      slug: (value) => {
-        if (!value.trim()) return "Slug is required";
-        if (!isValidAgentSlug(value.trim())) {
-          return "Must start with a letter; only lowercase letters, digits, hyphens";
-        }
-        return null;
-      },
-    },
+  const [values, setValues] = useState<AgentFormValues>({
+    ...initialValues,
+    default_tools: [...(initialValues.default_tools ?? [])],
+    mode_allowlist: [...(initialValues.mode_allowlist ?? [])],
+    prompt_templates: [...(initialValues.prompt_templates ?? [])],
+    default_settings: { ...(initialValues.default_settings ?? {}) },
   });
-
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [settingsJson, setSettingsJson] = useState(
     formatJson(initialValues.default_settings),
   );
-  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [templatesJson, setTemplatesJson] = useState(
-    formatJson(initialValues.prompt_templates),
+    JSON.stringify(initialValues.prompt_templates ?? [], null, 2),
   );
-  const [templatesError, setTemplatesError] = useState<string | null>(null);
+
+  function setField<K extends keyof AgentFormValues>(
+    key: K,
+    value: AgentFormValues[K],
+  ) {
+    setValues((current) => ({ ...current, [key]: value }));
+    if (key === "name" || key === "slug") {
+      setErrors((current) => {
+        if (!current[key as "name" | "slug"]) return current;
+        const next = { ...current };
+        delete next[key as "name" | "slug"];
+        return next;
+      });
+    }
+  }
+
+  function validate(): FieldErrors {
+    const result: FieldErrors = {};
+    const name = values.name.trim();
+    const slug = values.slug.trim();
+
+    if (!name) result.name = "Name is required";
+
+    if (!slug) {
+      result.slug = "Slug is required";
+    } else if (!isValidAgentSlug(slug)) {
+      result.slug =
+        "Must start with a letter; only lowercase letters, digits, hyphens";
+    }
+
+    try {
+      const parsed: unknown = JSON.parse(settingsJson || "{}");
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        Array.isArray(parsed)
+      ) {
+        result.default_settings = "Must be a JSON object";
+      }
+    } catch {
+      result.default_settings = "Invalid JSON";
+    }
+
+    try {
+      const parsed: unknown = JSON.parse(templatesJson || "[]");
+      if (!Array.isArray(parsed)) {
+        result.prompt_templates = "Must be a JSON array";
+      }
+    } catch {
+      result.prompt_templates = "Invalid JSON";
+    }
+
+    return result;
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors = validate();
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    const default_settings = JSON.parse(settingsJson || "{}") as Record<
+      string,
+      unknown
+    >;
+    const prompt_templates = JSON.parse(
+      templatesJson || "[]",
+    ) as AgentFormValues["prompt_templates"];
+
+    await onSubmit({
+      ...values,
+      name: values.name.trim(),
+      slug: values.slug.trim(),
+      default_settings,
+      prompt_templates,
+      default_tools: values.default_tools ?? [],
+      mode_allowlist: values.mode_allowlist ?? [],
+      result_type: values.result_type || null,
+      run_interval:
+        values.run_interval === undefined ||
+        values.run_interval === null ||
+        Number.isNaN(Number(values.run_interval))
+          ? null
+          : Number(values.run_interval),
+    });
+  }
 
   return (
-    <form
-      id={formId}
-      onSubmit={form.onSubmit((values) => {
-        let default_settings: Record<string, unknown> = {};
-        try {
-          const parsed: unknown = JSON.parse(settingsJson || "{}");
-          if (
-            typeof parsed !== "object" ||
-            parsed === null ||
-            Array.isArray(parsed)
-          ) {
-            setSettingsError("Must be a JSON object");
-            return;
-          }
-          default_settings = parsed as Record<string, unknown>;
-          setSettingsError(null);
-        } catch {
-          setSettingsError("Invalid JSON");
-          return;
-        }
-
-        let prompt_templates = initialValues.prompt_templates;
-        try {
-          const parsed: unknown = JSON.parse(templatesJson || "[]");
-          if (!Array.isArray(parsed)) {
-            setTemplatesError("Must be a JSON array");
-            return;
-          }
-          prompt_templates = parsed as AgentFormValues["prompt_templates"];
-          setTemplatesError(null);
-        } catch {
-          setTemplatesError("Invalid JSON");
-          return;
-        }
-
-        void onSubmit({
-          ...values,
-          name: values.name.trim(),
-          slug: values.slug.trim(),
-          default_settings,
-          prompt_templates,
-          default_tools: values.default_tools ?? [],
-          mode_allowlist: values.mode_allowlist ?? [],
-          result_type: values.result_type || null,
-          run_interval:
-            values.run_interval === undefined ||
-            values.run_interval === null ||
-            Number.isNaN(Number(values.run_interval))
-              ? null
-              : Number(values.run_interval),
-        });
-      })}
-    >
-      <Stack gap="lg">
-        <Stack gap="sm">
-          <Title order={4}>Basics</Title>
+    <form id={formId} className={classes.form} onSubmit={handleSubmit}>
+      <section className={classes.section}>
+        <h3 className={classes.sectionTitle}>Basics</h3>
+        <Field label="Name" error={errors.name}>
           <TextInput
-            label="Name"
-            withAsterisk
-            key={form.key("name")}
-            {...form.getInputProps("name")}
+            error={Boolean(errors.name)}
+            value={values.name}
+            onChange={(event) => setField("name", event.target.value)}
+            required
           />
+        </Field>
+        <Field
+          label="Slug"
+          hint={
+            slugLocked
+              ? "Built-in agent slug is locked."
+              : "Stable kebab-case id used by the hub."
+          }
+          error={errors.slug}
+        >
           <TextInput
-            label="Slug"
-            description={
-              slugLocked
-                ? "Built-in agent slug is locked."
-                : "Stable kebab-case id used by the hub."
-            }
-            withAsterisk
+            className={[classes.mono, slugLocked ? classes.inputLocked : ""]
+              .filter(Boolean)
+              .join(" ")}
+            error={Boolean(errors.slug)}
+            value={values.slug}
             readOnly={slugLocked}
-            styles={{
-              input: { fontFamily: "var(--mantine-font-family-monospace)" },
-            }}
-            key={form.key("slug")}
-            {...form.getInputProps("slug")}
+            onChange={(event) => setField("slug", event.target.value)}
+            required
           />
+        </Field>
+        <Field label="Description">
           <Textarea
-            label="Description"
-            autosize
-            minRows={2}
-            key={form.key("description")}
-            {...form.getInputProps("description")}
+            className={classes.textarea}
+            value={values.description}
+            onChange={(event) => setField("description", event.target.value)}
           />
+        </Field>
+        <Field label="Author">
           <TextInput
-            label="Author"
-            key={form.key("author")}
-            {...form.getInputProps("author")}
+            value={values.author}
+            onChange={(event) => setField("author", event.target.value)}
           />
-          <Select
-            label="Phase"
-            data={AGENT_PHASES.map((value) => ({ value, label: value }))}
-            allowDeselect={false}
-            key={form.key("phase")}
-            {...form.getInputProps("phase")}
-          />
-          <Select
-            label="Category"
-            data={AGENT_CATEGORIES.map((value) => ({ value, label: value }))}
-            allowDeselect={false}
-            key={form.key("category")}
-            {...form.getInputProps("category")}
-          />
-          <Select
+        </Field>
+
+        <div className={`${classes.grid} ${classes.grid2}`}>
+          <Field label="Phase">
+            <Select
+              data={AGENT_PHASES.map((value) => ({ value, label: value }))}
+              value={values.phase}
+              onChange={(value) => {
+                if (value) setField("phase", value as AgentFormValues["phase"]);
+              }}
+            />
+          </Field>
+          <Field label="Category">
+            <Select
+              data={AGENT_CATEGORIES.map((value) => ({ value, label: value }))}
+              value={values.category}
+              onChange={(value) => {
+                if (value)
+                  setField("category", value as AgentFormValues["category"]);
+              }}
+            />
+          </Field>
+          <Field
             label="Execution"
-            description="feature = non-LLM runtime (e.g. Calls)."
-            data={AGENT_EXECUTIONS.map((value) => ({ value, label: value }))}
-            allowDeselect={false}
-            key={form.key("execution")}
-            {...form.getInputProps("execution")}
-          />
-          <Select
-            label="Result type"
-            clearable
-            data={[{ value: "text_rewrite", label: "text_rewrite" }]}
-            key={form.key("result_type")}
-            {...form.getInputProps("result_type")}
-          />
-          <Switch
-            label="Enabled by default"
-            description="Suggested on when first added to a chat."
-            key={form.key("enabled_by_default")}
-            {...form.getInputProps("enabled_by_default", { type: "checkbox" })}
-          />
-          <Switch
-            label="Inject as section"
-            description="Trackers can inject state into the prompt as a section."
-            key={form.key("default_inject_as_section")}
-            {...form.getInputProps("default_inject_as_section", {
-              type: "checkbox",
-            })}
-          />
-          <Switch
-            label="Runtime disabled"
-            description="Skip LLM pipeline (feature agents)."
-            key={form.key("runtime_disabled")}
-            {...form.getInputProps("runtime_disabled", { type: "checkbox" })}
-          />
+            hint="feature = non-LLM runtime (e.g. Calls)."
+          >
+            <Select
+              data={AGENT_EXECUTIONS.map((value) => ({ value, label: value }))}
+              value={values.execution}
+              onChange={(value) => {
+                if (value)
+                  setField("execution", value as AgentFormValues["execution"]);
+              }}
+            />
+          </Field>
+          <Field label="Result type">
+            <Select
+              clearable
+              data={[{ value: "text_rewrite", label: "text_rewrite" }]}
+              value={values.result_type ?? ""}
+              onChange={(value) =>
+                setField(
+                  "result_type",
+                  (value || null) as AgentFormValues["result_type"],
+                )
+              }
+              placeholder="None"
+            />
+          </Field>
+        </div>
+
+        <Switch
+          variant="card"
+          checked={values.enabled_by_default}
+          onChange={(checked) => setField("enabled_by_default", checked)}
+          label="Enabled by default"
+          description="Suggested on when first added to a chat."
+        />
+
+        <Switch
+          variant="card"
+          checked={values.default_inject_as_section}
+          onChange={(checked) => setField("default_inject_as_section", checked)}
+          label="Inject as section"
+          description="Trackers can inject state into the prompt as a section."
+        />
+
+        <Switch
+          variant="card"
+          checked={values.runtime_disabled}
+          onChange={(checked) => setField("runtime_disabled", checked)}
+          label="Runtime disabled"
+          description="Skip LLM pipeline (feature agents)."
+        />
+
+        <Field
+          label="Run interval"
+          hint="Optional — run every N messages (empty = every turn)."
+        >
           <NumberInput
-            label="Run interval"
-            description="Optional — run every N messages (null = every turn)."
             min={1}
-            allowDecimal={false}
-            key={form.key("run_interval")}
-            {...form.getInputProps("run_interval")}
+            step={1}
+            value={values.run_interval ?? ""}
+            onChange={(value) => setField("run_interval", value === "" ? null : value)}
           />
-        </Stack>
+        </Field>
+      </section>
 
-        <Stack gap="sm">
-          <Title order={4}>Tools & modes</Title>
+      <section className={classes.section}>
+        <h3 className={classes.sectionTitle}>Tools & modes</h3>
+        <Field
+          label="Default tools"
+          hint="Tool names from the Tools catalog."
+        >
           <MultiSelect
-            label="Default tools"
-            description="Tool names from the Tools catalog."
-            data={toolOptions}
             searchable
-            key={form.key("default_tools")}
-            {...form.getInputProps("default_tools")}
+            data={toolOptions}
+            value={values.default_tools ?? []}
+            onChange={(default_tools) => setField("default_tools", default_tools)}
+            placeholder="Select tools…"
           />
+        </Field>
+        <Field
+          label="Mode allowlist"
+          hint="Empty = all modes. Examples: roleplay, conversation, visual_novel."
+        >
           <TagsInput
-            label="Mode allowlist"
-            description="Empty = all modes. Examples: roleplay, conversation, visual_novel."
-            key={form.key("mode_allowlist")}
-            {...form.getInputProps("mode_allowlist")}
+            value={values.mode_allowlist ?? []}
+            onChange={(mode_allowlist) =>
+              setField("mode_allowlist", mode_allowlist)
+            }
+            placeholder="Add mode and press Enter"
           />
-        </Stack>
+        </Field>
+      </section>
 
-        <Stack gap="sm">
-          <Title order={4}>Prompt</Title>
+      <section className={classes.section}>
+        <h3 className={classes.sectionTitle}>Prompt</h3>
+        <Field
+          label="Default prompt template"
+          hint="Main system/user prompt for the agent."
+        >
           <Textarea
-            label="Default prompt template"
-            description="Main system/user prompt for the agent."
-            autosize
-            minRows={8}
-            styles={{
-              input: { fontFamily: "var(--mantine-font-family-monospace)" },
-            }}
-            key={form.key("default_prompt_template")}
-            {...form.getInputProps("default_prompt_template")}
+            className={`${classes.textarea} ${classes.mono} ${classes.promptEditor}`}
+            value={values.default_prompt_template}
+            onChange={(event) =>
+              setField("default_prompt_template", event.target.value)
+            }
+            spellCheck={false}
           />
-        </Stack>
+        </Field>
+      </section>
 
-        <Stack gap="sm">
-          <Title order={4}>Default settings (JSON)</Title>
-          <Text size="sm" c="dimmed">
-            Free-form runtime knobs (e.g.{" "}
-            <Code>contextSize</Code>, <Code>directorMode</Code>).
-          </Text>
+      <section className={classes.section}>
+        <h3 className={classes.sectionTitle}>Default settings (JSON)</h3>
+        <p className={classes.sectionHint}>
+          Free-form runtime knobs (e.g.{" "}
+          <code className={classes.inlineCode}>contextSize</code>,{" "}
+          <code className={classes.inlineCode}>directorMode</code>).
+        </p>
+        <Field label="settings" error={errors.default_settings}>
           <Textarea
-            autosize
-            minRows={6}
-            error={settingsError}
+            className={[
+              classes.textarea,
+              classes.mono,
+              classes.jsonEditor,
+              errors.default_settings ? classes.inputError : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             value={settingsJson}
             onChange={(event) => {
-              setSettingsJson(event.currentTarget.value);
-              setSettingsError(null);
+              setSettingsJson(event.target.value);
+              setErrors((current) => {
+                if (!current.default_settings) return current;
+                const next = { ...current };
+                delete next.default_settings;
+                return next;
+              });
             }}
-            styles={{
-              input: { fontFamily: "var(--mantine-font-family-monospace)" },
-            }}
+            spellCheck={false}
           />
-        </Stack>
+        </Field>
+      </section>
 
-        <Stack gap="sm">
-          <Title order={4}>Prompt templates (JSON)</Title>
-          <Text size="sm" c="dimmed">
-            Optional alternate packs: array of{" "}
-            <Code>
-              {"{ id, name, description, prompt_template }"}
-            </Code>
-            .
-          </Text>
+      <section className={classes.section}>
+        <h3 className={classes.sectionTitle}>Prompt templates (JSON)</h3>
+        <p className={classes.sectionHint}>
+          Optional alternate packs: array of{" "}
+          <code className={classes.inlineCode}>
+            {"{ id, name, description, prompt_template }"}
+          </code>
+          .
+        </p>
+        <Field label="templates" error={errors.prompt_templates}>
           <Textarea
-            autosize
-            minRows={6}
-            error={templatesError}
+            className={[
+              classes.textarea,
+              classes.mono,
+              classes.jsonEditor,
+              errors.prompt_templates ? classes.inputError : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             value={templatesJson}
             onChange={(event) => {
-              setTemplatesJson(event.currentTarget.value);
-              setTemplatesError(null);
+              setTemplatesJson(event.target.value);
+              setErrors((current) => {
+                if (!current.prompt_templates) return current;
+                const next = { ...current };
+                delete next.prompt_templates;
+                return next;
+              });
             }}
-            styles={{
-              input: { fontFamily: "var(--mantine-font-family-monospace)" },
-            }}
+            spellCheck={false}
           />
-        </Stack>
-      </Stack>
+        </Field>
+      </section>
     </form>
   );
 }

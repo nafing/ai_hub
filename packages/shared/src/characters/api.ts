@@ -1,9 +1,21 @@
-import type { Character } from "./types";
+import type { Character, CharacterCardData, CharacterVersion } from "./types";
 
 /** Create payload — avatar is uploaded separately via PUT /characters/:id/avatar. */
-export type CreateCharacterInput = Omit<Character, "id" | "avatar">;
+export type CreateCharacterInput = Omit<
+  Character,
+  "id" | "avatar" | "active_version_id" | "versions"
+>;
 
-export type UpdateCharacterInput = Partial<CreateCharacterInput>;
+export type UpdateCharacterInput = Partial<CreateCharacterInput> & {
+  /** Switch which version is active (and returned as `data`). */
+  active_version_id?: string;
+  /**
+   * When true with `data`, save edits as a new version instead of overwriting
+   * the active one. Optional `version_label` overrides the auto-bumped label.
+   */
+  create_version?: boolean;
+  version_label?: string;
+};
 
 export type CharacterListItem = {
   id: string;

@@ -8,8 +8,17 @@ import type {
   PeekPromptResult,
   UpdateChatInput,
   UpdateChatMessageInput,
+  Variable,
 } from "@ai-hub/shared";
+import { promptPresetVariables } from "@/features/presets/PresetCommandBridge";
 import { api } from "@/lib/api";
+
+export class PresetVariablesCancelledError extends Error {
+  constructor() {
+    super("Preset variables setup cancelled");
+    this.name = "PresetVariablesCancelledError";
+  }
+}
 
 export async function listChats(): Promise<ChatListItem[]> {
   const { data } = await api.get<ChatListItem[]>("/chats");
@@ -23,6 +32,16 @@ export async function getChat(id: string): Promise<Chat> {
 
 export async function createChat(input: CreateChatInput): Promise<Chat> {
   const { data } = await api.post<Chat>("/chats", input);
+  return data;
+}
+
+export async function getOrCreateCharacterDm(
+  chatId: string,
+  characterId: string,
+): Promise<Chat> {
+  const { data } = await api.post<Chat>(
+    `/chats/${chatId}/character-dms/${characterId}`,
+  );
   return data;
 }
 
@@ -76,6 +95,28 @@ export async function peekChatPrompt(
   return data;
 }
 
+export async function applyAgentProposal(
+  id: string,
+  input: { slug?: string; proposalId: string },
+): Promise<Chat> {
+  const { data } = await api.post<Chat>(
+    `/chats/${id}/agent-proposals/apply`,
+    input,
+  );
+  return data;
+}
+
+export async function dismissAgentProposal(
+  id: string,
+  input: { slug?: string; proposalId: string },
+): Promise<Chat> {
+  const { data } = await api.post<Chat>(
+    `/chats/${id}/agent-proposals/dismiss`,
+    input,
+  );
+  return data;
+}
+
 function apiBaseUrl(): string {
   const base = api.defaults.baseURL ?? "/v1/api";
   if (base.startsWith("http")) return base.replace(/\/$/, "");
@@ -91,7 +132,7 @@ function apiBaseUrl(): string {
 async function readSseStream(
   response: Response,
   onEvent: (event: ChatStreamEvent) => void,
-): Promise<void> {
+): Promise<{ presetId: string; variables: Variable[] } | null> {
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(text || `Request failed (${response.status})`);
@@ -103,6 +144,8 @@ async function readSseStream(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let needsVariables: { presetId: string; variables: Variable[] } | null =
+    null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -119,11 +162,38 @@ async function readSseStream(
         const payload = trimmed.slice(5).trim();
         if (!payload) continue;
         try {
-          onEvent(JSON.parse(payload) as ChatStreamEvent);
+          const event = JSON.parse(payload) as ChatStreamEvent;
+          if (event.type === "needs_preset_variables") {
+            needsVariables = {
+              presetId: event.presetId,
+              variables: event.variables,
+            };
+            continue;
+          }
+          onEvent(event);
         } catch {
           // ignore malformed events
         }
       }
+    }
+  }
+
+  return needsVariables;
+}
+
+async function withPresetVariableRetry(
+  runOnce: () => Promise<{ presetId: string; variables: Variable[] } | null>,
+): Promise<void> {
+  for (;;) {
+    const needs = await runOnce();
+    if (!needs) return;
+
+    const chosen = await promptPresetVariables(
+      needs.presetId,
+      needs.variables,
+    );
+    if (!chosen) {
+      throw new PresetVariablesCancelledError();
     }
   }
 }
@@ -134,13 +204,18 @@ export async function streamGenerate(
   onEvent: (event: ChatStreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(`${apiBaseUrl()}/chats/${id}/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify(input),
-    signal,
+  await withPresetVariableRetry(async () => {
+    const response = await fetch(`${apiBaseUrl()}/chats/${id}/generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify(input),
+      signal,
+    });
+    return readSseStream(response, onEvent);
   });
-  await readSseStream(response, onEvent);
 }
 
 export async function streamRegenerate(
@@ -149,14 +224,16 @@ export async function streamRegenerate(
   signal?: AbortSignal,
   messageId?: string,
 ): Promise<void> {
-  const response = await fetch(`${apiBaseUrl()}/chats/${id}/regenerate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-    },
-    body: JSON.stringify(messageId ? { messageId } : {}),
-    signal,
+  await withPresetVariableRetry(async () => {
+    const response = await fetch(`${apiBaseUrl()}/chats/${id}/regenerate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify(messageId ? { messageId } : {}),
+      signal,
+    });
+    return readSseStream(response, onEvent);
   });
-  await readSseStream(response, onEvent);
 }

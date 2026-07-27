@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Button, Group, Modal, TextInput } from "@mantine/core";
-import { notifications } from "@mantine/notifications";
 import { useNavigate } from "@tanstack/react-router";
 import { defaultAgent, slugifyAgentName } from "@ai-hub/shared";
+import { Button, Modal, TextInput, notifications } from "@/components/ui";
 import { useCreateAgent } from "./queries";
+import classes from "./CreateAgentModal.module.css";
 
 type CreateAgentModalProps = {
   opened: boolean;
@@ -61,49 +61,54 @@ export function CreateAgentModal({ opened, onClose }: CreateAgentModalProps) {
   }
 
   return (
-    <Modal opened={opened} onClose={handleClose} title="New agent" centered>
+    <Modal opened={opened} onClose={handleClose} title="New agent" size="sm">
       <form
         onSubmit={(event) => {
           event.preventDefault();
           void handleCreate();
         }}
       >
-        <TextInput
-          label="Name"
-          description="Display name shown in the hub and chat settings."
-          placeholder="My Agent"
-          data-autofocus
-          required
-          value={name}
-          onChange={(event) => setName(event.currentTarget.value)}
-          mb="sm"
-        />
-        <TextInput
-          label="Slug"
-          description="Stable kebab-case id. Must be unique."
-          placeholder="my-agent"
-          required
-          value={slug}
-          onChange={(event) => {
-            setSlugTouched(true);
-            setSlug(event.currentTarget.value);
-          }}
-          styles={{
-            input: { fontFamily: "var(--mantine-font-family-monospace)" },
-          }}
-        />
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" type="button" onClick={handleClose}>
+        <label className={classes.field}>
+          <span className={classes.fieldLabel}>Name</span>
+          <p className={classes.fieldHint}>
+            Display name shown in the hub and chat settings.
+          </p>
+          <TextInput
+            placeholder="My Agent"
+            required
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+          />
+        </label>
+        <label className={classes.fieldSpaced}>
+          <span className={classes.fieldLabel}>Slug</span>
+          <p className={classes.fieldHint}>
+            Stable kebab-case id. Must be unique.
+          </p>
+          <TextInput
+            className={classes.mono}
+            placeholder="my-agent"
+            required
+            value={slug}
+            onChange={(event) => {
+              setSlugTouched(true);
+              setSlug(event.currentTarget.value);
+            }}
+          />
+        </label>
+        <div className={classes.actions}>
+          <Button variant="default" type="button"
+            onClick={handleClose}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            loading={createMutation.isPending}
-            disabled={!name.trim() || !slug.trim()}
-          >
-            Create
+          <Button variant="primary" type="submit"
+            disabled={
+              !name.trim() || !slug.trim() || createMutation.isPending
+            }>
+            {createMutation.isPending ? "Creating…" : "Create"}
           </Button>
-        </Group>
+        </div>
       </form>
     </Modal>
   );

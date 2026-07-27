@@ -1,5 +1,5 @@
 import { isSectionMarker } from "./constants";
-import type { Preset, Section, SectionKind, SectionRole, Variable, WrapFormat } from "./types";
+import type { Preset, Section, SectionKind, SectionRole, Variable, VariableOption, WrapFormat } from "./types";
 import type { ChatMessage } from "../llm/types";
 import { resolveTemplate } from "./template";
 
@@ -226,17 +226,66 @@ export function buildPromptMessages(
   return mergeSameRole ? mergeMessages(messages) : messages;
 }
 
+/** Resolve a stored `selected` entry to the option value (supports part / id / value). */
+function resolveSelectedOptionValue(
+  selected: string,
+  options: Array<Pick<VariableOption, "id" | "value">> | undefined,
+): string {
+  if (!options?.length) return selected;
+  const match = options.find(
+    (option) =>
+      option.value === selected ||
+      option.id === selected ||
+      option.id.endsWith(`:${selected}`),
+  );
+  return match?.value ?? selected;
+}
+
 /** Build a variables map from each variable's `selected` values. */
 export function selectedVariableValues(
-  variables: Array<Pick<Variable, "variable_name" | "multi_select" | "selected">>,
+  variables: Array<
+    Pick<Variable, "variable_name" | "multi_select" | "selected"> & {
+      options?: Array<Pick<VariableOption, "id" | "value">>;
+    }
+  >,
 ): PresetVariableValues {
   const out: PresetVariableValues = {};
   for (const variable of variables) {
     const name = variable.variable_name.trim();
     if (!name) continue;
-    const selected = (variable.selected ?? []).filter(Boolean);
+    const selected = (variable.selected ?? [])
+      .filter(Boolean)
+      .map((entry) => resolveSelectedOptionValue(entry, variable.options))
+      .filter(Boolean);
     if (selected.length === 0) continue;
     out[name] = variable.multi_select ? selected : selected[0]!;
   }
   return out;
+}
+
+function hasPresetVariableValue(value: string | string[] | undefined): boolean {
+  if (value == null) return false;
+  if (Array.isArray(value)) {
+    return value.some((item) => Boolean(String(item).trim()));
+  }
+  return Boolean(value.trim());
+}
+
+/**
+ * Named preset variables that still lack a value after merging saved
+ * `selected` with runtime `provided` overrides.
+ */
+export function unresolvedPresetVariables(
+  variables: Variable[],
+  provided?: PresetVariableValues,
+): Variable[] {
+  const resolved: PresetVariableValues = {
+    ...selectedVariableValues(variables),
+    ...(provided ?? {}),
+  };
+  return variables.filter((variable) => {
+    const name = variable.variable_name.trim();
+    if (!name) return false;
+    return !hasPresetVariableValue(resolved[name]);
+  });
 }

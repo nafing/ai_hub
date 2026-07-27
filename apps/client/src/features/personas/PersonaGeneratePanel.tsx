@@ -1,21 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  Button,
-  Group,
-  MultiSelect,
-  Select,
-  SimpleGrid,
-  Stack,
-  Text,
-  Textarea,
-} from "@mantine/core";
-import { notifications } from "@mantine/notifications";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { IconSparkles } from "@tabler/icons-react";
 import {
   buildPresetPromptContext,
   type PresetVariableValues,
   type Variable,
 } from "@ai-hub/shared";
+import { Button,
+  MultiSelect,
+  Select,
+  Textarea,
+  notifications,
+} from "@/components/ui";
 import { useConnections } from "@/features/connections/queries";
 import { getCharacter } from "@/features/characters/api";
 import { useCharacters } from "@/features/characters/queries";
@@ -25,6 +20,7 @@ import {
   usePreset,
   usePresets,
 } from "@/features/presets/queries";
+import classes from "./PersonaGeneratePanel.module.css";
 
 type PersonaGeneratePanelProps = {
   personaName: string;
@@ -39,9 +35,31 @@ type GenerateField = "description" | "personality" | "both";
 /** Value injected into `{{target_field}}` when generating both card fields. */
 const TARGET_FIELD_BOTH = "description and personality";
 
+function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.field}>
+      <span className={classes.fieldLabel}>{label}</span>
+      {hint ? <p className={classes.fieldHint}>{hint}</p> : null}
+      {children}
+      {error ? <p className={classes.fieldError}>{error}</p> : null}
+    </div>
+  );
+}
+
 function targetFieldValue(field: GenerateField): string {
   return field === "both" ? TARGET_FIELD_BOTH : field;
 }
+
 function resolvePresetVariables(variables: Variable[]): PresetVariableValues {
   const out: PresetVariableValues = {};
   for (const variable of variables) {
@@ -58,11 +76,7 @@ function resolvePresetVariables(variables: Variable[]): PresetVariableValues {
         return match?.value ?? selected;
       })
       .filter(Boolean);
-    if (resolved.length === 0) {
-      const fallback = variable.options[0]?.value;
-      if (fallback) out[name] = fallback;
-      continue;
-    }
+    if (resolved.length === 0) continue;
     out[name] = variable.multi_select ? resolved : resolved[0]!;
   }
   return out;
@@ -118,10 +132,10 @@ function buildGeneratorVariables(options: {
 }): PresetVariableValues {
   return {
     ...resolvePresetVariables(options.presetVariables),
-    user: options.personaName.trim() || "(unnamed)",
+    user: options.personaName.trim(),
     target_field: targetFieldValue(options.field),
-    existing_description: options.description.trim() || "(none yet)",
-    existing_personality: options.personality.trim() || "(none yet)",
+    existing_description: options.description.trim(),
+    existing_personality: options.personality.trim(),
   };
 }
 
@@ -227,9 +241,7 @@ export function PersonaGeneratePanel({
         characterIds.map((id) => getCharacter(id)),
       );
       const promptContext = buildPresetPromptContext({
-        generatorBrief:
-          brief.trim() ||
-          "(no brief — invent a coherent persona that complements the reference characters)",
+        generatorBrief: brief.trim() || null,
         referenceCharacterList: characters,
         variables: buildGeneratorVariables({
           field,
@@ -296,160 +308,165 @@ export function PersonaGeneratePanel({
     !presetId ||
     presetDetailQuery.isLoading;
 
+  const connectionError = connectionsQuery.isError
+    ? "Failed to load connections"
+    : !connectionsQuery.isLoading && !connectionsQuery.data?.length
+      ? "Create a connection first"
+      : undefined;
+
+  const presetError = presetsQuery.isError
+    ? "Failed to load presets"
+    : presetDetailQuery.isError
+      ? "Failed to load preset details"
+      : !presetsQuery.isLoading && !presetOptions.length
+        ? "No presets available"
+        : undefined;
+
   return (
-    <Stack gap="md">
-      <Text size="sm" c="dimmed">
+    <div className={classes.stack}>
+      <p className={classes.muted}>
         Uses the selected Persona Generator preset. Brief and reference
         characters fill marker sections; target field and existing card values
         are preset variables. Remember to Save after generating.
-      </Text>
+      </p>
 
-      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-        <Select
+      <div className={`${classes.grid} ${classes.grid2}`}>
+        <Field
           label="Connection"
-          description="Defaults to the active connection."
-          placeholder={
-            connectionsQuery.isLoading
-              ? "Loading connections…"
-              : "Select connection"
-          }
-          data={(connectionsQuery.data ?? []).map((connection) => ({
-            value: connection.id,
-            label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
-          }))}
-          value={resolvedConnectionId}
-          onChange={setConnectionId}
-          searchable
-          clearable={false}
-          allowDeselect={false}
-          disabled={!connectionsQuery.data?.length}
-          error={
-            connectionsQuery.isError
-              ? "Failed to load connections"
-              : !connectionsQuery.isLoading && !connectionsQuery.data?.length
-                ? "Create a connection first"
-                : undefined
-          }
-        />
-        <Select
+          hint="Defaults to the active connection."
+          error={connectionError}
+        >
+          <Select
+            placeholder={
+              connectionsQuery.isLoading
+                ? "Loading connections…"
+                : "Select connection"
+            }
+            data={(connectionsQuery.data ?? []).map((connection) => ({
+              value: connection.id,
+              label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
+            }))}
+            value={resolvedConnectionId ?? ""}
+            onChange={(value) => setConnectionId(value || null)}
+            searchable
+            disabled={!connectionsQuery.data?.length}
+            error={Boolean(connectionError)}
+          />
+        </Field>
+        <Field
           label="Preset"
-          description="Prefer presets in the Persona Generator category."
-          placeholder={
-            presetsQuery.isLoading ? "Loading presets…" : "Select preset"
-          }
-          data={presetOptions}
-          value={presetId}
-          onChange={setPresetId}
-          searchable
-          clearable={false}
-          allowDeselect={false}
-          disabled={!presetOptions.length}
-          error={
-            presetsQuery.isError
-              ? "Failed to load presets"
-              : presetDetailQuery.isError
-                ? "Failed to load preset details"
-                : !presetsQuery.isLoading && !presetOptions.length
-                  ? "No presets available"
-                  : undefined
-          }
-        />
-      </SimpleGrid>
+          hint="Prefer presets in the Persona Generator category."
+          error={presetError}
+        >
+          <Select
+            placeholder={
+              presetsQuery.isLoading ? "Loading presets…" : "Select preset"
+            }
+            data={presetOptions}
+            value={presetId ?? ""}
+            onChange={(value) => setPresetId(value || null)}
+            searchable
+            disabled={!presetOptions.length}
+            error={Boolean(presetError)}
+          />
+        </Field>
+      </div>
 
-      <MultiSelect
+      <Field
         label="Reference characters"
-        description="Fills the Reference Characters marker."
-        placeholder={
-          charactersQuery.isLoading
-            ? "Loading characters…"
-            : "Select characters"
-        }
-        clearable
-        data={characterOptions}
-        value={characterIds}
-        onChange={setCharacterIds}
-        disabled={!characterOptions.length}
+        hint="Fills the Reference Characters marker."
         error={
           charactersQuery.isError ? "Failed to load characters" : undefined
         }
-      />
+      >
+        <MultiSelect
+          placeholder={
+            charactersQuery.isLoading
+              ? "Loading characters…"
+              : "Select characters"
+          }
+          clearable
+          data={characterOptions}
+          value={characterIds}
+          onChange={setCharacterIds}
+          disabled={!characterOptions.length}
+          error={charactersQuery.isError}
+        />
+      </Field>
 
-      <Textarea
+      <Field
         label="Generator brief"
-        description="Fills the Generator Brief marker."
-        autosize
-        minRows={4}
-        value={brief}
-        onChange={(event) => setBrief(event.currentTarget.value)}
-        placeholder="e.g. A cautious archivist who knows the selected characters from university, dry humor, soft-spoken…"
-      />
+        hint="Fills the Generator Brief marker."
+      >
+        <Textarea
+          className={classes.textarea}
+          value={brief}
+          onChange={(event) => setBrief(event.currentTarget.value)}
+          placeholder="e.g. A cautious archivist who knows the selected characters from university, dry humor, soft-spoken…"
+        />
+      </Field>
 
-      <Group justify="flex-end">
+      <div className={classes.actionsEnd}>
         <Button
-          size="xs"
-          variant="light"
-          leftSection={<IconSparkles size={14} />}
+          type="button"
+          variant="default"
+          size="sm"
           loading={pendingField === "both"}
           disabled={generateDisabled}
+          leftSection={<IconSparkles size={14} />}
           onClick={() => void handleGenerate("both")}
         >
           Generate description & personality
         </Button>
-      </Group>
+      </div>
 
-      <Stack gap="xs">
-        <Group justify="space-between" align="flex-end" wrap="nowrap">
-          <Text size="sm" fw={500}>
-            Description
-          </Text>
+      <div className={classes.stackSm}>
+        <div className={classes.fieldHeader}>
+          <p className={classes.fieldTitle}>Description</p>
           <Button
-            size="xs"
-            variant="light"
-            leftSection={<IconSparkles size={14} />}
+            type="button"
+            variant="default"
+            size="sm"
             loading={pendingField === "description"}
             disabled={generateDisabled}
+            leftSection={<IconSparkles size={14} />}
             onClick={() => void handleGenerate("description")}
           >
             Generate
           </Button>
-        </Group>
+        </div>
+        <p className={classes.fieldHint}>
+          Appearance / background — same field as Card.
+        </p>
         <Textarea
-          description="Appearance / background — same field as Card."
-          autosize
-          minRows={4}
+          className={classes.textarea}
           value={description}
-          onChange={(event) =>
-            onDescriptionChange(event.currentTarget.value)
-          }
+          onChange={(event) => onDescriptionChange(event.currentTarget.value)}
         />
-      </Stack>
+      </div>
 
-      <Stack gap="xs">
-        <Group justify="space-between" align="flex-end" wrap="nowrap">
-          <Text size="sm" fw={500}>
-            Personality
-          </Text>
+      <div className={classes.stackSm}>
+        <div className={classes.fieldHeader}>
+          <p className={classes.fieldTitle}>Personality</p>
           <Button
-            size="xs"
-            variant="light"
-            leftSection={<IconSparkles size={14} />}
+            type="button"
+            variant="default"
+            size="sm"
             loading={pendingField === "personality"}
             disabled={generateDisabled}
+            leftSection={<IconSparkles size={14} />}
             onClick={() => void handleGenerate("personality")}
           >
             Generate
           </Button>
-        </Group>
+        </div>
+        <p className={classes.fieldHint}>Traits / voice — same field as Card.</p>
         <Textarea
-          description="Traits / voice — same field as Card."
-          autosize
-          minRows={3}
+          className={classes.textarea}
           value={personality}
-          onChange={(event) =>
-            onPersonalityChange(event.currentTarget.value)
-          }
+          onChange={(event) => onPersonalityChange(event.currentTarget.value)}
         />
-      </Stack>
-    </Stack>
+      </div>
+    </div>
   );
 }

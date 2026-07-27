@@ -5,6 +5,7 @@ export type {
   CharacterBookEntryPosition,
   CharacterCardData,
   CharacterCardV2,
+  CharacterVersion,
 } from "./types";
 export {
   CHARA_CARD_SPEC,
@@ -17,7 +18,6 @@ export type {
 } from "./api";
 export {
   defaultCharacter,
-  defaultCharacterBook,
   defaultCharacterBookEntry,
   defaultCharacterCardData,
   normalizeAlternateGreetings,
@@ -30,6 +30,11 @@ export {
   DEFAULT_TALKATIVENESS,
   normalizeTalkativeness,
 } from "./talkativeness";
+export {
+  createCharacterVersion,
+  normalizeCharacterVersions,
+  nextCharacterVersionLabel,
+} from "./versions";
 export {
   parseCharacterCardJson,
   parseCharacterCardPng,

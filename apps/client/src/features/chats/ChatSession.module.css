@@ -1,0 +1,233 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-stage);
+}
+
+.messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-md) var(--space-lg);
+}
+
+.messageList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: 52rem;
+  margin-inline: auto;
+}
+
+.emptyHint {
+  padding: var(--space-xl) 0;
+  color: var(--color-text-dimmed);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.streamingStatus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) 0;
+}
+
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.streamingLabel {
+  color: var(--color-text-dimmed);
+  font-size: 0.8125rem;
+}
+
+.composerWrap {
+  flex-shrink: 0;
+  padding: var(--space-sm) var(--space-lg) var(--space-md);
+  background: linear-gradient(
+    to top,
+    var(--color-stage) 60%,
+    color-mix(in srgb, var(--color-stage) 0%, transparent)
+  );
+}
+
+.composerBar {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  max-width: 52rem;
+  margin-inline: auto;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  transition: border-color 0.15s ease;
+}
+
+.composerBar:focus-within {
+  border-color: var(--color-border-strong);
+}
+
+.composerInputWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.composerInput {
+  width: 100%;
+  min-height: 1.75rem;
+  max-height: 10rem;
+  padding: 0.35rem 0.25rem;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.composerInput:focus {
+  outline: none;
+}
+
+.composerInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.composerInput:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.suggestDropdown {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 40;
+  max-height: 14rem;
+  margin: 0;
+  padding: var(--space-xs);
+  list-style: none;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+
+.suggestOption {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  color: var(--color-text);
+  text-align: left;
+  font-size: 0.8125rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.suggestOption:hover,
+.suggestOptionSelected {
+  background: var(--color-surface-hover);
+}
+
+.suggestOptionCommand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.suggestCommandLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.suggestCommandDesc {
+  color: var(--color-text-dimmed);
+  font-size: 0.6875rem;
+}
+
+.menuDropdownAbove {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.menuAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.625rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+}
+
+.menuAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.menuItemDisabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.deleteStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.deleteHint {
+  margin: 0;
+  color: var(--color-text-dimmed);
+  font-size: 0.875rem;
+}
+
+.deleteActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.agentsButtonActive {
+  position: relative;
+}
+
+.agentsBadge {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.2rem;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 1.5px var(--color-surface);
+}
+

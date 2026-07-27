@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { Button, Group, Modal, Select, TextInput } from "@mantine/core";
-import { notifications } from "@mantine/notifications";
 import { useNavigate } from "@tanstack/react-router";
 import {
   PRESET_CATEGORIES,
@@ -8,7 +6,9 @@ import {
   defaultPreset,
   type PresetCategory,
 } from "@ai-hub/shared";
+import { Button, Modal, Select, TextInput, notifications } from "@/components/ui";
 import { useCreatePreset } from "./queries";
+import classes from "./CreatePresetModal.module.css";
 
 type CreatePresetModalProps = {
   opened: boolean;
@@ -60,48 +60,52 @@ export function CreatePresetModal({
   }
 
   return (
-    <Modal opened={opened} onClose={handleClose} title="New preset" centered>
+    <Modal opened={opened} onClose={handleClose} title="New preset" size="sm">
       <form
         onSubmit={(event) => {
           event.preventDefault();
           void handleCreate();
         }}
       >
-        <TextInput
-          label="Name"
-          description="The display name for this preset."
-          placeholder="My preset"
-          data-autofocus
-          required
-          value={name}
-          onChange={(event) => setName(event.currentTarget.value)}
-        />
-        <Select
-          mt="md"
-          label="Category"
-          description="Where this preset is intended to be used."
-          data={PRESET_CATEGORIES.map((value) => ({
-            value,
-            label: PRESET_CATEGORY_LABELS[value],
-          }))}
-          value={category}
-          allowDeselect={false}
-          onChange={(value) => {
-            if (value) setCategory(value as PresetCategory);
-          }}
-        />
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" type="button" onClick={handleClose}>
+        <label className={classes.field}>
+          <span className={classes.fieldLabel}>Name</span>
+          <p className={classes.fieldHint}>
+            The display name for this preset.
+          </p>
+          <TextInput
+            placeholder="My preset"
+            required
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+          />
+        </label>
+        <div className={classes.fieldSpaced}>
+          <span className={classes.fieldLabel}>Category</span>
+          <p className={classes.fieldHint}>
+            Where this preset is intended to be used.
+          </p>
+          <Select
+            data={PRESET_CATEGORIES.map((value) => ({
+              value,
+              label: PRESET_CATEGORY_LABELS[value],
+            }))}
+            value={category}
+            onChange={(value) => {
+              if (value) setCategory(value as PresetCategory);
+            }}
+          />
+        </div>
+        <div className={classes.actions}>
+          <Button variant="default" type="button"
+            onClick={handleClose}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            loading={createMutation.isPending}
-            disabled={!name.trim()}
-          >
-            Create
+          <Button variant="primary" type="submit"
+            disabled={!name.trim() || createMutation.isPending}>
+            {createMutation.isPending ? "Creating…" : "Create"}
           </Button>
-        </Group>
+        </div>
       </form>
     </Modal>
   );

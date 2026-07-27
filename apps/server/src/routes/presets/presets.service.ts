@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -23,11 +24,13 @@ import type {
 } from "@ai-hub/shared";
 import {
   DEFAULT_PRESETS,
+  NEEDS_PRESET_VARIABLES_CODE,
   PRESET_CATEGORIES,
   SECTION_KIND_LABELS,
   SECTION_KINDS,
   defaultPresetId,
   substituteVariables,
+  unresolvedPresetVariables,
 } from "@ai-hub/shared";
 import { ConnectionsService } from "../connections/connections.service";
 import {
@@ -62,15 +65,28 @@ export class PresetsService implements OnModuleInit {
   }
 
   /**
-   * Insert missing built-in presets (`default:*`).
-   * Existing rows are left alone so user edits (sections, Setup Variables, etc.) survive restarts.
+   * Insert missing built-in presets (`default:*`) and refresh their prompt
+   * sections from code so built-in instruction updates (e.g. import mode)
+   * apply on restart. Variables / is_default are left alone when the row exists
+   * so Setup Variables selections survive.
    */
   async seedDefaultPresets(): Promise<void> {
     let created = 0;
+    let refreshed = 0;
     for (const def of DEFAULT_PRESETS) {
       const id = defaultPresetId(def.key);
       const existing = await this.presets.findOneBy({ id });
-      if (existing) continue;
+      if (existing) {
+        existing.name = def.name;
+        existing.description = def.description;
+        existing.wrap_format = def.wrap_format;
+        existing.author = def.author;
+        existing.groups = def.groups ?? [];
+        existing.sections = def.sections ?? [];
+        await this.presets.save(existing);
+        refreshed += 1;
+        continue;
+      }
 
       const { key: _key, ...input } = def;
       const category = this.normalizeCategory(input.category);
@@ -97,8 +113,10 @@ export class PresetsService implements OnModuleInit {
       created += 1;
     }
 
-    if (created > 0) {
-      this.logger.log(`Default presets: ${created} created`);
+    if (created > 0 || refreshed > 0) {
+      this.logger.log(
+        `Default presets: ${created} created, ${refreshed} sections refreshed`,
+      );
     }
   }
 
@@ -243,6 +261,20 @@ export class PresetsService implements OnModuleInit {
           ),
         }
       : saved;
+
+    // Always use persisted (normalized) variable defs — draft.variables is
+    // stripped by ValidationPipe whitelist and arrives as junk.
+    const unresolved = unresolvedPresetVariables(
+      saved.variables,
+      input.variables,
+    );
+    if (unresolved.length > 0) {
+      throw new ConflictException({
+        code: NEEDS_PRESET_VARIABLES_CODE,
+        presetId: saved.id,
+        variables: unresolved,
+      });
+    }
 
     const connection = input.connectionId
       ? await this.connections.findOne(input.connectionId)

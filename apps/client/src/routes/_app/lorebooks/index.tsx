@@ -1,71 +1,66 @@
+import { useState } from "react";
+import { motion } from "motion/react";
 import {
-  ActionIcon,
-  Badge,
-  Box,
-  Card,
-  Center,
-  Group,
-  Loader,
-  SimpleGrid,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import { modals } from "@mantine/modals";
-import { notifications } from "@mantine/notifications";
-import { IconCopy, IconPlus, IconTrash, IconUpload } from "@tabler/icons-react";
+  IconCopy,
+  IconPlus,
+  IconRefresh,
+  IconTrash,
+  IconUpload,
+} from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import type { LorebookListItem } from "@ai-hub/shared";
-import { LOREBOOK_CATEGORY_LABELS } from "@ai-hub/shared";
+import {
+  LOREBOOK_CATEGORY_LABELS,
+  type LorebookListItem,
+} from "@ai-hub/shared";
+import { ActionIcon, Button, Modal, notifications } from "@/components/ui";
 import { CreateLorebookModal } from "@/features/lorebooks/CreateLorebookModal";
 import { ImportLorebookModal } from "@/features/lorebooks/ImportLorebookModal";
 import {
   useDeleteLorebook,
   useDuplicateLorebook,
+  useLoreIndexStatus,
   useLorebooks,
+  useReindexLorebooks,
 } from "@/features/lorebooks/queries";
+import classes from "./index.module.css";
 
 export const Route = createFileRoute("/_app/lorebooks/")({
   component: RouteComponent,
 });
 
+type DeleteTarget = {
+  id: string;
+  name: string;
+};
+
 function RouteComponent() {
-  const [createOpened, { open: openCreate, close: closeCreate }] =
-    useDisclosure(false);
-  const [importOpened, { open: openImport, close: closeImport }] =
-    useDisclosure(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+
   const { data, isLoading, isError } = useLorebooks();
+  const indexStatus = useLoreIndexStatus();
   const deleteMutation = useDeleteLorebook();
   const duplicateMutation = useDuplicateLorebook();
+  const reindexMutation = useReindexLorebooks();
 
-  function confirmDelete(id: string, name: string) {
-    modals.openConfirmModal({
-      title: "Delete lorebook",
-      children: (
-        <Text size="sm">
-          Delete <strong>{name || "this lorebook"}</strong>? This cannot be
-          undone.
-        </Text>
-      ),
-      labels: { confirm: "Delete", cancel: "Cancel" },
-      confirmProps: { color: "red" },
-      onConfirm: () => {
-        deleteMutation.mutate(id, {
-          onSuccess: () => {
-            notifications.show({
-              title: "Deleted",
-              message: "Lorebook removed.",
-              color: "green",
-            });
-          },
-          onError: (error) => {
-            notifications.show({
-              title: "Delete failed",
-              message: error instanceof Error ? error.message : "Unknown error",
-              color: "red",
-            });
-          },
+  function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    const { id } = deleteTarget;
+    setDeleteTarget(null);
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        notifications.show({
+          title: "Deleted",
+          message: "Lorebook removed.",
+          color: "green",
+        });
+      },
+      onError: (error) => {
+        notifications.show({
+          title: "Delete failed",
+          message: error instanceof Error ? error.message : "Unknown error",
+          color: "red",
         });
       },
     });
@@ -90,71 +85,144 @@ function RouteComponent() {
     });
   }
 
-  return (
-    <Stack>
-      <CreateLorebookModal opened={createOpened} onClose={closeCreate} />
-      <ImportLorebookModal opened={importOpened} onClose={closeImport} />
+  function handleReindex() {
+    reindexMutation.mutate(undefined, {
+      onSuccess: (result) => {
+        notifications.show({
+          title: "Reindexed",
+          message: `${result.entries} entries across ${result.lorebooks} lorebooks.`,
+          color: "green",
+        });
+      },
+      onError: (error) => {
+        notifications.show({
+          title: "Reindex failed",
+          message: error instanceof Error ? error.message : "Unknown error",
+          color: "red",
+        });
+      },
+    });
+  }
 
-      <Box
-        pos="sticky"
-        top="var(--app-shell-header-offset, 0px)"
-        bg="var(--mantine-color-body)"
-        style={{ zIndex: "calc(var(--mantine-z-index-app) - 1)" }}
-        py="xs"
-      >
-        <Group justify="space-between" align="start" wrap="nowrap">
-          <Title order={2}>Lorebooks</Title>
-          <Group gap="xs" wrap="nowrap">
+  const status = indexStatus.data;
+  const dirtyCount = status?.dirty_count ?? 0;
+
+  return (
+    <div className={classes.page}>
+      <header className={classes.header}>
+        <div className={classes.headerRow}>
+          <h2 className={classes.title}>Lorebooks</h2>
+          <div className={classes.headerActions}>
             <ActionIcon
+              type="button"
+              variant="default"
+              aria-label="Reindex lore vectors"
+              disabled={reindexMutation.isPending}
+              onClick={handleReindex}
+            >
+              <IconRefresh size={16} />
+            </ActionIcon>
+            <ActionIcon
+              type="button"
               variant="default"
               aria-label="Import lorebook"
-              onClick={openImport}
+              onClick={() => setImportOpen(true)}
             >
-              <IconUpload />
+              <IconUpload size={16} />
             </ActionIcon>
             <ActionIcon
+              type="button"
               variant="default"
               aria-label="New lorebook"
-              onClick={openCreate}
+              onClick={() => setCreateOpen(true)}
             >
-              <IconPlus />
+              <IconPlus size={16} />
             </ActionIcon>
-          </Group>
-        </Group>
-        <Text c="dimmed">
+          </div>
+        </div>
+        <p className={classes.subtitle}>
           Lorebooks. Create, edit, duplicate, or import JSON.
-        </Text>
-      </Box>
+        </p>
+        {status ? (
+          <p className={classes.indexStatus}>
+            Vector index: {status.indexed_rows} rows
+            {dirtyCount > 0
+              ? ` · ${dirtyCount} pending reindex`
+              : " · up to date"}
+            {reindexMutation.isPending ? " · reindexing…" : null}
+          </p>
+        ) : null}
+      </header>
 
       {isLoading ? (
-        <Center py="xl">
-          <Loader />
-        </Center>
+        <div className={classes.loading}>
+          <div className={classes.spinner} aria-label="Loading" />
+        </div>
       ) : null}
 
-      {isError ? <Text c="red">Failed to load lorebooks.</Text> : null}
-
-      {!isLoading && !isError ? (
-        (data ?? []).length === 0 ? (
-          <Text c="dimmed" size="sm">
-            No lorebooks yet. Create one with + or import JSON.
-          </Text>
-        ) : (
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-            {(data ?? []).map((lorebook) => (
-              <LorebookCard
-                key={lorebook.id}
-                lorebook={lorebook}
-                onDuplicate={handleDuplicate}
-                onDelete={confirmDelete}
-                duplicateLoading={duplicateMutation.isPending}
-                deleteLoading={deleteMutation.isPending}
-              />
-            ))}
-          </SimpleGrid>
-        )
+      {isError ? (
+        <p className={classes.statusError}>Failed to load lorebooks.</p>
       ) : null}
-    </Stack>
+
+      {!isLoading && !isError && (data?.length ?? 0) === 0 ? (
+        <p className={classes.status}>
+          No lorebooks yet. Create one with + or import JSON.
+        </p>
+      ) : null}
+
+      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
+        <div className={classes.grid}>
+          {(data ?? []).map((lorebook) => (
+            <LorebookCard
+              key={lorebook.id}
+              lorebook={lorebook}
+              onDuplicate={handleDuplicate}
+              onDelete={(id, name) => setDeleteTarget({ id, name })}
+              duplicatePending={duplicateMutation.isPending}
+              deletePending={deleteMutation.isPending}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <CreateLorebookModal
+        opened={createOpen}
+        onClose={() => setCreateOpen(false)}
+      />
+
+      <ImportLorebookModal
+        opened={importOpen}
+        onClose={() => setImportOpen(false)}
+      />
+
+      <Modal
+        opened={deleteTarget != null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete lorebook"
+        size="sm"
+      >
+        <p className={classes.modalBody}>
+          Delete <strong>{deleteTarget?.name || "this lorebook"}</strong>? This
+          cannot be undone.
+        </p>
+        <div className={classes.modalActions}>
+          <Button
+            variant="default"
+            type="button"
+            onClick={() => setDeleteTarget(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="dangerSolid"
+            type="button"
+            onClick={handleConfirmDelete}
+          >
+            Delete
+          </Button>
+        </div>
+      </Modal>
+    </div>
   );
 }
 
@@ -162,111 +230,103 @@ function LorebookCard({
   lorebook,
   onDuplicate,
   onDelete,
-  duplicateLoading,
-  deleteLoading,
+  duplicatePending,
+  deletePending,
 }: {
   lorebook: LorebookListItem;
   onDuplicate: (id: string) => void;
   onDelete: (id: string, name: string) => void;
-  duplicateLoading: boolean;
-  deleteLoading: boolean;
+  duplicatePending: boolean;
+  deletePending: boolean;
 }) {
   return (
-    <Card withBorder padding={0}>
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.16 }}
+    >
       <Link
         to="/lorebooks/$lorebookId"
         params={{ lorebookId: lorebook.id }}
-        style={{
-          textDecoration: "none",
-          color: "inherit",
-          display: "block",
-        }}
+        className={classes.card}
       >
-        <Box p="md">
-          <Group justify="space-between" align="start" wrap="nowrap">
-            <div style={{ minWidth: 0 }}>
-              <Text size="lg" fw={600} lineClamp={1}>
-                {lorebook.name || "untitled"}
-              </Text>
-              <Text size="sm" c="dimmed" lineClamp={2} mt={4}>
-                {lorebook.description || "No description"}
-              </Text>
-            </div>
-            <Group gap="xs" wrap="nowrap">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                aria-label="Duplicate"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onDuplicate(lorebook.id);
-                }}
-                loading={duplicateLoading}
-              >
-                <IconCopy />
-              </ActionIcon>
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                color="red"
-                aria-label="Delete"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onDelete(lorebook.id, lorebook.name);
-                }}
-                loading={deleteLoading}
-              >
-                <IconTrash />
-              </ActionIcon>
-            </Group>
-          </Group>
-          <Group gap={6} mt="sm">
-            <Badge size="sm" variant="light">
-              {LOREBOOK_CATEGORY_LABELS[lorebook.category]}
-            </Badge>
-            <Badge size="sm" variant="light">
-              {lorebook.entry_count}{" "}
-              {lorebook.entry_count === 1 ? "entry" : "entries"}
-            </Badge>
-            {!lorebook.enabled ? (
-              <Badge size="sm" variant="outline" color="gray">
-                disabled
-              </Badge>
-            ) : null}
-            {lorebook.global ? (
-              <Badge size="sm" variant="outline">
-                global
-              </Badge>
-            ) : null}
-            {lorebook.linked_characters.length > 0 ? (
-              <Badge size="sm" variant="outline">
-                {lorebook.linked_characters.length}{" "}
-                {lorebook.linked_characters.length === 1
-                  ? "character"
-                  : "characters"}
-              </Badge>
-            ) : null}
-            {lorebook.linked_personas.length > 0 ? (
-              <Badge size="sm" variant="outline">
-                {lorebook.linked_personas.length}{" "}
-                {lorebook.linked_personas.length === 1 ? "persona" : "personas"}
-              </Badge>
-            ) : null}
-            {lorebook.recursive_scanning ? (
-              <Badge size="sm" variant="outline">
-                recursive
-              </Badge>
-            ) : null}
-            {lorebook.token_budget != null ? (
-              <Badge size="sm" variant="outline">
-                {lorebook.token_budget} tok
-              </Badge>
-            ) : null}
-          </Group>
-        </Box>
+        <div className={classes.cardTop}>
+          <div className={classes.cardText}>
+            <p className={classes.cardName}>{lorebook.name || "untitled"}</p>
+            <p className={classes.cardDescription}>
+              {lorebook.description || "No description"}
+            </p>
+          </div>
+          <div className={classes.cardActions}>
+            <ActionIcon
+              type="button"
+              variant="ghost"
+              aria-label="Duplicate"
+              disabled={duplicatePending}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDuplicate(lorebook.id);
+              }}
+            >
+              <IconCopy size={15} />
+            </ActionIcon>
+            <ActionIcon
+              type="button"
+              variant="ghostDanger"
+              aria-label="Delete"
+              disabled={deletePending}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDelete(lorebook.id, lorebook.name);
+              }}
+            >
+              <IconTrash size={15} />
+            </ActionIcon>
+          </div>
+        </div>
+        <div className={classes.badges}>
+          <span className={classes.badgeSoft}>
+            {LOREBOOK_CATEGORY_LABELS[lorebook.category]}
+          </span>
+          <span className={classes.badgeSoft}>
+            {lorebook.entry_count}{" "}
+            {lorebook.entry_count === 1 ? "entry" : "entries"}
+          </span>
+          {lorebook.index_dirty ? (
+            <span className={classes.badgeWarn}>index pending</span>
+          ) : null}
+          {!lorebook.enabled ? (
+            <span className={classes.badgeMuted}>disabled</span>
+          ) : null}
+          {lorebook.global ? (
+            <span className={classes.badgeOutline}>global</span>
+          ) : null}
+          {lorebook.linked_characters.length > 0 ? (
+            <span className={classes.badgeOutline}>
+              {lorebook.linked_characters.length}{" "}
+              {lorebook.linked_characters.length === 1
+                ? "character"
+                : "characters"}
+            </span>
+          ) : null}
+          {lorebook.linked_personas.length > 0 ? (
+            <span className={classes.badgeOutline}>
+              {lorebook.linked_personas.length}{" "}
+              {lorebook.linked_personas.length === 1 ? "persona" : "personas"}
+            </span>
+          ) : null}
+          {lorebook.recursive_scanning ? (
+            <span className={classes.badgeOutline}>recursive</span>
+          ) : null}
+          {lorebook.token_budget != null ? (
+            <span className={classes.badgeOutline}>
+              {lorebook.token_budget} tok
+            </span>
+          ) : null}
+        </div>
       </Link>
-    </Card>
+    </motion.div>
   );
 }

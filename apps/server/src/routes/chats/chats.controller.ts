@@ -22,6 +22,7 @@ import { GenerateChatDto } from "./dto/generate-chat.dto";
 import { RegenerateChatDto } from "./dto/regenerate-chat.dto";
 import { UpdateChatDto } from "./dto/update-chat.dto";
 import { UpdateChatMessageDto } from "./dto/update-chat-message.dto";
+import { AgentProposalActionDto } from "./dto/agent-proposal.dto";
 
 @Controller("chats")
 export class ChatsController {
@@ -40,6 +41,14 @@ export class ChatsController {
   @Post()
   create(@Body() body: CreateChatDto): Promise<Chat> {
     return this.chatsService.create(body);
+  }
+
+  @Post(":id/character-dms/:characterId")
+  getOrCreateCharacterDm(
+    @Param("id") id: string,
+    @Param("characterId") characterId: string,
+  ): Promise<Chat> {
+    return this.chatsService.getOrCreateCharacterDm(id, characterId);
   }
 
   @Patch(":id")
@@ -109,6 +118,22 @@ export class ChatsController {
     @Query("messageId") messageId?: string,
   ) {
     return this.chatsService.peekPrompt(id, messageId);
+  }
+
+  @Post(":id/agent-proposals/apply")
+  applyAgentProposal(
+    @Param("id") id: string,
+    @Body() body: AgentProposalActionDto,
+  ): Promise<Chat> {
+    return this.chatsService.applyAgentProposal(id, body);
+  }
+
+  @Post(":id/agent-proposals/dismiss")
+  dismissAgentProposal(
+    @Param("id") id: string,
+    @Body() body: AgentProposalActionDto,
+  ): Promise<Chat> {
+    return this.chatsService.dismissAgentProposal(id, body);
   }
 
   private async stream(

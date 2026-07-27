@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Code, Text } from "@mantine/core";
+import classes from "./formatChatText.module.css";
 
 /**
  * Lightweight chat formatting:
@@ -26,21 +26,21 @@ export function formatChatText(text: string): ReactNode[] {
     const [full, code, italic, dialogue] = match;
     if (code) {
       nodes.push(
-        <Code key={key++} style={{ fontSize: "0.9em" }}>
+        <code key={key++} className={classes.code}>
           {code.slice(1, -1)}
-        </Code>,
+        </code>,
       );
     } else if (italic) {
       nodes.push(
-        <Text key={key++} span fs="italic" inherit component="em">
+        <em key={key++} className={classes.italic}>
           {italic.slice(1, -1)}
-        </Text>,
+        </em>,
       );
     } else if (dialogue) {
       nodes.push(
-        <Text key={key++} span inherit c="blue">
+        <span key={key++} className={classes.dialogue}>
           {dialogue}
-        </Text>,
+        </span>,
       );
     } else {
       nodes.push(full);

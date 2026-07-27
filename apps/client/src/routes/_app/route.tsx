@@ -1,24 +1,18 @@
-import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
+import { useState } from "react";
 import {
-  ActionIcon,
-  AppShell,
-  Burger,
-  Container,
-  Divider,
-  Group,
-  NavLink,
-  ScrollArea,
-  Stack,
-} from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+  createFileRoute,
+  Link,
+  Outlet,
+  useRouterState,
+} from "@tanstack/react-router";
 import {
   IconAiAgent,
-  IconArrowLeft,
   IconBook,
   IconBrandTwitter,
   IconConnection,
-  IconDashboard,
   IconFunction,
+  IconHome,
+  IconMenu2,
   IconMessages,
   IconPresentation,
   IconRegex,
@@ -26,13 +20,29 @@ import {
   IconUser,
   IconUsers,
 } from "@tabler/icons-react";
+import { Button } from "@/components/ui";
+import classes from "./route.module.css";
 
 export const Route = createFileRoute("/_app")({
   component: RouteComponent,
 });
 
-const NAVBAR_ITEMS = [
-  { label: "Dashboard", icon: IconDashboard, to: "/" },
+type NavLinkItem = {
+  type?: undefined;
+  label: string;
+  icon: typeof IconHome;
+  to: string;
+};
+
+type NavDividerItem = {
+  type: "divider";
+  label: string;
+};
+
+type NavItem = NavLinkItem | NavDividerItem;
+
+const NAVBAR_ITEMS: NavItem[] = [
+  { label: "Home", icon: IconHome, to: "/" },
   { label: "Chats", icon: IconMessages, to: "/chats" },
   { label: "Twatter", icon: IconBrandTwitter, to: "/twatter" },
 
@@ -53,76 +63,110 @@ const NAVBAR_ITEMS = [
 ];
 
 function RouteComponent() {
-  const [openedNavbar, { toggle: toggleNavbar }] = useDisclosure();
-  const [openedAside, { toggle: toggleAside }] = useDisclosure();
+  const [navbarOpen, setNavbarOpen] = useState(false);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  function closeNavbar() {
+    setNavbarOpen(false);
+  }
 
   return (
-    <AppShell
-      layout="alt"
-      header={{ height: 60 }}
-      footer={{ height: 60 }}
-      navbar={{
-        width: 300,
-        breakpoint: "sm",
-        collapsed: { mobile: !openedNavbar },
-      }}
-      aside={{
-        width: 300,
-        breakpoint: "md",
-        collapsed: { desktop: !openedAside, mobile: !openedAside },
-      }}
-      padding="xs"
-    >
-      <AppShell.Header>
-        <Group h="100%" px="md">
-          <Burger
-            opened={openedNavbar}
-            onClick={toggleNavbar}
-            hiddenFrom="sm"
-            size="sm"
-          />
-          <ActionIcon onClick={toggleAside}>
-            <IconArrowLeft />
-          </ActionIcon>
-        </Group>
-      </AppShell.Header>
-      <AppShell.Navbar p="md">
-        <Stack h="100%">
-          <Group>
-            <Burger
-              opened={openedNavbar}
-              onClick={toggleNavbar}
-              hiddenFrom="sm"
-              size="sm"
-            />
-          </Group>
-          <ScrollArea.Autosize>
-            <Stack gap="xs">
-              {NAVBAR_ITEMS.map((item, index) => {
-                if (item.type === "divider") {
-                  return <Divider key={index} label={item.label} />;
-                }
+    <div className={classes.shell}>
+      <header className={classes.header} data-glass-surface>
+        <Button
+          type="button"
+          variant="ghost"
+          className={[classes.burger, navbarOpen ? classes.burgerOpen : ""]
+            .filter(Boolean)
+            .join(" ")}
+          aria-label={navbarOpen ? "Close navigation" : "Open navigation"}
+          aria-expanded={navbarOpen}
+          onClick={() => setNavbarOpen((open) => !open)}
+        >
+          <IconMenu2 />
+        </Button>
+      </header>
 
+      {navbarOpen ? (
+        <Button
+          type="button"
+          variant="ghost"
+          className={classes.overlay}
+          aria-label="Close navigation"
+          onClick={closeNavbar}
+        />
+      ) : null}
+
+      <nav
+        className={[classes.navbar, navbarOpen ? classes.navbarOpen : ""]
+          .filter(Boolean)
+          .join(" ")}
+        aria-label="Main"
+        data-glass-surface
+      >
+        <div className={classes.navbarTop}>
+          <Button
+            type="button"
+            variant="ghost"
+            className={[classes.burger, navbarOpen ? classes.burgerOpen : ""]
+              .filter(Boolean)
+              .join(" ")}
+            aria-label={navbarOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={navbarOpen}
+            onClick={() => setNavbarOpen((open) => !open)}
+          >
+            <IconMenu2 />
+          </Button>
+        </div>
+
+        <div className={classes.navScroll}>
+          <div className={classes.navList}>
+            {NAVBAR_ITEMS.map((item, index) => {
+              if (item.type === "divider") {
                 return (
-                  <NavLink
-                    key={index}
-                    component={Link}
-                    to={item.to}
-                    label={item.label}
-                    leftSection={item.icon && <item.icon />}
-                  />
+                  <div
+                    key={`divider-${item.label}-${index}`}
+                    className={classes.divider}
+                  >
+                    {item.label}
+                  </div>
                 );
-              })}
-            </Stack>
-          </ScrollArea.Autosize>
-        </Stack>
-      </AppShell.Navbar>
-      <AppShell.Aside p="md">Aside</AppShell.Aside>
-      <AppShell.Main>
-        <Container size="xl">
+              }
+
+              const Icon = item.icon;
+              const active =
+                item.to === "/"
+                  ? pathname === "/"
+                  : pathname === item.to || pathname.startsWith(`${item.to}/`);
+
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={[
+                    classes.navLink,
+                    active ? classes.navLinkActive : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={closeNavbar}
+                >
+                  <span className={classes.navIcon}>
+                    <Icon />
+                  </span>
+                  <span className={classes.navLabel}>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </nav>
+
+      <main className={classes.main}>
+        <div className={classes.container}>
           <Outlet />
-        </Container>
-      </AppShell.Main>
-    </AppShell>
+        </div>
+      </main>
+    </div>
   );
 }

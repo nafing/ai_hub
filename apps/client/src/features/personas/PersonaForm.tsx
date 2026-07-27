@@ -1,8 +1,12 @@
-import type { ReactNode } from "react";
-import { Stack, Switch, Tabs, Text, TextInput, Textarea } from "@mantine/core";
-import { isNotEmpty, useForm } from "@mantine/form";
+import {
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import type { CreatePersonaInput } from "@ai-hub/shared";
+import { Tabs, Textarea, TextInput, Switch, RuntimeText } from "@/components/ui";
 import { PersonaGeneratePanel } from "./PersonaGeneratePanel";
+import classes from "./PersonaForm.module.css";
 
 export type PersonaFormValues = CreatePersonaInput;
 
@@ -16,6 +20,34 @@ type PersonaFormProps = {
   lorebooksSection?: ReactNode;
 };
 
+type FieldErrors = Partial<Record<"name", string>>;
+
+function Field({
+  label,
+  hint,
+  error,
+  required,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  error?: string;
+  required?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.field}>
+      <span className={classes.fieldLabel}>
+        {label}
+        {required ? " *" : ""}
+      </span>
+      {hint ? <p className={classes.fieldHint}>{hint}</p> : null}
+      {children}
+      {error ? <p className={classes.fieldError}>{error}</p> : null}
+    </div>
+  );
+}
+
 export function PersonaForm({
   formId = "persona-form",
   initialValues,
@@ -23,21 +55,35 @@ export function PersonaForm({
   avatarSection,
   lorebooksSection,
 }: PersonaFormProps) {
-  const form = useForm<PersonaFormValues>({
-    mode: "controlled",
-    initialValues,
-    validate: {
-      name: isNotEmpty("Name is required"),
-    },
-  });
+  const [values, setValues] = useState<PersonaFormValues>(initialValues);
+  const [errors, setErrors] = useState<FieldErrors>({});
+
+  function setField<K extends keyof PersonaFormValues>(
+    key: K,
+    value: PersonaFormValues[K],
+  ) {
+    setValues((current) => ({ ...current, [key]: value }));
+    if (key === "name" && errors.name) {
+      setErrors((current) => {
+        const next = { ...current };
+        delete next.name;
+        return next;
+      });
+    }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = values.name.trim();
+    if (!name) {
+      setErrors({ name: "Name is required" });
+      return;
+    }
+    void onSubmit({ ...values, name });
+  }
 
   return (
-    <form
-      id={formId}
-      onSubmit={form.onSubmit((values) => {
-        void onSubmit(values);
-      })}
-    >
+    <form id={formId} className={classes.form} onSubmit={handleSubmit}>
       <Tabs defaultValue="metadata">
         <Tabs.List>
           <Tabs.Tab value="metadata">Metadata</Tabs.Tab>
@@ -46,71 +92,87 @@ export function PersonaForm({
           <Tabs.Tab value="generate">Generate with AI</Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="metadata" pt="md">
-          <Stack gap="md">
+        <Tabs.Panel value="metadata">
+          <div className={classes.stack}>
             {avatarSection}
-            <TextInput
+            <Field
               label="Name"
-              description="Replaces `{{user}}` in prompts."
+              hint={
+                <>
+                  Replaces <RuntimeText>{"{{user}}"}</RuntimeText> in prompts.
+                </>
+              }
               required
-              {...form.getInputProps("name")}
-            />
+              error={errors.name}
+            >
+              <TextInput
+                error={Boolean(errors.name)}
+                value={values.name}
+                onChange={(event) => setField("name", event.target.value)}
+              />
+            </Field>
             <Switch
+              variant="card"
+              checked={values.is_default}
+              onChange={(checked) => setField("is_default", checked)}
               label="Default persona"
               description="Used as the active player persona when starting chats. Only one can be default."
-              checked={form.values.is_default}
-              onChange={(event) =>
-                form.setFieldValue("is_default", event.currentTarget.checked)
-              }
             />
-            <Textarea
+            <Field
               label="Notes"
-              description="Private notes — not injected into prompts."
-              autosize
-              minRows={2}
-              {...form.getInputProps("notes")}
-            />
-          </Stack>
+              hint="Private notes — not injected into prompts."
+            >
+              <Textarea
+                className={classes.textarea}
+                value={values.notes}
+                onChange={(event) => setField("notes", event.target.value)}
+              />
+            </Field>
+          </div>
         </Tabs.Panel>
 
-        <Tabs.Panel value="card" pt="md">
-          <Stack gap="md">
-            <Textarea
+        <Tabs.Panel value="card">
+          <div className={classes.stack}>
+            <Field
               label="Description"
-              description="Main persona definition / appearance / background."
-              autosize
-              minRows={4}
-              {...form.getInputProps("description")}
-            />
-            <Textarea
+              hint="Main persona definition / appearance / background."
+            >
+              <Textarea
+                className={classes.textarea}
+                value={values.description}
+                onChange={(event) =>
+                  setField("description", event.target.value)
+                }
+              />
+            </Field>
+            <Field
               label="Personality"
-              description="Trait block for the player persona."
-              autosize
-              minRows={3}
-              {...form.getInputProps("personality")}
-            />
-          </Stack>
+              hint="Trait block for the player persona."
+            >
+              <Textarea
+                className={classes.textarea}
+                value={values.personality}
+                onChange={(event) =>
+                  setField("personality", event.target.value)
+                }
+              />
+            </Field>
+          </div>
         </Tabs.Panel>
 
-        <Tabs.Panel value="lorebooks" pt="md">
+        <Tabs.Panel value="lorebooks">
           {lorebooksSection ?? (
-            <Text size="sm" c="dimmed">
-              No lorebooks panel available.
-            </Text>
+            <p className={classes.muted}>No lorebooks panel available.</p>
           )}
         </Tabs.Panel>
 
-        <Tabs.Panel value="generate" pt="md">
+        <Tabs.Panel value="generate">
           <PersonaGeneratePanel
-            personaName={form.values.name}
-            description={form.values.description}
-            personality={form.values.personality}
-            onDescriptionChange={(value) =>
-              form.setFieldValue("description", value)
-            }
-            onPersonalityChange={(value) =>
-              form.setFieldValue("personality", value)
-            }
+            personaName={values.name}
+            description={values.description}
+            personality={values.personality}
+            onDescriptionChange={(value) => setField("description", value)}
+            onPersonalityChange={(value) => setField("personality", value)}
           />
         </Tabs.Panel>
       </Tabs>
