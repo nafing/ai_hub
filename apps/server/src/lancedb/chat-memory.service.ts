@@ -39,6 +39,7 @@ export class ChatMemoryService {
   ) {}
 
   async indexMessage(chatId: string, message: ChatMessage): Promise<void> {
+    if (!this.lancedb.isAvailable()) return;
     if (!isIndexableMessage(message)) {
       await this.lancedb.deleteChatMessage(chatId, message.id);
       return;
@@ -72,6 +73,7 @@ export class ChatMemoryService {
   }
 
   async reindexChat(chatId: string, messages: ChatMessage[]): Promise<void> {
+    if (!this.lancedb.isAvailable()) return;
     const indexable = messages.filter(isIndexableMessage);
     if (indexable.length === 0) {
       await this.lancedb.deleteChatMessages(chatId);
@@ -148,7 +150,7 @@ export class ChatMemoryService {
     const recent =
       all.length <= depth ? all : all.slice(all.length - depth);
 
-    if (!settings.memory_enabled) {
+    if (!settings.memory_enabled || !this.lancedb.isAvailable()) {
       return {
         historyMessages: recent,
         chatSummary: input.chatSummary.trim(),

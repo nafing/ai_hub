@@ -26,6 +26,8 @@ export class LoreIndexService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    await this.lancedb.connect();
+    if (!this.lancedb.isAvailable()) return;
     try {
       const count = await this.lancedb.countRows();
       const dirtyIds = await this.lorebooks.listDirtyIds();
@@ -56,6 +58,7 @@ export class LoreIndexService implements OnModuleInit {
   }
 
   async indexLorebook(lorebook: Lorebook): Promise<boolean> {
+    if (!this.lancedb.isAvailable()) return false;
     try {
       const rows = await this.embeddings.buildEntryRows(
         lorebook.id,
@@ -92,6 +95,9 @@ export class LoreIndexService implements OnModuleInit {
   }
 
   async reindexAll(): Promise<{ lorebooks: number; entries: number }> {
+    if (!this.lancedb.isAvailable()) {
+      return { lorebooks: 0, entries: 0 };
+    }
     const list = await this.lorebooks.findAll();
     const allRows: LoreEntryRow[] = [];
     const failedIds: string[] = [];

@@ -173,7 +173,7 @@ export class LoreRetrievalService {
       });
     }
 
-    if (query) {
+    if (query && this.lancedb.isAvailable()) {
       try {
         const vector = await this.embeddings.embedQuery(query);
         const hits = await this.lancedb.search({

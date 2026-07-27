@@ -7,7 +7,7 @@ import {
   OnModuleInit,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import * as lancedb from "@lancedb/lancedb";
+import type { Connection, Table } from "@lancedb/lancedb";
 import type { LorebookEntry } from "@ai-hub/shared";
 
 export const LORE_ENTRIES_TABLE = "lore_entries";
@@ -43,6 +43,8 @@ export type ChatMemorySearchHit = ChatMessageRow & {
   _distance?: number;
 };
 
+type LanceDbModule = typeof import("@lancedb/lancedb");
+
 export function loreEntryUid(entry: LorebookEntry, index: number): string {
   if (typeof entry.id === "number" && Number.isFinite(entry.id)) {
     return String(entry.id);
@@ -74,11 +76,18 @@ export function chatMessageRowId(chatId: string, messageId: string): string {
 @Injectable()
 export class LancedbService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LancedbService.name);
-  private db: lancedb.Connection | null = null;
-  private loreTable: lancedb.Table | null = null;
-  private chatTable: lancedb.Table | null = null;
+  private available = false;
+  private connectAttempted = false;
+  private lance: LanceDbModule | null = null;
+  private db: Connection | null = null;
+  private loreTable: Table | null = null;
+  private chatTable: Table | null = null;
 
   constructor(private readonly config: ConfigService) {}
+
+  isAvailable(): boolean {
+    return this.available;
+  }
 
   async onModuleInit() {
     await this.connect();
@@ -88,6 +97,9 @@ export class LancedbService implements OnModuleInit, OnModuleDestroy {
     this.loreTable = null;
     this.chatTable = null;
     this.db = null;
+    this.lance = null;
+    this.available = false;
+    this.connectAttempted = false;
   }
 
   private resolvePath(): string {
@@ -100,48 +112,70 @@ export class LancedbService implements OnModuleInit, OnModuleDestroy {
     return path.resolve(__dirname, "../../../../data/lancedb");
   }
 
-  async connect(): Promise<lancedb.Connection> {
+  private markUnavailable(reason: string) {
+    this.available = false;
+    this.db = null;
+    this.loreTable = null;
+    this.chatTable = null;
+    this.lance = null;
+    this.logger.warn(
+      `LanceDB unavailable (${reason}). Vector lore/memory disabled; keyword and constant lore still work.`,
+    );
+  }
+
+  async connect(): Promise<Connection | null> {
     if (this.db) return this.db;
-    const uri = this.resolvePath();
-    this.db = await lancedb.connect(uri);
-    this.logger.log(`LanceDB connected at ${uri}`);
+    if (this.connectAttempted && !this.available) return null;
+    this.connectAttempted = true;
+
     try {
-      this.loreTable = await this.db.openTable(LORE_ENTRIES_TABLE);
-      const count = await this.loreTable.countRows();
-      this.logger.log(`Opened ${LORE_ENTRIES_TABLE} (${count} rows)`);
-    } catch {
-      this.loreTable = null;
+      if (!this.lance) {
+        this.lance = await import("@lancedb/lancedb");
+      }
+      const uri = this.resolvePath();
+      this.db = await this.lance.connect(uri);
+      this.available = true;
+      this.logger.log(`LanceDB connected at ${uri}`);
+      try {
+        this.loreTable = await this.db.openTable(LORE_ENTRIES_TABLE);
+        const count = await this.loreTable.countRows();
+        this.logger.log(`Opened ${LORE_ENTRIES_TABLE} (${count} rows)`);
+      } catch {
+        this.loreTable = null;
+      }
+      try {
+        this.chatTable = await this.db.openTable(CHAT_MESSAGES_TABLE);
+        const count = await this.chatTable.countRows();
+        this.logger.log(`Opened ${CHAT_MESSAGES_TABLE} (${count} rows)`);
+      } catch {
+        this.chatTable = null;
+      }
+      return this.db;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.markUnavailable(message);
+      return null;
     }
-    try {
-      this.chatTable = await this.db.openTable(CHAT_MESSAGES_TABLE);
-      const count = await this.chatTable.countRows();
-      this.logger.log(`Opened ${CHAT_MESSAGES_TABLE} (${count} rows)`);
-    } catch {
-      this.chatTable = null;
-    }
-    return this.db;
   }
 
   async countRows(): Promise<number> {
-    await this.connect();
+    if (!(await this.connect())) return 0;
     if (!this.loreTable) return 0;
     return this.loreTable.countRows();
   }
 
   async countChatRows(chatId?: string): Promise<number> {
-    await this.connect();
+    if (!(await this.connect())) return 0;
     if (!this.chatTable) return 0;
     if (!chatId) return this.chatTable.countRows();
     const safe = chatId.replace(/'/g, "''");
     return this.chatTable.countRows(`chat_id = '${safe}'`);
   }
 
-  private async ensureLoreTable(
-    sampleVector: number[],
-  ): Promise<lancedb.Table> {
-    await this.connect();
+  private async ensureLoreTable(sampleVector: number[]): Promise<Table | null> {
+    if (!(await this.connect())) return null;
     if (this.loreTable) return this.loreTable;
-    if (!this.db) throw new Error("LanceDB not connected");
+    if (!this.db) return null;
 
     const placeholder: LoreEntryRow = {
       id: "__init__",
@@ -162,12 +196,10 @@ export class LancedbService implements OnModuleInit, OnModuleDestroy {
     return this.loreTable;
   }
 
-  private async ensureChatTable(
-    sampleVector: number[],
-  ): Promise<lancedb.Table> {
-    await this.connect();
+  private async ensureChatTable(sampleVector: number[]): Promise<Table | null> {
+    if (!(await this.connect())) return null;
     if (this.chatTable) return this.chatTable;
-    if (!this.db) throw new Error("LanceDB not connected");
+    if (!this.db) return null;
 
     const placeholder: ChatMessageRow = {
       id: "__init__",
@@ -189,7 +221,7 @@ export class LancedbService implements OnModuleInit, OnModuleDestroy {
   }
 
   async deleteLorebook(lorebookId: string): Promise<void> {
-    await this.connect();
+    if (!(await this.connect())) return;
     if (!this.loreTable) return;
     const safe = lorebookId.replace(/'/g, "''");
     await this.loreTable.delete(`lorebook_id = '${safe}'`);
@@ -198,6 +230,7 @@ export class LancedbService implements OnModuleInit, OnModuleDestroy {
   async upsertEntries(rows: LoreEntryRow[]): Promise<void> {
     if (rows.length === 0) return;
     const table = await this.ensureLoreTable(rows[0].vector);
+    if (!table) return;
     const lorebookId = rows[0].lorebook_id;
     await this.deleteLorebook(lorebookId);
     if (!this.loreTable) this.loreTable = table;
@@ -206,15 +239,14 @@ export class LancedbService implements OnModuleInit, OnModuleDestroy {
 
   async replaceAll(rows: LoreEntryRow[]): Promise<void> {
     if (rows.length === 0) {
-      await this.connect();
+      if (!(await this.connect())) return;
       if (this.loreTable && this.db) {
         await this.db.dropTable(LORE_ENTRIES_TABLE);
         this.loreTable = null;
       }
       return;
     }
-    await this.connect();
-    if (!this.db) throw new Error("LanceDB not connected");
+    if (!(await this.connect()) || !this.db) return;
     this.loreTable = await this.db.createTable(LORE_ENTRIES_TABLE, rows, {
       mode: "overwrite",
     });
@@ -226,7 +258,7 @@ export class LancedbService implements OnModuleInit, OnModuleDestroy {
     topK: number;
     enabledOnly?: boolean;
   }): Promise<LoreSearchHit[]> {
-    await this.connect();
+    if (!(await this.connect())) return [];
     if (!this.loreTable || input.lorebookIds.length === 0 || input.topK <= 0) {
       return [];
     }
@@ -249,14 +281,14 @@ export class LancedbService implements OnModuleInit, OnModuleDestroy {
   }
 
   async deleteChatMessages(chatId: string): Promise<void> {
-    await this.connect();
+    if (!(await this.connect())) return;
     if (!this.chatTable) return;
     const safe = chatId.replace(/'/g, "''");
     await this.chatTable.delete(`chat_id = '${safe}'`);
   }
 
   async deleteChatMessage(chatId: string, messageId: string): Promise<void> {
-    await this.connect();
+    if (!(await this.connect())) return;
     if (!this.chatTable) return;
     const id = chatMessageRowId(chatId, messageId).replace(/'/g, "''");
     await this.chatTable.delete(`id = '${id}'`);
@@ -265,6 +297,7 @@ export class LancedbService implements OnModuleInit, OnModuleDestroy {
   async upsertChatMessages(rows: ChatMessageRow[]): Promise<void> {
     if (rows.length === 0) return;
     const table = await this.ensureChatTable(rows[0].vector);
+    if (!table) return;
     if (!this.chatTable) this.chatTable = table;
     for (const row of rows) {
       const safe = row.id.replace(/'/g, "''");
@@ -280,6 +313,7 @@ export class LancedbService implements OnModuleInit, OnModuleDestroy {
     await this.deleteChatMessages(chatId);
     if (rows.length === 0) return;
     const table = await this.ensureChatTable(rows[0].vector);
+    if (!table) return;
     if (!this.chatTable) this.chatTable = table;
     await this.chatTable.add(rows);
   }
@@ -290,7 +324,7 @@ export class LancedbService implements OnModuleInit, OnModuleDestroy {
     topK: number;
     excludeMessageIds?: string[];
   }): Promise<ChatMemorySearchHit[]> {
-    await this.connect();
+    if (!(await this.connect())) return [];
     if (!this.chatTable || input.topK <= 0) return [];
 
     const safeChat = input.chatId.replace(/'/g, "''");
