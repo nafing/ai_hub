@@ -98,8 +98,7 @@ export const DEFAULT_AGENTS: AgentDefinition[] = [
     "default_prompt_template": "Generate 2-4 short in-character choices the player could send next.\nEach choice must fit the current scene, the player persona, relationships, goals, danger, and emotional state. Write choices in first person as natural action/dialogue, ready to send as the player's message.\nMake the options meaningfully different: e.g. bold, cautious, clever, vulnerable, confrontational, investigative, or plot-advancing. Include at least one choice that moves the scene forward and one that explores the current moment.\nKeep each text 1-2 sentences. Do not include OOC notes, instructions, meta-commentary, probabilities, consequences, or UI text. If <previous_cyoa_choices> is provided, do not repeat or lightly rephrase them.\nReturn only valid JSON:\n{\n  \"choices\": [\n    { \"label\": \"short display label, 3-6 words\", \"text\": \"full first-person action/dialogue to send\" }\n  ]\n}",
     "default_settings": {},
     "mode_allowlist": [
-      "roleplay",
-      "visual_novel"
+      "roleplay"
     ],
     "result_type": null,
     "default_inject_as_section": false,
@@ -208,8 +207,7 @@ export const DEFAULT_AGENTS: AgentDefinition[] = [
       "useChatActiveLorebooks": true
     },
     "mode_allowlist": [
-      "roleplay",
-      "visual_novel"
+      "roleplay"
     ],
     "result_type": null,
     "default_inject_as_section": false,
@@ -232,8 +230,7 @@ export const DEFAULT_AGENTS: AgentDefinition[] = [
       "useChatActiveLorebooks": true
     },
     "mode_allowlist": [
-      "roleplay",
-      "visual_novel"
+      "roleplay"
     ],
     "result_type": null,
     "default_inject_as_section": false,
@@ -245,7 +242,7 @@ export const DEFAULT_AGENTS: AgentDefinition[] = [
   {
     "slug": "lorebook-keeper",
     "name": "Lorebook Keeper",
-    "description": "Creates and updates durable chat lorebook entries from important story facts, characters, places, and world changes. Add the Agent in Chat Settings → Agents → Misc Agents/Lorebook Keeper for Roleplay and Game modes.",
+    "description": "Creates and updates durable chat lorebook entries from important story facts, characters, places, and world changes. Add the Agent in Chat Settings → Agents → Misc Agents/Lorebook Keeper for Roleplay mode.",
     "author": "Pasta Devs",
     "phase": "post_processing",
     "category": "misc",
@@ -253,35 +250,12 @@ export const DEFAULT_AGENTS: AgentDefinition[] = [
     "default_tools": [
       "search_lorebook"
     ],
-    "default_prompt_template": "You are Lorebook Keeper for chat/roleplay continuity. Record only durable facts from the latest assistant response that will help future generations remember the world, characters, factions, locations, items, events, powers, relationships, or reusable history.\nSkip trivial momentary actions, temporary moods, ordinary scene beats, and facts already captured by <chat_summary>. Check <existing_entries> first: update a matching entry instead of creating duplicates. Never modify locked entries.\nFor creates, write concise standalone content and useful activation keys. For updates, return only atomic newFacts to append; do not rewrite whole entries unless an existing entry is empty or malformed. If nothing durable changed, return {\"updates\":[]}.\nThis is not the Game Mode session-end keeper. Game Mode uses separate post-session instructions.\nReturn only valid JSON:\n{\n  \"updates\": [\n    {\n      \"action\": \"create|update\",\n      \"entryName\": \"name, exact existing name when updating\",\n      \"content\": \"full content for creates, or only for replacing an empty/malformed entry\",\n      \"newFacts\": [\"atomic durable fact to append on update\"],\n      \"keys\": [\"activation keyword\"],\n      \"tag\": \"character|location|item|faction|event|lore\",\n      \"reason\": \"why this should be recorded\"\n    }\n  ]\n}",
+    "default_prompt_template": "You are Lorebook Keeper for chat/roleplay continuity. Record only durable facts from the latest assistant response that will help future generations remember the world, characters, factions, locations, items, events, powers, relationships, or reusable history.\nSkip trivial momentary actions, temporary moods, ordinary scene beats, and facts already captured by <chat_summary>. Check <existing_entries> first: update a matching entry instead of creating duplicates. Never modify locked entries.\nFor creates, write concise standalone content and useful activation keys. For updates, return only atomic newFacts to append; do not rewrite whole entries unless an existing entry is empty or malformed. If nothing durable changed, return {\"updates\":[]}.\nReturn only valid JSON:\n{\n  \"updates\": [\n    {\n      \"action\": \"create|update\",\n      \"entryName\": \"name, exact existing name when updating\",\n      \"content\": \"full content for creates, or only for replacing an empty/malformed entry\",\n      \"newFacts\": [\"atomic durable fact to append on update\"],\n      \"keys\": [\"activation keyword\"],\n      \"tag\": \"character|location|item|faction|event|lore\",\n      \"reason\": \"why this should be recorded\"\n    }\n  ]\n}",
     "default_settings": {},
     "mode_allowlist": [],
     "result_type": null,
     "default_inject_as_section": false,
     "run_interval": 8,
-    "prompt_templates": [],
-    "runtime_disabled": false,
-    "execution": "llm"
-  },
-  {
-    "slug": "character-dm",
-    "name": "Character DM",
-    "description": "After each main reply, decides whether cast members should start or continue private side DMs with the player. Requires Connected chats → Allow character DMs. Add in Chat Settings → Agents → Misc Agents.",
-    "author": "Pasta Devs",
-    "phase": "post_processing",
-    "category": "misc",
-    "enabled_by_default": false,
-    "default_tools": [],
-    "default_prompt_template": "You are Character DM, a post-processing agent for roleplay.\nAfter the latest assistant message, decide whether any cast members should open or continue a private side conversation (DM) with {{user}}.\nOnly propose DMs when it fits the story: secrets, private reactions, flirtation, plotting, check-ins, or off-screen messages. Do not open a DM every turn. Prefer 0 or 1 DM; never more than 2.\nUse exact characterId values from <character_cards>. Do not invent IDs. Skip characters who have no reason to message privately.\nReturn only valid JSON:\n{\n  \"dms\": [\n    {\n      \"characterId\": \"exact character id\",\n      \"reason\": \"why this private chat happens now\",\n      \"openingMessage\": \"optional short player-side seed (1–2 sentences) to send into the DM before the character replies; empty string if the character should speak first\"\n    }\n  ]\n}\nIf none, return {\"dms\":[]}.",
-    "default_settings": {
-      "maxDmsPerTurn": 2
-    },
-    "mode_allowlist": [
-      "roleplay"
-    ],
-    "result_type": null,
-    "default_inject_as_section": false,
-    "run_interval": null,
     "prompt_templates": [],
     "runtime_disabled": false,
     "execution": "llm"

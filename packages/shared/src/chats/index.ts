@@ -8,7 +8,41 @@ export type {
   ChatAgentSettingsMap,
   GroupChatMode,
   GroupResponseOrder,
+  RoleplayDmSource,
 } from "./types";
+export {
+  CHAT_SUMMARY_OUTPUT_TOKENS,
+  DEFAULT_SUMMARY_RUN_INTERVAL,
+  DEFAULT_SUMMARY_CONTEXT_SIZE,
+  estimateChatSummaryTokens,
+  normalizeChatSummaryEntries,
+  compileChatSummaryEntries,
+  clampSummaryRunInterval,
+  clampSummaryContextSize,
+  clampSummaryMaxTokens,
+  roleplaySummaryEnabled,
+  SUMMARY_TAIL_MESSAGES,
+  normalizeSummaryTailMessages,
+  isMessageHiddenFromPrompt,
+  computeSummaryHideIds,
+} from "./summary";
+export type {
+  ChatSummaryEntry,
+  GenerateChatSummaryInput,
+  SummaryEntriesPatchBody,
+} from "./summary";
+export type {
+  DaySummaryEntry,
+  WeekSummaryEntry,
+  ConversationSummaryBackfillInput,
+  ConversationSummaryBackfillResult,
+  ConversationSummariesPatchBody,
+} from "./conversation-summary";
+export {
+  weekRangeLabel,
+  normalizeDaySummaries,
+  normalizeWeekSummaries,
+} from "./conversation-summary";
 export {
   CHAT_MODES,
   CHAT_MODE_LABELS,
@@ -27,21 +61,89 @@ export type {
   ChatStreamEvent,
   PeekPromptResult,
   PeekPromptLoreHit,
-  PeekPromptMemoryHit,
 } from "./api";
 export {
   defaultChatSettings,
   createChatMessage,
   primaryCharacterId,
   DEFAULT_CHAT_HISTORY_DEPTH,
-  DEFAULT_CHAT_MEMORY_TOP_K,
-  DEFAULT_CHAT_MEMORY_TOKEN_BUDGET,
 } from "./defaults";
+export {
+  normalizeInactiveCharacterIds,
+  activeCharacterIds,
+  isCharacterInactiveInChat,
+} from "./active-characters";
+export {
+  CONVERSATION_PRESENCE_STATUSES,
+  CONVERSATION_SCHEDULE_DAYS,
+  CONVERSATION_COMMAND_KEYS,
+  toConversationScheduleWallClockDate,
+  getCurrentStatus,
+  getActiveStatusOverride,
+  getEffectiveCurrentStatus,
+  dailyCapFromTalkativeness,
+  dailyCapForCharacter,
+  busyDelayMsForStatus,
+  inactivityThresholdMinutes,
+  normalizeWeekSchedule,
+  normalizeCharacterSchedules,
+  normalizeStatusOverrides,
+  normalizeAutonomousDailyBudget,
+  emptyWeekSchedule,
+  filterOnlineCharacterIds,
+  type ConversationPresenceStatus,
+  type ConversationStatusOverride,
+  type ConversationMessageIntent,
+  type ScheduleBlock,
+  type DaySchedule,
+  type WeekSchedule,
+  type CharacterSchedules,
+  type AutonomousDailyBudget,
+  type CurrentConversationStatus,
+  type ConversationCommandKey,
+} from "./conversation-presence";
+export {
+  parseConversationCommands,
+  filterEnabledConversationCommands,
+  buildConversationCommandsReminder,
+  buildAboutMePromptBlock,
+  isConversationCommandEnabled,
+  type ConversationCommand,
+} from "./conversation-commands";
+export {
+  buildAwarenessBlock,
+  buildConnectedParentChatBlock,
+  recallLexicalMemories,
+} from "./conversation-awareness";
+export {
+  parseDirectMessageCommands,
+  buildRoleplayDmCommandReminder,
+  resolveRoleplayDmTarget,
+  formatUnresolvedRoleplayDmFallback,
+  replaceRoleplayDmCommandText,
+  type DirectMessageCommand,
+} from "./roleplay-dm";
+export {
+  buildGroupChatRuntimeInstructions,
+  buildConversationGroupOutputFormat,
+  groupSpeakerTagsEnabled,
+  shouldPrefixGroupHistorySpeakers,
+  groupHistoryUsesSpeakerPrefix,
+  isGroupChat as isGroupChatSettings,
+} from "./group-prompt";
+export {
+  parseGroupedSpeakerSegments,
+  normalizeTextForMatch,
+  type GroupedSegment,
+  type SpeakerSegment,
+} from "./speaker-segments";
 export { activeMessageText, formatChatHistoryMarker } from "./history";
 export {
   normalizeChatMessages,
   visibleChatMessages,
   visibleChatMessagesThrough,
+  promptVisibleChatMessages,
+  promptVisibleChatMessagesThrough,
   ancestorChatMessages,
   branchParentOf,
   chatMessageSubtreeIds,

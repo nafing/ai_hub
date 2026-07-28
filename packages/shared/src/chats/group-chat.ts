@@ -1,4 +1,5 @@
 import type { Character } from "../characters/types";
+import { activeCharacterIds } from "./active-characters";
 import { characterTalkativeness } from "../characters/talkativeness";
 import { activeMessageText } from "./history";
 import { parseSlashCommand } from "./slash-commands";
@@ -102,7 +103,7 @@ export function resolveSpeakerQueue(input: {
   forCharacterId?: string | null;
 }): SpeakerQueueResult {
   const { settings, characters, messages, userMessage, forCharacterId } = input;
-  const characterIds = settings.character_ids.filter(Boolean);
+  const characterIds = activeCharacterIds(settings);
   const characterIdSet = new Set(characters.map((c) => c.id));
 
   if (forCharacterId) {

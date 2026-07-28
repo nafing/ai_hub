@@ -11,6 +11,13 @@
   min-width: 0;
 }
 
+.twoCol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-md);
+  min-width: 0;
+}
+
 .field {
   display: flex;
   flex-direction: column;

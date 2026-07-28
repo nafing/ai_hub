@@ -9,6 +9,7 @@ export function defaultPersona(
     name: "",
     description: "",
     personality: "",
+    about_me: "",
     notes: "",
     is_default: false,
     ...overrides,
@@ -24,6 +25,7 @@ export function normalizePersona(
       typeof input.description === "string" ? input.description : "",
     personality:
       typeof input.personality === "string" ? input.personality : "",
+    about_me: typeof input.about_me === "string" ? input.about_me : "",
     notes: typeof input.notes === "string" ? input.notes : "",
     is_default: Boolean(input.is_default),
   });
@@ -37,6 +39,7 @@ export function toPersonaExport(
     name: persona.name,
     description: persona.description,
     personality: persona.personality,
+    about_me: persona.about_me,
     notes: persona.notes,
     is_default: false,
   };

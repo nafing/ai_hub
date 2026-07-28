@@ -14,8 +14,14 @@ import type {
   Chat,
   ChatListItem,
   ChatStreamEvent,
+  ConversationSummariesPatchBody,
+  ConversationSummaryBackfillInput,
+  GenerateChatSummaryInput,
+  SummaryEntriesPatchBody,
 } from "@ai-hub/shared";
+import { ChatSummaryService } from "./chat-summary.service";
 import { ChatsService } from "./chats.service";
+import { ConversationSummaryService } from "./conversation-summary.service";
 import { CreateChatDto } from "./dto/create-chat.dto";
 import { CreateChatMessageDto } from "./dto/create-chat-message.dto";
 import { GenerateChatDto } from "./dto/generate-chat.dto";
@@ -26,7 +32,11 @@ import { AgentProposalActionDto } from "./dto/agent-proposal.dto";
 
 @Controller("chats")
 export class ChatsController {
-  constructor(private readonly chatsService: ChatsService) {}
+  constructor(
+    private readonly chatsService: ChatsService,
+    private readonly chatSummaryService: ChatSummaryService,
+    private readonly conversationSummaryService: ConversationSummaryService,
+  ) {}
 
   @Get()
   findAll(): Promise<ChatListItem[]> {
@@ -134,6 +144,38 @@ export class ChatsController {
     @Body() body: AgentProposalActionDto,
   ): Promise<Chat> {
     return this.chatsService.dismissAgentProposal(id, body);
+  }
+
+  @Post(":id/generate-summary")
+  generateSummary(
+    @Param("id") id: string,
+    @Body() body: GenerateChatSummaryInput,
+  ): Promise<Chat> {
+    return this.chatSummaryService.generateSummary(id, body);
+  }
+
+  @Patch(":id/summary-entries")
+  patchSummaryEntries(
+    @Param("id") id: string,
+    @Body() body: SummaryEntriesPatchBody,
+  ): Promise<Chat> {
+    return this.chatSummaryService.patchSummaryEntries(id, body);
+  }
+
+  @Patch(":id/summaries")
+  patchConversationSummaries(
+    @Param("id") id: string,
+    @Body() body: ConversationSummariesPatchBody,
+  ): Promise<Chat> {
+    return this.conversationSummaryService.patchSummaries(id, body);
+  }
+
+  @Post(":id/backfill-summaries")
+  backfillConversationSummaries(
+    @Param("id") id: string,
+    @Body() body: ConversationSummaryBackfillInput,
+  ) {
+    return this.conversationSummaryService.backfillSummaries(id, body);
   }
 
   private async stream(

@@ -1,0 +1,57 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.blocks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-height: min(50vh, 24rem);
+  overflow: auto;
+}
+
+.block {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) minmax(8rem, 1.4fr) minmax(6.5rem, 0.9fr) auto;
+  gap: var(--space-sm);
+  align-items: end;
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-dimmed);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 640px) {
+  .block {
+    grid-template-columns: 1fr;
+  }
+}

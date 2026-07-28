@@ -157,6 +157,16 @@ export function PersonaForm({
                 }
               />
             </Field>
+            <Field
+              label="About Me"
+              hint="Public bio for conversation chats (About Me inject)."
+            >
+              <Textarea
+                className={classes.textarea}
+                value={values.about_me}
+                onChange={(event) => setField("about_me", event.target.value)}
+              />
+            </Field>
           </div>
         </Tabs.Panel>
 

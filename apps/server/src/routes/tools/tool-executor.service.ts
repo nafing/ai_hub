@@ -78,8 +78,9 @@ export class ToolExecutorService {
           return this.rollDice(String(args.notation ?? "1d20"), args);
         case "edit_chat_message":
           return this.editChatMessage(args, ctx);
-        case "trigger_event":
         case "update_about_me":
+          return this.updateAboutMe(args, ctx);
+        case "trigger_event":
         case "web_search":
           return {
             ok: false,
@@ -317,6 +318,66 @@ export class ToolExecutorService {
         reason: typeof args.reason === "string" ? args.reason : undefined,
       },
       patch: { messages },
+    };
+  }
+
+  private updateAboutMe(
+    args: Record<string, unknown>,
+    ctx: ToolExecutionContext,
+  ): ToolExecutionResult {
+    const scope = String(args.scope ?? "chat").trim().toLowerCase();
+    const content = String(args.content ?? "").trim();
+    if (!content) return { ok: false, error: "content is required" };
+    if (scope !== "chat" && scope !== "public") {
+      return { ok: false, error: 'scope must be "chat" or "public"' };
+    }
+
+    const characterIds = ctx.settings.character_ids;
+    const targetId =
+      typeof args.characterId === "string" && args.characterId.trim()
+        ? args.characterId.trim()
+        : characterIds[0] ?? ctx.settings.persona_id;
+    if (!targetId) {
+      return { ok: false, error: "No character or persona target available" };
+    }
+
+    const existing =
+      ctx.agentState.__about_me_overrides &&
+      typeof ctx.agentState.__about_me_overrides === "object" &&
+      !Array.isArray(ctx.agentState.__about_me_overrides)
+        ? (ctx.agentState.__about_me_overrides as Record<string, string>)
+        : {};
+
+    const agentState = {
+      ...ctx.agentState,
+      __about_me_overrides: {
+        ...existing,
+        [targetId]: content,
+      },
+      ...(scope === "public"
+        ? {
+            __about_me_public_proposals: {
+              ...((ctx.agentState.__about_me_public_proposals as
+                | Record<string, string>
+                | undefined) ?? {}),
+              [targetId]: content,
+            },
+          }
+        : {}),
+    };
+
+    return {
+      ok: true,
+      result: {
+        scope,
+        targetId,
+        content,
+        note:
+          scope === "public"
+            ? "Stored as chat override and public proposal (apply on character card manually if needed)"
+            : "Stored as chat-scoped About Me override",
+      },
+      patch: { agentState },
     };
   }
 }

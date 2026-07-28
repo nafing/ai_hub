@@ -22,6 +22,24 @@ export class ChatEntity {
   summary!: string;
 
   @Column("simple-json")
+  summary_entries!: import("@ai-hub/shared").ChatSummaryEntry[];
+
+  @Column("text", { nullable: true })
+  last_automatic_summary_message_id!: string | null;
+
+  @Column("simple-json", { default: {} })
+  day_summaries!: Record<string, import("@ai-hub/shared").DaySummaryEntry>;
+
+  @Column("simple-json", { default: {} })
+  week_summaries!: Record<string, import("@ai-hub/shared").WeekSummaryEntry>;
+
+  @Column("simple-json", { default: { days: {}, weeks: {} } })
+  conversation_summary_failures!: {
+    days: Record<string, unknown>;
+    weeks: Record<string, unknown>;
+  };
+
+  @Column("simple-json")
   agent_state!: Record<string, unknown>;
 
   /** Parent chat when this row is a character DM; null for root chats. */

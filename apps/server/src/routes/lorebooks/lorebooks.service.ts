@@ -1,23 +1,15 @@
-import {
-  Inject,
-  Injectable,
-  NotFoundException,
-  forwardRef,
-} from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { randomUUID } from "node:crypto";
 import { Repository } from "typeorm";
 import {
   normalizeLorebook,
   type CreateLorebookInput,
-  type LoreIndexStatus,
   type Lorebook,
   type LorebookListItem,
   type UpdateLorebookInput,
 } from "@ai-hub/shared";
-import { LoreIndexService } from "../../lancedb/lore-index.service";
-import { LoreRetrievalService } from "../../lancedb/lore-retrieval.service";
-import { LancedbService } from "../../lancedb/lancedb.service";
+import { LoreRetrievalService } from "../../lore/lore-retrieval.service";
 import { CharacterEntity } from "../characters/character.entity";
 import { PersonaEntity } from "../personas/persona.entity";
 import { LorebookEntity } from "./lorebook.entity";
@@ -31,10 +23,7 @@ export class LorebooksService {
     private readonly characters: Repository<CharacterEntity>,
     @InjectRepository(PersonaEntity)
     private readonly personas: Repository<PersonaEntity>,
-    @Inject(forwardRef(() => LoreIndexService))
-    private readonly loreIndex: LoreIndexService,
     private readonly loreRetrieval: LoreRetrievalService,
-    private readonly lancedb: LancedbService,
   ) {}
 
   async findAll(): Promise<LorebookListItem[]> {
@@ -59,12 +48,9 @@ export class LorebooksService {
     const entity = this.lorebooks.create({
       id: randomUUID(),
       ...normalized,
-      index_dirty: true,
     });
     const saved = await this.lorebooks.save(entity);
-    const lorebook = this.toLorebook(saved);
-    void this.loreIndex.indexLorebook(lorebook);
-    return lorebook;
+    return this.toLorebook(saved);
   }
 
   async update(id: string, input: UpdateLorebookInput): Promise<Lorebook> {
@@ -103,11 +89,8 @@ export class LorebooksService {
     });
 
     Object.assign(row, merged);
-    row.index_dirty = true;
     const saved = await this.lorebooks.save(row);
-    const lorebook = this.toLorebook(saved);
-    void this.loreIndex.indexLorebook(lorebook);
-    return lorebook;
+    return this.toLorebook(saved);
   }
 
   async remove(id: string): Promise<void> {
@@ -116,7 +99,6 @@ export class LorebooksService {
       throw new NotFoundException(`Lorebook ${id} not found`);
     }
     await this.lorebooks.delete({ id });
-    void this.loreIndex.removeLorebook(id);
   }
 
   /** Drop a character id from every lorebook's `linked_characters`. */
@@ -201,54 +183,12 @@ export class LorebooksService {
 
   async duplicate(id: string): Promise<Lorebook> {
     const source = await this.findOne(id);
-    const { id: _id, index_dirty: _dirty, ...rest } = source;
+    const { id: _id, ...rest } = source;
     return this.create({
       ...rest,
       name: `${source.name || "Lorebook"} (copy)`,
       enabled: false,
     });
-  }
-
-  async reindexAll(): Promise<{ lorebooks: number; entries: number }> {
-    return this.loreIndex.reindexAll();
-  }
-
-  async reindexOne(id: string): Promise<{ ok: boolean }> {
-    const ok = await this.loreIndex.reindexOne(id);
-    return { ok };
-  }
-
-  async setIndexDirty(id: string, dirty: boolean): Promise<void> {
-    const row = await this.lorebooks.findOneBy({ id });
-    if (!row) return;
-    if (row.index_dirty === dirty) return;
-    row.index_dirty = dirty;
-    await this.lorebooks.save(row);
-  }
-
-  async listDirtyIds(): Promise<string[]> {
-    const rows = await this.lorebooks.find({
-      where: { index_dirty: true },
-      select: { id: true },
-    });
-    return rows.map((row) => row.id);
-  }
-
-  async getIndexStatus(): Promise<LoreIndexStatus> {
-    const list = await this.findAll();
-    const dirtyIds = list.filter((item) => item.index_dirty).map((item) => item.id);
-    let indexedRows = 0;
-    try {
-      indexedRows = await this.lancedb.countRows();
-    } catch {
-      indexedRows = 0;
-    }
-    return {
-      indexed_rows: indexedRows,
-      lorebook_count: list.length,
-      dirty_count: dirtyIds.length,
-      dirty_ids: dirtyIds,
-    };
   }
 
   /**
@@ -295,7 +235,6 @@ export class LorebooksService {
         extensions: row.extensions,
         entries: row.entries,
       }),
-      index_dirty: Boolean(row.index_dirty),
     };
   }
 
@@ -313,7 +252,6 @@ export class LorebooksService {
       scan_depth: lorebook.scan_depth,
       token_budget: lorebook.token_budget,
       recursive_scanning: lorebook.recursive_scanning,
-      index_dirty: lorebook.index_dirty,
       entry_count: lorebook.entries.length,
     };
   }

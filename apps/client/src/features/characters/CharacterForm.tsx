@@ -279,6 +279,44 @@ export function CharacterForm({
                 onChange={(event) => setDataField("scenario", event.target.value)}
               />
             </Field>
+            <Field
+              label="About Me"
+              hint="Public bio for conversation chats (About Me inject / update_about_me)."
+            >
+              <Textarea
+                className={classes.textarea}
+                value={values.data.about_me}
+                onChange={(event) =>
+                  setDataField("about_me", event.target.value)
+                }
+              />
+            </Field>
+            <div className={classes.twoCol}>
+              <Field label="Name color" hint="CSS color for speaker labels.">
+                <TextInput
+                  value={values.data.name_color ?? ""}
+                  placeholder="#7aa2ff"
+                  onChange={(event) =>
+                    setDataField(
+                      "name_color",
+                      event.target.value.trim() || null,
+                    )
+                  }
+                />
+              </Field>
+              <Field label="Dialogue color" hint="Optional body tint.">
+                <TextInput
+                  value={values.data.dialogue_color ?? ""}
+                  placeholder="#c8d0e0"
+                  onChange={(event) =>
+                    setDataField(
+                      "dialogue_color",
+                      event.target.value.trim() || null,
+                    )
+                  }
+                />
+              </Field>
+            </div>
             <div className={classes.field}>
               <span className={classes.fieldLabel}>Talkativeness</span>
               <p className={classes.fieldHint}>

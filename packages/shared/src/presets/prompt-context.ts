@@ -19,9 +19,20 @@ function joinBlocks(
 /** Text for the `character_info` marker section. */
 export function formatCharacterInfoMarker(
   character: Pick<Character, "data">,
-  options: { scenarioOverride?: string | null } = {},
+  options: {
+    scenarioOverride?: string | null;
+    /** When true, omit scenario (used for group cast + shared scenario). */
+    omitScenario?: boolean;
+  } = {},
 ): string {
   const { data } = character;
+  if (options.omitScenario) {
+    return joinBlocks([
+      { label: "Name", value: data.name },
+      { label: "Description", value: data.description },
+      { label: "Personality", value: data.personality },
+    ]);
+  }
   const override = options.scenarioOverride?.trim();
   return joinBlocks([
     { label: "Name", value: data.name },
@@ -103,6 +114,12 @@ export type BuildPresetPromptContextOptions = {
    * Extra characters (after the first) also fill `reference_characters`.
    */
   characters?: Array<Pick<Character, "data">> | null;
+  /**
+   * Full group cast when the active prompt character is scoped to one speaker
+   * (individual group mode). Fills {{characters}} / {{group}} and appends other
+   * cast members' cards into `character_info` so the speaker knows they exist.
+   */
+  groupCharacters?: Array<Pick<Character, "data">> | null;
   persona?: Pick<Persona, "name" | "description" | "personality"> | null;
   /** Existing setup-variable values; `user` / `char` from persona/character win. */
   variables?: PresetVariableValues;
@@ -154,6 +171,8 @@ export function buildPresetPromptContext(
       : options.character
         ? [options.character]
         : [];
+  const groupCharacterList =
+    options.groupCharacters?.length ? options.groupCharacters : characterList;
   const primary = characterList[0] ?? null;
   const extras = characterList.slice(1);
 
@@ -164,12 +183,58 @@ export function buildPresetPromptContext(
     if (examples) markers.dialogue_examples = examples;
   }
 
+  const allNames = groupCharacterList
+    .map((character) => character.data.name.trim())
+    .filter(Boolean);
+  if (allNames.length > 0) {
+    variables.characters = allNames.join(", ");
+    const responder = (variables.char as string | undefined)?.trim();
+    const others = responder
+      ? allNames.filter((name) => name !== responder)
+      : allNames.slice(1);
+    if (others.length > 0) variables.group = others.join(", ");
+  }
+
+  const groupScenario = options.scenarioOverride?.trim();
   if (characterList.length === 1 && primary) {
+    const blocks: string[] = [];
     const info = formatCharacterInfoMarker(primary, scenarioOpts);
-    if (info) markers.character_info = info;
+    if (info) blocks.push(info);
+
+    // Individual group turns scope `characters` to the speaker; still inject
+    // the rest of the cast so {{char}} knows who else is present.
+    const others = groupCharacterList.filter((character) => character !== primary);
+    if (others.length > 0) {
+      const otherBlocks = others
+        .map((character) =>
+          formatCharacterInfoMarker(character, { omitScenario: true }),
+        )
+        .filter(Boolean);
+      if (otherBlocks.length > 0) {
+        blocks.push(
+          [
+            "Other cast members (present in this chat — you know they exist; do not speak or narrate as them):",
+            "",
+            otherBlocks.join("\n\n---\n\n"),
+          ].join("\n"),
+        );
+      }
+    }
+
+    if (blocks.length > 0) {
+      markers.character_info = blocks.join("\n\n---\n\n");
+    }
   } else if (characterList.length > 1) {
-    const info = formatReferenceCharactersMarker(characterList, scenarioOpts);
-    if (info) markers.character_info = info;
+    const charOpts = groupScenario ? { omitScenario: true as const } : scenarioOpts;
+    const blocks = characterList
+      .map((character) => formatCharacterInfoMarker(character, charOpts))
+      .filter(Boolean);
+    if (groupScenario) {
+      blocks.push(`Scenario:\n${groupScenario}`);
+    }
+    if (blocks.length > 0) {
+      markers.character_info = blocks.join("\n\n---\n\n");
+    }
   }
 
   const brief = options.generatorBrief?.trim();

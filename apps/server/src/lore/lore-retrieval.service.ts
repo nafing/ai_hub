@@ -1,25 +1,32 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
+import { createHash } from "node:crypto";
+import { Injectable } from "@nestjs/common";
 import {
   activeMessageText,
   type ChatMessage,
   type Lorebook,
   type LorebookEntry,
 } from "@ai-hub/shared";
-import { EmbeddingsService } from "./embeddings.service";
-import {
-  LancedbService,
-  loreEntryUid,
-  type LoreSearchHit,
-} from "./lancedb.service";
 
 export type LoreSearchResultEntry = {
   lorebook_id: string;
   lorebook_name: string;
   entry: LorebookEntry;
-  source: "constant" | "keyword" | "vector";
+  source: "constant" | "keyword";
   score: number;
 };
+
+function loreEntryUid(entry: LorebookEntry, index: number): string {
+  if (typeof entry.id === "number" && Number.isFinite(entry.id)) {
+    return String(entry.id);
+  }
+  const basis = [
+    entry.name ?? "",
+    (entry.keys ?? []).join("|"),
+    entry.content ?? "",
+    String(index),
+  ].join("\0");
+  return createHash("sha1").update(basis).digest("hex").slice(0, 16);
+}
 
 function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil(text.length / 4));
@@ -73,22 +80,8 @@ function buildScanText(
 
 @Injectable()
 export class LoreRetrievalService {
-  private readonly logger = new Logger(LoreRetrievalService.name);
-
-  constructor(
-    private readonly config: ConfigService,
-    private readonly lancedb: LancedbService,
-    private readonly embeddings: EmbeddingsService,
-  ) {}
-
-  vectorTopK(): number {
-    const raw = Number(this.config.get<string>("SERVER_LORE_VECTOR_TOP_K"));
-    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 12;
-  }
-
   /**
-   * Hybrid retrieval: constant + keyword hits + vector neighbors,
-   * trimmed to the strictest token budget across books.
+   * Keyword + constant lore retrieval, trimmed to the strictest token budget.
    */
   async filterLorebooksForPrompt(input: {
     lorebooks: Lorebook[];
@@ -115,7 +108,6 @@ export class LoreRetrievalService {
     const selected = await this.searchEntries({
       lorebooks: books,
       query: queryText,
-      topK: this.vectorTopK(),
     });
 
     const { lorebooks, hits, tokenEstimate } = this.toFilteredLorebooks(
@@ -129,7 +121,6 @@ export class LoreRetrievalService {
   async searchEntries(input: {
     lorebooks: Lorebook[];
     query: string;
-    topK?: number;
     category?: string;
   }): Promise<LoreSearchResultEntry[]> {
     const books = input.lorebooks.filter((book) => {
@@ -139,7 +130,6 @@ export class LoreRetrievalService {
     });
     if (books.length === 0) return [];
 
-    const byId = new Map(books.map((book) => [book.id, book]));
     const query = input.query.trim();
     const results = new Map<string, LoreSearchResultEntry>();
 
@@ -173,32 +163,11 @@ export class LoreRetrievalService {
       });
     }
 
-    if (query && this.lancedb.isAvailable()) {
-      try {
-        const vector = await this.embeddings.embedQuery(query);
-        const hits = await this.lancedb.search({
-          queryVector: vector,
-          lorebookIds: books.map((book) => book.id),
-          topK: input.topK ?? this.vectorTopK(),
-        });
-        this.mergeVectorHits(results, hits, byId);
-      } catch (error) {
-        this.logger.warn(
-          `Vector lore search skipped: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      }
-    }
-
     return [...results.values()].sort((a, b) => {
       const rank = (source: LoreSearchResultEntry["source"]) =>
-        source === "constant" ? 0 : source === "keyword" ? 1 : 2;
+        source === "constant" ? 0 : 1;
       const bySource = rank(a.source) - rank(b.source);
       if (bySource !== 0) return bySource;
-      if (a.source === "vector" && b.source === "vector") {
-        return a.score - b.score;
-      }
       return (a.entry.insertion_order ?? 100) - (b.entry.insertion_order ?? 100);
     });
   }
@@ -213,13 +182,12 @@ export class LoreRetrievalService {
       lorebooks: input.lorebooks,
       query: input.query,
       category: input.category,
-      topK: this.vectorTopK(),
     });
     if (hits.length === 0) {
       return "No relevant lorebook entries found.";
     }
     return hits
-      .slice(0, this.vectorTopK())
+      .slice(0, 12)
       .map((hit, index) => {
         const title =
           hit.entry.name?.trim() ||
@@ -228,30 +196,6 @@ export class LoreRetrievalService {
         return `### ${title} (${hit.lorebook_name}, ${hit.source})\n${hit.entry.content.trim()}`;
       })
       .join("\n\n---\n\n");
-  }
-
-  private mergeVectorHits(
-    results: Map<string, LoreSearchResultEntry>,
-    hits: LoreSearchHit[],
-    byId: Map<string, Lorebook>,
-  ) {
-    for (const hit of hits) {
-      const book = byId.get(hit.lorebook_id);
-      if (!book) continue;
-      const entry = (book.entries ?? []).find((item, index) => {
-        return loreEntryUid(item, index) === hit.entry_uid;
-      });
-      if (!entry || entry.enabled === false) continue;
-      const key = `${hit.lorebook_id}:${hit.entry_uid}`;
-      if (results.has(key)) continue;
-      results.set(key, {
-        lorebook_id: hit.lorebook_id,
-        lorebook_name: book.name,
-        entry,
-        source: "vector",
-        score: typeof hit._distance === "number" ? hit._distance : 99,
-      });
-    }
   }
 
   private toFilteredLorebooks(
@@ -286,7 +230,6 @@ export class LoreRetrievalService {
             entries: (book.entries ?? []).filter((entry) => entry.constant),
           };
         }
-        // Preserve constants even if budget trimmed them earlier.
         const constants = (book.entries ?? []).filter(
           (entry) => entry.constant && entry.enabled !== false,
         );

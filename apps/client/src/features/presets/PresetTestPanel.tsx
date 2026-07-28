@@ -4,6 +4,8 @@ import { IconPlayerPlay } from "@tabler/icons-react";
 import {
   buildPresetPromptContext,
   buildPromptMessages,
+  CHAT_PRESET_CATEGORIES,
+  CHAT_SUMMARY_PRESET_CATEGORIES,
   PRESET_CATEGORY_LABELS,
   substituteVariables,
   type LlmChatMessage,
@@ -39,7 +41,19 @@ type PresetTestPanelProps = {
 };
 
 function isChatCategory(category: PresetCategory): boolean {
-  return category === "roleplay" || category === "conversation";
+  return (CHAT_PRESET_CATEGORIES as readonly PresetCategory[]).includes(
+    category,
+  );
+}
+
+function isChatSummaryCategory(category: PresetCategory): boolean {
+  return (CHAT_SUMMARY_PRESET_CATEGORIES as readonly PresetCategory[]).includes(
+    category,
+  );
+}
+
+function usesChatHistoryMarkers(category: PresetCategory): boolean {
+  return isChatCategory(category) || isChatSummaryCategory(category);
 }
 
 function isGeneratorCategory(category: PresetCategory): boolean {
@@ -251,8 +265,12 @@ export function PresetTestPanel({
           ? referenceCharacters
           : null,
         lorebooks: isChatCategory(category) ? lorebooks : null,
-        chatHistory: isChatCategory(category) ? chatHistory || null : null,
-        chatSummary: isChatCategory(category) ? chatSummary || null : null,
+        chatHistory: usesChatHistoryMarkers(category)
+          ? chatHistory || null
+          : null,
+        chatSummary: usesChatHistoryMarkers(category)
+          ? chatSummary || null
+          : null,
       }),
     [
       category,
@@ -658,7 +676,7 @@ export function PresetTestPanel({
         </Accordion>
       ) : null}
 
-      {isChatCategory(category) ? (
+      {usesChatHistoryMarkers(category) ? (
         <div className={`${classes.grid} ${classes.grid2}`}>
           <Field label="Chat summary" hint="Fills the Chat Summary marker.">
             <Textarea

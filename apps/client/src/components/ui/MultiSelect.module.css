@@ -12,11 +12,15 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: 2.25rem;
-  padding: 0.4rem 0.55rem 0.4rem 0.7rem;
+  height: var(--control-height);
+  margin: 0;
+  padding: 0 0.55rem 0 0.7rem;
   overflow: hidden;
   color: var(--color-text);
   text-align: left;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.25;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
@@ -90,44 +94,6 @@
 .clear:hover {
   color: var(--color-text);
   background: var(--color-surface-hover);
-}
-
-.pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-  margin-top: var(--space-xs);
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  max-width: 100%;
-  padding: 0.15rem 0.35rem 0.15rem 0.55rem;
-  color: var(--color-primary);
-  font-size: 0.75rem;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
-  border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-}
-
-.pillRemove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.1rem;
-  height: 1.1rem;
-  padding: 0;
-  color: inherit;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  cursor: pointer;
-}
-
-.pillRemove:hover {
-  background: color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 
 .dropdown {

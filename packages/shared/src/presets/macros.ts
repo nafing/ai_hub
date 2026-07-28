@@ -53,6 +53,15 @@ export const PRESET_RUNTIME_VARIABLES: readonly PresetMacroEntry[] = [
     description: "Primary character display name.",
   },
   {
+    syntax: "{{characters}}",
+    description: "Comma-separated names of every character in the chat.",
+  },
+  {
+    syntax: "{{group}}",
+    description:
+      "Other cast members besides {{char}} (comma-separated). Empty in solo chats.",
+  },
+  {
     syntax: "{{target_field}}",
     description:
       "What the generator should produce (e.g. all card fields, description, personality).",

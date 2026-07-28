@@ -15,7 +15,15 @@ import {
   type PresetCategory,
   type PresetListItem,
 } from "@ai-hub/shared";
-import { ActionIcon, Button, Modal, notifications } from "@/components/ui";
+import {
+  ActionIcon,
+  Button,
+  Modal,
+  MultiSelect,
+  notifications,
+  Switch,
+  TextInput,
+} from "@/components/ui";
 import { CreatePresetModal } from "@/features/presets/CreatePresetModal";
 import { ImportPresetModal } from "@/features/presets/ImportPresetModal";
 import {
@@ -39,18 +47,52 @@ function RouteComponent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<PresetCategory[]>([]);
+  const [defaultsOnly, setDefaultsOnly] = useState(false);
 
   const { data, isLoading, isError } = usePresets();
   const deleteMutation = useDeletePreset();
   const duplicateMutation = useDuplicatePreset();
   const updateMutation = useUpdatePreset();
 
+  const categoryOptions = useMemo(
+    () =>
+      PRESET_CATEGORIES.map((category) => ({
+        value: category,
+        label: PRESET_CATEGORY_LABELS[category],
+      })),
+    [],
+  );
+
+  const hasActiveFilters =
+    query.trim().length > 0 || categoryFilter.length > 0 || defaultsOnly;
+
+  const filteredPresets = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return (data ?? []).filter((preset) => {
+      if (defaultsOnly && !preset.is_default) return false;
+      if (
+        categoryFilter.length > 0 &&
+        !categoryFilter.includes(preset.category)
+      ) {
+        return false;
+      }
+      if (!normalizedQuery) return true;
+      return (
+        preset.name.toLowerCase().includes(normalizedQuery) ||
+        preset.description.toLowerCase().includes(normalizedQuery) ||
+        preset.author.toLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [categoryFilter, data, defaultsOnly, query]);
+
   const grouped = useMemo(() => {
     const byCategory = new Map<PresetCategory, PresetListItem[]>();
     for (const category of PRESET_CATEGORIES) {
       byCategory.set(category, []);
     }
-    for (const preset of data ?? []) {
+    for (const preset of filteredPresets) {
       const list = byCategory.get(preset.category) ?? [];
       list.push(preset);
       byCategory.set(preset.category, list);
@@ -59,7 +101,13 @@ function RouteComponent() {
       category,
       presets: byCategory.get(category) ?? [],
     })).filter((group) => group.presets.length > 0);
-  }, [data]);
+  }, [filteredPresets]);
+
+  function clearFilters() {
+    setQuery("");
+    setCategoryFilter([]);
+    setDefaultsOnly(false);
+  }
 
   function handleConfirmDelete() {
     if (!deleteTarget) return;
@@ -141,8 +189,51 @@ function RouteComponent() {
             </ActionIcon>
           </div>
         </div>
-        <p className={classes.subtitle}>Manage prompt presets for chats.</p>
+        <p className={classes.subtitle}>
+          Manage prompt presets for chats.
+          {!isLoading && !isError && hasActiveFilters
+            ? ` Showing ${filteredPresets.length} of ${data?.length ?? 0}.`
+            : null}
+        </p>
       </header>
+
+      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
+        <div className={classes.filters}>
+          <TextInput
+            className={classes.searchInput}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Search name, description, author…"
+            aria-label="Search presets"
+          />
+          <MultiSelect
+            className={classes.categoryFilter}
+            searchable
+            clearable
+            data={categoryOptions}
+            value={categoryFilter}
+            onChange={(value) => setCategoryFilter(value as PresetCategory[])}
+            placeholder="All categories"
+            searchPlaceholder="Filter categories…"
+          />
+          <Switch
+            className={classes.defaultsSwitch}
+            checked={defaultsOnly}
+            onChange={setDefaultsOnly}
+            label="Defaults only"
+          />
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="default"
+              className={classes.clearFilters}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className={classes.loading}>
@@ -160,6 +251,24 @@ function RouteComponent() {
         </p>
       ) : null}
 
+      {!isLoading &&
+      !isError &&
+      (data?.length ?? 0) > 0 &&
+      grouped.length === 0 ? (
+        <p className={classes.status}>
+          No presets match your filters.{" "}
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className={classes.clearFiltersLink}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+
       {grouped.map(({ category, presets }) => (
         <section key={category} className={classes.group}>
           <h3 className={classes.groupTitle}>
@@ -169,6 +278,7 @@ function RouteComponent() {
             {presets.map((preset) => (
               <motion.div
                 key={preset.id}
+                className={classes.cardWrap}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.16 }}

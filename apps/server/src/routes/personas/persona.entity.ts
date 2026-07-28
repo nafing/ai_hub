@@ -19,6 +19,9 @@ export class PersonaEntity {
   personality!: string;
 
   @Column("text", { default: "" })
+  about_me!: string;
+
+  @Column("text", { default: "" })
   notes!: string;
 
   @Column("boolean", { default: false })

@@ -108,44 +108,6 @@ export function PeekPromptModal({
               )}
             </section>
 
-            <section className={classes.loreSection}>
-              <div className={classes.loreHeader}>
-                <p className={classes.role}>Chat memory</p>
-                <p className={classes.loreMeta}>
-                  {(result.memory_hits ?? []).length} hit
-                  {(result.memory_hits ?? []).length === 1 ? "" : "s"}
-                  {(result.memory_token_estimate ?? 0) > 0
-                    ? ` · ~${result.memory_token_estimate} tok`
-                    : null}
-                </p>
-              </div>
-              {(result.memory_hits ?? []).length === 0 ? (
-                <p className={classes.loreEmpty}>
-                  No older messages retrieved for this turn.
-                </p>
-              ) : (
-                <ul className={classes.loreList}>
-                  {(result.memory_hits ?? []).map((hit) => (
-                    <li key={hit.message_id} className={classes.loreItem}>
-                      <div className={classes.loreItemTop}>
-                        <span className={classes.loreName}>{hit.role}</span>
-                        <span className={classes.loreSource}>vector</span>
-                      </div>
-                      {hit.preview ? (
-                        <pre className={classes.lorePreview}>
-                          <RuntimeText
-                            as="span"
-                            text={hit.preview}
-                            values={{ char: result.character_name }}
-                          />
-                        </pre>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
             {result.messages.map((message, index) => (
               <div key={`${message.role}-${index}`} className={classes.block}>
                 <p className={classes.role}>{message.role}</p>

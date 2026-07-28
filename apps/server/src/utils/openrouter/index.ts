@@ -14,4 +14,3 @@ export {
   type CompleteWithConnectionOptions,
   type CompleteWithConnectionResult,
 } from "./complete";
-export { embedTexts, type OpenRouterEmbeddingResponse } from "./embeddings";

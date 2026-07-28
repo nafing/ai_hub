@@ -166,10 +166,6 @@ export function MultiSelect({
     }
   }
 
-  function remove(next: string) {
-    onChange(value.filter((v) => v !== next));
-  }
-
   function onTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     if (disabled) return;
     if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
@@ -356,28 +352,6 @@ export function MultiSelect({
           <IconChevronDown size={16} />
         </span>
       </button>
-
-      {value.length > 0 ? (
-        <div className={classes.pills}>
-          {value.map((v) => {
-            const label = data.find((option) => option.value === v)?.label ?? v;
-            return (
-              <span key={v} className={classes.pill}>
-                {label}
-                <button
-                  type="button"
-                  className={classes.pillRemove}
-                  aria-label={`Remove ${label}`}
-                  disabled={disabled}
-                  onClick={() => remove(v)}
-                >
-                  <IconX size={12} />
-                </button>
-              </span>
-            );
-          })}
-        </div>
-      ) : null}
 
       {dropdown}
     </div>

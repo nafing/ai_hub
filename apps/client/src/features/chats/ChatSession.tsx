@@ -11,9 +11,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   activeMessageText,
   executeSlashCommand,
+  activeCharacterIds,
   getSlashCompletions,
   isGroupChat,
   matchSlashCommand,
+  normalizeTextForMatch,
+  parseGroupedSpeakerSegments,
   parseMentions,
   primaryCharacterId,
   visibleChatMessages,
@@ -38,6 +41,7 @@ import {
 } from "./ChatAgentPanel";
 import { ChatMessageBubble } from "./ChatMessageBubble";
 import { PeekPromptModal } from "./PeekPromptModal";
+import { useAutonomousMessaging } from "./useAutonomousMessaging";
 import {
   chatKeys,
   useDeleteChatMessage,
@@ -75,6 +79,11 @@ export function ChatSession({ chat }: ChatSessionProps) {
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
   }, [charactersQuery.data, chat.settings.character_ids]);
 
+  const activeChatCharacters = useMemo(() => {
+    const activeIds = new Set(activeCharacterIds(chat.settings));
+    return chatCharacters.filter((character) => activeIds.has(character.id));
+  }, [chatCharacters, chat.settings]);
+
   const characterNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const character of charactersQuery.data ?? []) {
@@ -90,6 +99,20 @@ export function ChatSession({ chat }: ChatSessionProps) {
     }
     return map;
   }, [charactersQuery.data, apiBase]);
+
+  const characterColorsById = useMemo(() => {
+    const map = new Map<
+      string,
+      { nameColor: string | null; dialogueColor: string | null }
+    >();
+    for (const character of charactersQuery.data ?? []) {
+      map.set(character.id, {
+        nameColor: character.name_color ?? null,
+        dialogueColor: character.dialogue_color ?? null,
+      });
+    }
+    return map;
+  }, [charactersQuery.data]);
 
   const personaAvatar = useMemo(() => {
     const list = personasQuery.data ?? [];
@@ -147,9 +170,52 @@ export function ChatSession({ chat }: ChatSessionProps) {
     return primaryId ? characterAvatarById.get(primaryId) ?? null : null;
   }
 
+  function colorsForCharacterId(characterId: string | null | undefined): {
+    nameColor: string | null;
+    dialogueColor: string | null;
+  } {
+    if (!characterId) {
+      const primaryId = primaryCharacterId(chat.settings);
+      if (!primaryId) return { nameColor: null, dialogueColor: null };
+      return (
+        characterColorsById.get(primaryId) ?? {
+          nameColor: null,
+          dialogueColor: null,
+        }
+      );
+    }
+    return (
+      characterColorsById.get(characterId) ?? {
+        nameColor: null,
+        dialogueColor: null,
+      }
+    );
+  }
+
   const group = isGroupChat(chat.settings);
   const individual = group && chat.settings.group_mode === "individual";
+  const mergedGroup = group && chat.settings.group_mode === "merged";
   const manualOrder = individual && chat.settings.response_order === "manual";
+
+  const knownSpeakerNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const character of chatCharacters) {
+      const name = character.name?.trim();
+      if (name) names.add(normalizeTextForMatch(name));
+    }
+    return names;
+  }, [chatCharacters]);
+
+  function resolveCharacterIdByName(
+    name: string | null | undefined,
+  ): string | null {
+    if (!name?.trim()) return null;
+    const target = normalizeTextForMatch(name);
+    for (const character of chatCharacters) {
+      if (normalizeTextForMatch(character.name) === target) return character.id;
+    }
+    return null;
+  }
 
   const [draft, setDraft] = useState("");
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(
@@ -186,15 +252,16 @@ export function ChatSession({ chat }: ChatSessionProps) {
 
   useEffect(() => {
     const primary = primaryCharacterId(chat.settings);
+    const activeIds = activeCharacterIds(chat.settings);
     if (
       selectedCharacterId &&
-      !chat.settings.character_ids.includes(selectedCharacterId)
+      !activeIds.includes(selectedCharacterId)
     ) {
       setSelectedCharacterId(primary);
     } else if (!selectedCharacterId && primary) {
       setSelectedCharacterId(primary);
     }
-  }, [chat.settings.character_ids, selectedCharacterId, chat.settings]);
+  }, [chat.settings, selectedCharacterId]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -206,39 +273,92 @@ export function ChatSession({ chat }: ChatSessionProps) {
     const branch = regenHideAfterId
       ? visibleChatMessagesThrough(localMessages, regenHideAfterId)
       : visibleChatMessages(localMessages);
-    return branch.map((message, index, arr) => {
-      const depth = arr.length - 1 - index;
+    type DisplayRow = {
+      key: string;
+      message: ChatMessage;
+      displayText: string;
+      segmentSpeaker?: string | null;
+      showMessageActions?: boolean;
+    };
+    const rows: DisplayRow[] = [];
+
+    for (let index = 0; index < branch.length; index++) {
+      const message = branch[index]!;
+      const depth = branch.length - 1 - index;
       const raw = activeMessageText(message);
       const displayText = applyToText(raw, { role: message.role }, depth).text;
-      return { message, displayText };
-    });
-  }, [localMessages, applyToText, regenHideAfterId]);
+
+      if (
+        mergedGroup &&
+        message.role === "assistant" &&
+        displayText.trim()
+      ) {
+        const leadingSpeaker = message.character_id
+          ? characterNameById.get(message.character_id) ?? null
+          : null;
+        const segments = parseGroupedSpeakerSegments(
+          displayText,
+          knownSpeakerNames,
+          leadingSpeaker,
+        );
+        if (segments && segments.length > 0) {
+          segments.forEach((segment, segmentIndex) => {
+            const segmentText = segment.lines.join("\n").trim();
+            if (!segmentText) return;
+            rows.push({
+              key: `${message.id}:seg:${segmentIndex}`,
+              message,
+              displayText: segmentText,
+              segmentSpeaker: segment.speaker,
+              showMessageActions: segmentIndex === segments.length - 1,
+            });
+          });
+          continue;
+        }
+      }
+
+      rows.push({
+        key: message.id,
+        message,
+        displayText,
+        showMessageActions: true,
+      });
+    }
+
+    return rows;
+  }, [
+    localMessages,
+    applyToText,
+    regenHideAfterId,
+    mergedGroup,
+    knownSpeakerNames,
+    characterNameById,
+  ]);
 
   const mentionCharacters = useMemo(() => {
-    // Lightweight stand-ins for parseMentions (needs data.name)
-    return chatCharacters.map((item) => ({
+    return activeChatCharacters.map((item) => ({
       id: item.id,
       data: { name: item.name || "" },
     }));
-  }, [chatCharacters]);
+  }, [activeChatCharacters]);
 
   const characterSelectOptions = useMemo(
     () =>
-      chatCharacters.map((item) => ({
+      activeChatCharacters.map((item) => ({
         value: item.id,
         label: item.name || "Unnamed",
       })),
-    [chatCharacters],
+    [activeChatCharacters],
   );
 
   const mentionSuggestions = useMemo(() => {
     if (mentionFilter === null) return [];
     const q = mentionFilter.toLowerCase();
-    return chatCharacters.filter((item) => {
+    return activeChatCharacters.filter((item) => {
       const name = (item.name || "").toLowerCase();
       return !q || name.includes(q) || name.startsWith(q);
     });
-  }, [chatCharacters, mentionFilter]);
+  }, [activeChatCharacters, mentionFilter]);
 
   const commandSuggestions = useMemo(() => {
     if (commandFilter === null) return [];
@@ -324,12 +444,50 @@ export function ChatSession({ chat }: ChatSessionProps) {
       setAgentStatus(null);
       return;
     }
+    if (event.type === "roleplay_dm") {
+      void queryClient.invalidateQueries({ queryKey: chatKeys.list() });
+      void queryClient.invalidateQueries({
+        queryKey: chatKeys.detail(event.chat_id),
+      });
+      notifications.show({
+        title:
+          event.action === "created"
+            ? `DM with ${event.character_name}`
+            : `Message from ${event.character_name}`,
+        message:
+          event.action === "created"
+            ? `Opened ${event.chat_title}.`
+            : `Posted to ${event.chat_title}.`,
+        color: "blue",
+      });
+      return;
+    }
+    if (event.type === "conversation_command") {
+      void queryClient.invalidateQueries({
+        queryKey: chatKeys.detail(chat.id),
+      });
+      if (event.chat_id) {
+        void queryClient.invalidateQueries({
+          queryKey: chatKeys.detail(event.chat_id),
+        });
+      }
+      notifications.show({
+        title: `Command · ${event.command}`,
+        message: event.detail || "Applied",
+        color: "blue",
+      });
+      return;
+    }
     if (event.type === "error") {
       notifications.show({
         title: "Generation failed",
         message: event.message,
         color: "red",
       });
+      return;
+    }
+    if (event.type === "chat_summary") {
+      queryClient.setQueryData(chatKeys.detail(chat.id), event.chat);
       return;
     }
     if (event.type === "done") {
@@ -398,6 +556,12 @@ export function ChatSession({ chat }: ChatSessionProps) {
     }
   }
 
+  useAutonomousMessaging({
+    chat,
+    streaming,
+    generate: runGenerate,
+  });
+
   async function applySlashActions(actions: SlashCommandAction[]) {
     for (const action of actions) {
       if (action.type === "feedback") {
@@ -465,7 +629,7 @@ export function ChatSession({ chat }: ChatSessionProps) {
         .find((message) => message.role === "assistant");
       const result = await executeSlashCommand(text, {
         mode,
-        characters: chatCharacters.map((item) => ({
+        characters: activeChatCharacters.map((item) => ({
           id: item.id,
           name: item.name || "Unnamed",
         })),
@@ -770,30 +934,70 @@ export function ChatSession({ chat }: ChatSessionProps) {
     <div className={classes.root}>
       <div ref={viewportRef} className={classes.messages}>
         <div className={classes.messageList}>
-          {displayMessages.map(({ message, displayText }) => (
-            <ChatMessageBubble
-              key={message.id}
-              message={message}
-              displayText={displayText}
-              speakerName={speakerNameFor(message)}
-              avatarUrl={avatarFor(message)}
-              macroValues={macroValues}
-              disabled={streaming}
-              onSwipe={
-                message.role === "assistant" || message.role === "user"
-                  ? (swipeId) => handleSwipe(message.id, swipeId)
-                  : undefined
-              }
-              onEdit={(content) => handleEdit(message.id, content)}
-              onRegenerate={
-                message.role === "assistant" || message.role === "user"
-                  ? () => void handleRegenerate(message.id)
-                  : undefined
-              }
-              onPeekPrompt={() => setPeekMessageId(message.id)}
-              onDelete={() => handleDelete(message)}
-            />
-          ))}
+          {displayMessages.map(
+            ({
+              key,
+              message,
+              displayText,
+              segmentSpeaker,
+              showMessageActions = true,
+            }) => {
+              const segmentCharacterId = resolveCharacterIdByName(segmentSpeaker);
+              const resolvedSpeakerName = segmentSpeaker
+                ? segmentSpeaker
+                : speakerNameFor(message);
+              const resolvedAvatar = segmentCharacterId
+                ? characterAvatarById.get(segmentCharacterId) ?? null
+                : avatarFor(message);
+              const colorSourceId =
+                message.role === "user"
+                  ? null
+                  : (segmentCharacterId ?? message.character_id);
+              const colors =
+                message.role === "assistant"
+                  ? colorsForCharacterId(colorSourceId)
+                  : { nameColor: null, dialogueColor: null };
+
+              return (
+                <ChatMessageBubble
+                  key={key}
+                  message={message}
+                  displayText={displayText}
+                  speakerName={resolvedSpeakerName}
+                  nameColor={colors.nameColor}
+                  dialogueColor={colors.dialogueColor}
+                  avatarUrl={resolvedAvatar}
+                  macroValues={macroValues}
+                  disabled={streaming}
+                  onSwipe={
+                    showMessageActions &&
+                    (message.role === "assistant" || message.role === "user")
+                      ? (swipeId) => handleSwipe(message.id, swipeId)
+                      : undefined
+                  }
+                  onEdit={
+                    showMessageActions
+                      ? (content) => handleEdit(message.id, content)
+                      : undefined
+                  }
+                  onRegenerate={
+                    showMessageActions &&
+                    (message.role === "assistant" || message.role === "user")
+                      ? () => void handleRegenerate(message.id)
+                      : undefined
+                  }
+                  onPeekPrompt={
+                    showMessageActions
+                      ? () => setPeekMessageId(message.id)
+                      : undefined
+                  }
+                  onDelete={
+                    showMessageActions ? () => handleDelete(message) : undefined
+                  }
+                />
+              );
+            },
+          )}
 
           {streaming && (streamText || streamThinking) ? (
             <ChatMessageBubble
@@ -810,6 +1014,10 @@ export function ChatSession({ chat }: ChatSessionProps) {
               }}
               displayText={streamText}
               speakerName={streamingSpeakerName}
+              nameColor={colorsForCharacterId(streamingCharacterId).nameColor}
+              dialogueColor={
+                colorsForCharacterId(streamingCharacterId).dialogueColor
+              }
               avatarUrl={
                 streamingCharacterId
                   ? characterAvatarById.get(streamingCharacterId) ?? null

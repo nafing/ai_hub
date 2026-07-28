@@ -6,7 +6,6 @@ import { LorebookForm } from "@/features/lorebooks/LorebookForm";
 import {
   useDeleteLorebook,
   useLorebook,
-  useReindexLorebook,
   useUpdateLorebook,
 } from "@/features/lorebooks/queries";
 import classes from "./index.module.css";
@@ -24,7 +23,6 @@ function RouteComponent() {
   const { data, isLoading, isError } = useLorebook(lorebookId);
   const updateMutation = useUpdateLorebook();
   const deleteMutation = useDeleteLorebook();
-  const reindexMutation = useReindexLorebook();
 
   function handleConfirmDelete() {
     setDeleteOpen(false);
@@ -61,27 +59,6 @@ function RouteComponent() {
     URL.revokeObjectURL(url);
   }
 
-  function handleReindex() {
-    reindexMutation.mutate(lorebookId, {
-      onSuccess: (result) => {
-        notifications.show({
-          title: result.ok ? "Reindexed" : "Reindex incomplete",
-          message: result.ok
-            ? "Vector index updated for this lorebook."
-            : "Indexing failed — check default connection / embedding model.",
-          color: result.ok ? "green" : "red",
-        });
-      },
-      onError: (error) => {
-        notifications.show({
-          title: "Reindex failed",
-          message: error instanceof Error ? error.message : "Unknown error",
-          color: "red",
-        });
-      },
-    });
-  }
-
   if (isLoading) {
     return (
       <div className={classes.loading}>
@@ -94,7 +71,7 @@ function RouteComponent() {
     return <p className={classes.error}>Lorebook not found.</p>;
   }
 
-  const { id, index_dirty: _indexDirty, ...formValues } = data;
+  const { id, ...formValues } = data;
 
   return (
     <div className={classes.page}>
@@ -103,20 +80,9 @@ function RouteComponent() {
           <h2 className={classes.title}>{data.name || "Edit lorebook"}</h2>
           <p className={classes.subtitle}>
             Overview, keyword entries, and extensions.
-            {data.index_dirty
-              ? " Vector index is pending — reindex after saving or use Reindex."
-              : null}
           </p>
         </div>
         <div className={classes.actions}>
-          <Button
-            variant="default"
-            type="button"
-            onClick={handleReindex}
-            disabled={reindexMutation.isPending}
-          >
-            {reindexMutation.isPending ? "Reindexing…" : "Reindex"}
-          </Button>
           <Button variant="default" type="button" onClick={handleExport}>
             Export
           </Button>

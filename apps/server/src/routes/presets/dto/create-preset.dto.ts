@@ -1,3 +1,4 @@
+import { PRESET_CATEGORIES, type PresetCategory } from "@ai-hub/shared";
 import { Type } from "class-transformer";
 import {
   Allow,
@@ -105,19 +106,8 @@ export class CreatePresetDto {
   @IsIn(["xml", "markdown", "none"])
   wrap_format!: "xml" | "markdown" | "none";
 
-  @IsIn([
-    "roleplay",
-    "conversation",
-    "character_generator",
-    "persona_generator",
-    "lorebook_generator",
-  ])
-  category!:
-    | "roleplay"
-    | "conversation"
-    | "character_generator"
-    | "persona_generator"
-    | "lorebook_generator";
+  @IsIn([...PRESET_CATEGORIES])
+  category!: PresetCategory;
 
   @IsBoolean()
   is_default!: boolean;

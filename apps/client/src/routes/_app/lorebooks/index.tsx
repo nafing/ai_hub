@@ -3,7 +3,6 @@ import { motion } from "motion/react";
 import {
   IconCopy,
   IconPlus,
-  IconRefresh,
   IconTrash,
   IconUpload,
 } from "@tabler/icons-react";
@@ -18,9 +17,7 @@ import { ImportLorebookModal } from "@/features/lorebooks/ImportLorebookModal";
 import {
   useDeleteLorebook,
   useDuplicateLorebook,
-  useLoreIndexStatus,
   useLorebooks,
-  useReindexLorebooks,
 } from "@/features/lorebooks/queries";
 import classes from "./index.module.css";
 
@@ -39,10 +36,8 @@ function RouteComponent() {
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   const { data, isLoading, isError } = useLorebooks();
-  const indexStatus = useLoreIndexStatus();
   const deleteMutation = useDeleteLorebook();
   const duplicateMutation = useDuplicateLorebook();
-  const reindexMutation = useReindexLorebooks();
 
   function handleConfirmDelete() {
     if (!deleteTarget) return;
@@ -85,43 +80,12 @@ function RouteComponent() {
     });
   }
 
-  function handleReindex() {
-    reindexMutation.mutate(undefined, {
-      onSuccess: (result) => {
-        notifications.show({
-          title: "Reindexed",
-          message: `${result.entries} entries across ${result.lorebooks} lorebooks.`,
-          color: "green",
-        });
-      },
-      onError: (error) => {
-        notifications.show({
-          title: "Reindex failed",
-          message: error instanceof Error ? error.message : "Unknown error",
-          color: "red",
-        });
-      },
-    });
-  }
-
-  const status = indexStatus.data;
-  const dirtyCount = status?.dirty_count ?? 0;
-
   return (
     <div className={classes.page}>
       <header className={classes.header}>
         <div className={classes.headerRow}>
           <h2 className={classes.title}>Lorebooks</h2>
           <div className={classes.headerActions}>
-            <ActionIcon
-              type="button"
-              variant="default"
-              aria-label="Reindex lore vectors"
-              disabled={reindexMutation.isPending}
-              onClick={handleReindex}
-            >
-              <IconRefresh size={16} />
-            </ActionIcon>
             <ActionIcon
               type="button"
               variant="default"
@@ -143,15 +107,6 @@ function RouteComponent() {
         <p className={classes.subtitle}>
           Lorebooks. Create, edit, duplicate, or import JSON.
         </p>
-        {status ? (
-          <p className={classes.indexStatus}>
-            Vector index: {status.indexed_rows} rows
-            {dirtyCount > 0
-              ? ` · ${dirtyCount} pending reindex`
-              : " · up to date"}
-            {reindexMutation.isPending ? " · reindexing…" : null}
-          </p>
-        ) : null}
       </header>
 
       {isLoading ? (
@@ -294,9 +249,6 @@ function LorebookCard({
             {lorebook.entry_count}{" "}
             {lorebook.entry_count === 1 ? "entry" : "entries"}
           </span>
-          {lorebook.index_dirty ? (
-            <span className={classes.badgeWarn}>index pending</span>
-          ) : null}
           {!lorebook.enabled ? (
             <span className={classes.badgeMuted}>disabled</span>
           ) : null}

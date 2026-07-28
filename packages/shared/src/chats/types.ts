@@ -1,4 +1,16 @@
 import type { PresetVariableValues } from "../presets/build-prompt";
+import type { ChatSummaryEntry } from "./summary/types";
+import type {
+  ConversationSummaryFailures,
+  DaySummaryEntry,
+  WeekSummaryEntry,
+} from "./conversation-summary/types";
+import type {
+  AutonomousDailyBudget,
+  CharacterSchedules,
+  ConversationCommandKey,
+  ConversationStatusOverride,
+} from "./conversation-presence";
 
 export const CHAT_MODES = ["roleplay", "conversation"] as const;
 
@@ -10,6 +22,12 @@ export const CHAT_MODE_LABELS: Record<ChatMode, string> = {
 };
 
 export type ChatMessageRole = "user" | "assistant" | "system";
+
+export type RoleplayDmSource = {
+  source_chat_id: string;
+  source_user_message_id: string;
+  target_character_id?: string;
+};
 
 /**
  * Persisted chat turn. Active text is `swipes[swipe_id]`.
@@ -32,6 +50,19 @@ export type ChatMessage = {
   /** Which swipe of `parent_id` this message was created under. */
   parent_swipe_id: number | null;
   created_at: string;
+  /**
+   * When this message was mirrored from a roleplay chat into a DM thread
+   * (Marinara-style dedupe metadata).
+   */
+  roleplay_dm_source?: RoleplayDmSource | null;
+  /** When true, excluded from LLM prompt history (summary hide or manual). */
+  hidden_from_prompt?: boolean;
+  /** Conversation message reaction chips. */
+  reactions?: Array<{
+    emoji: string;
+    character_id?: string | null;
+    created_at: string;
+  }>;
 };
 
 export const GROUP_CHAT_MODES = ["merged", "individual"] as const;
@@ -41,7 +72,7 @@ export const GROUP_RESPONSE_ORDERS = ["sequential", "smart", "manual"] as const;
 export type GroupResponseOrder = (typeof GROUP_RESPONSE_ORDERS)[number];
 
 export const GROUP_CHAT_MODE_LABELS: Record<GroupChatMode, string> = {
-  merged: "Merged",
+  merged: "Merged (Narrator)",
   individual: "Individual",
 };
 
@@ -72,6 +103,11 @@ export type ChatSettings = {
    * Required non-empty for roleplay on create.
    */
   character_ids: string[];
+  /**
+   * Group chat members temporarily excluded from prompts and replies.
+   * If every member is listed here, all are treated as active (Marinara fallback).
+   */
+  inactive_character_ids: string[];
   /** null → default persona */
   persona_id: string | null;
   lorebook_ids: string[];
@@ -95,16 +131,36 @@ export type ChatSettings = {
    */
   scenario_override: string;
   /**
-   * When true, older messages are embedded and retrieved into chat_summary.
-   * Recent turns still go into chat_history via history_depth.
+   * Merged group roleplay: wrap dialogue in <speaker="name"> tags (Marinara Color Dialogues).
+   * Conversation group chats enable this automatically.
    */
-  memory_enabled: boolean;
+  group_speaker_tags: boolean;
+  /**
+   * Individual group roleplay: prefix chat history turns with the speaker name.
+   * Marinara default is off.
+   */
+  group_speaker_names_in_history: boolean;
   /** How many recent messages stay in the full chat_history marker. */
   history_depth: number;
-  /** Max vector-retrieved older messages injected as memory. */
-  memory_top_k: number;
-  /** Soft token budget for retrieved memory text. */
-  memory_token_budget: number;
+  /** When true, run rolling summary after enough user turns (roleplay). */
+  automatic_summary_enabled: boolean;
+  /** User messages between automatic summary runs. */
+  summary_run_interval: number;
+  /** Messages included in each summary generation window. */
+  summary_context_size: number;
+  /** Max output tokens for summary LLM calls. */
+  summary_max_tokens: number;
+  /** Optional dedicated connection for summaries; null → chat/default connection. */
+  summary_connection_id: string | null;
+  /** Preset used for rolling roleplay summaries; null → default `chat_summary` preset. */
+  summary_preset_id: string | null;
+  /**
+   * When true, summarized messages are hidden from the prompt except the
+   * most-recent `summary_tail_messages` in each batch.
+   */
+  hide_summarised_messages: boolean;
+  /** Recent messages kept visible when hide_summarised_messages is enabled. */
+  summary_tail_messages: number;
   /**
    * When true, this chat may pull Twatter posts/feeds into prompts / agents.
    */
@@ -117,6 +173,44 @@ export type ChatSettings = {
    * Map of character id → conversation DM chat id spawned from this chat.
    */
   character_dm_chat_ids: Record<string, string>;
+  /** Hour (0–11) when a conversation day rolls over for day summaries. */
+  day_rollover_hour: number;
+  /** Optional IANA timezone for conversation day bucketing. */
+  prompt_timezone: string | null;
+  /** Conversation: characters may message unprompted while the chat is open. */
+  autonomous_messages: boolean;
+  /** Conversation group: characters may reply to each other after autonomous turns. */
+  character_exchanges: boolean;
+  /** Conversation: use weekly schedules for presence / delays. */
+  conversation_schedules_enabled: boolean;
+  /** Per-character week schedules. */
+  character_schedules: CharacterSchedules;
+  /** Alias timezone for presence schedules (falls back to prompt_timezone). */
+  conversation_timezone: string | null;
+  /** Manual presence overrides keyed by character id. */
+  conversation_status_overrides: Record<string, ConversationStatusOverride>;
+  /** Rolled daily autonomous message counters. */
+  autonomous_daily_budget: AutonomousDailyBudget;
+  /** Optional chat-level autonomous daily cap. */
+  autonomous_daily_cap_override: number | null;
+  /** Per-character per-intent cooldown ISO timestamps. */
+  intent_cooldowns: Record<string, Record<string, string>>;
+  /** Inject cross-chat awareness blocks for shared characters. */
+  cross_chat_awareness: boolean;
+  /** Inject About Me bios into conversation prompts. */
+  conversation_about_me_inject: boolean;
+  /** Chat-scoped About Me overrides keyed by character/persona id. */
+  conversation_about_me_overrides: Record<string, string>;
+  /** Master switch for hidden conversation commands. */
+  character_commands: boolean;
+  /** Per-command enable map (missing key = enabled). */
+  conversation_command_toggles: Partial<
+    Record<ConversationCommandKey, boolean>
+  >;
+  /** Vector memory recall for conversation (no-ops without embeddings). */
+  enable_memory_recall: boolean;
+  /** Durable facts recorded via [memory] commands, keyed by character id. */
+  character_memories: Record<string, string[]>;
 };
 
 export type Chat = {
@@ -126,6 +220,15 @@ export type Chat = {
   settings: ChatSettings;
   messages: ChatMessage[];
   summary: string;
+  summary_entries: ChatSummaryEntry[];
+  /** Anchor for automatic summary cadence (last assistant message id). */
+  last_automatic_summary_message_id: string | null;
+  /** Conversation mode: per-day summary blocks keyed DD.MM.YYYY. */
+  day_summaries: Record<string, DaySummaryEntry>;
+  /** Conversation mode: weekly consolidations keyed by Monday DD.MM.YYYY. */
+  week_summaries: Record<string, WeekSummaryEntry>;
+  /** Retry bookkeeping for conversation auto-summaries. */
+  conversation_summary_failures: ConversationSummaryFailures;
   /** Tracker / agent JSON keyed by agent slug */
   agent_state: Record<string, unknown>;
   /** Parent roleplay/group chat when this is a character DM; null for root chats. */

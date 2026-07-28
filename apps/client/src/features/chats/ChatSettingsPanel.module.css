@@ -36,6 +36,13 @@
   text-transform: uppercase;
 }
 
+.summaryHint {
+  margin: 0;
+  color: var(--color-text-dimmed);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
 .input,
 .textarea {
   width: 100%;
@@ -79,6 +86,54 @@
 
 .switch:hover {
   background: var(--color-surface-hover);
+}
+
+.memberList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memberRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: var(--radius-md);
+}
+
+.memberRowInactive {
+  opacity: 0.55;
+}
+
+.memberRowInactive .memberName {
+  text-decoration: line-through;
+}
+
+.memberAvatar,
+.memberAvatarFallback {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.memberAvatarFallback {
+  background: var(--color-surface-hover);
+}
+
+.memberName {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .switch input {

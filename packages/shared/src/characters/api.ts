@@ -26,4 +26,6 @@ export type CharacterListItem = {
   creator: string;
   character_version: string;
   tags: string[];
+  name_color?: string | null;
+  dialogue_color?: string | null;
 };

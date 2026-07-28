@@ -65,6 +65,22 @@ export class CharacterCardDataDto implements CharacterCardData {
   @IsOptional()
   @IsNumber()
   talkativeness!: number;
+
+  @IsOptional()
+  @IsString()
+  about_me!: string;
+
+  @IsOptional()
+  @IsString()
+  name_color!: string | null;
+
+  @IsOptional()
+  @IsString()
+  dialogue_color!: string | null;
+
+  @IsOptional()
+  @IsString()
+  convo_display_name!: string;
 }
 
 export class CreateCharacterDto {

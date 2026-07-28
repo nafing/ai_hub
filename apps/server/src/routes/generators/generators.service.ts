@@ -1,5 +1,7 @@
 import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
 import {
+  CHARACTER_CARD_DIALOGUE_FORMAT_APPEND,
+  characterCardTargetNeedsProseMarkup,
   GENERATOR_CATEGORIES,
   NEEDS_PRESET_VARIABLES_CODE,
   substituteVariables,
@@ -87,14 +89,30 @@ export class GeneratorsService {
       ? substituteVariables(userMessage, input.variables).trim()
       : "";
 
+    const appendMessages: Array<{ role: "user"; content: string }> = [];
+    if (resolvedUserMessage) {
+      appendMessages.push({ role: "user", content: resolvedUserMessage });
+    }
+    if (
+      input.category === "character_generator" &&
+      characterCardTargetNeedsProseMarkup(
+        typeof input.variables?.target_field === "string"
+          ? input.variables.target_field
+          : null,
+      )
+    ) {
+      appendMessages.push({
+        role: "user",
+        content: CHARACTER_CARD_DIALOGUE_FORMAT_APPEND,
+      });
+    }
+
     const result = await completeWithConnectionAndPreset(connection, preset, {
       prompt: {
         variables: input.variables,
         markers: input.markers,
       },
-      appendMessages: resolvedUserMessage
-        ? [{ role: "user", content: resolvedUserMessage }]
-        : undefined,
+      appendMessages: appendMessages.length ? appendMessages : undefined,
     });
 
     return {

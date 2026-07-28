@@ -322,7 +322,7 @@ export function AgentForm({
         </Field>
         <Field
           label="Mode allowlist"
-          hint="Empty = all modes. Examples: roleplay, conversation, visual_novel."
+          hint="Empty = all modes. Examples: roleplay, conversation."
         >
           <TagsInput
             value={values.mode_allowlist ?? []}

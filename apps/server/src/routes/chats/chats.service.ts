@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
+  forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { randomUUID } from "node:crypto";
@@ -10,56 +12,90 @@ import { Repository } from "typeorm";
 import {
   activeMessageText,
   ancestorChatMessages,
+  activeCharacterIds,
   applyRegexScriptsToPromptMessages,
   branchParentOf,
+  buildAboutMePromptBlock,
+  buildAwarenessBlock,
+  buildConnectedParentChatBlock,
   buildPresetPromptContext,
   buildPromptMessages,
   buildCharacterGreetingMessage,
+  buildConversationCommandsReminder,
   createChatMessage,
   defaultChatSettings,
   extractThinking,
   fallbackSpeakerId,
+  filterEnabledConversationCommands,
+  filterOnlineCharacterIds,
   formatChatHistoryMarker,
   formatRecentHistoryForSmart,
   formatSmartCandidate,
+  getEffectiveCurrentStatus,
   normalizeChatMessages,
+  parseConversationCommands,
   parseSlashCommand,
   parseSmartSpeakerIds,
   primaryCharacterId,
+  compileChatSummaryEntries,
+  normalizeChatSummaryEntries,
+  normalizeDaySummaries,
+  normalizeWeekSummaries,
+  normalizeConversationSummaryFailures,
+  recallLexicalMemories,
+  roleplaySummaryEnabled,
   removeChatMessageSubtree,
   removeChatMessageSwipe,
+  buildGroupChatRuntimeInstructions,
+  buildConversationGroupOutputFormat,
+  buildRoleplayDmCommandReminder,
+  groupHistoryUsesSpeakerPrefix,
+  parseDirectMessageCommands,
+  resolveRoleplayDmTarget,
+  formatUnresolvedRoleplayDmFallback,
+  replaceRoleplayDmCommandText,
   resolveSpeakerQueue,
   selectedVariableValues,
+  toConversationScheduleWallClockDate,
   unresolvedPresetVariables,
   visibleChatMessages,
+  promptVisibleChatMessages,
+  isMessageHiddenFromPrompt,
+  CONVERSATION_COMMAND_KEYS,
   type Character,
+  type CharacterListItem,
   type Chat,
   type ChatListItem,
   type ChatMessage,
+  type ChatMode,
   type ChatSettings,
   type ChatStreamEvent,
+  type ConversationCommandKey,
+  type ConversationPresenceStatus,
   type CreateChatInput,
   type CreateChatMessageInput,
   type GenerateChatInput,
   type LlmChatMessage,
   type PeekPromptLoreHit,
-  type PeekPromptMemoryHit,
   type PeekPromptResult,
   type SpeakerTurn,
   type UpdateChatInput,
   type UpdateChatMessageInput,
 } from "@ai-hub/shared";
-import { ChatMemoryService } from "../../lancedb/chat-memory.service";
-import { LoreRetrievalService } from "../../lancedb/lore-retrieval.service";
+import { LoreRetrievalService } from "../../lore/lore-retrieval.service";
 import { completeWithConnection } from "../../utils/openrouter";
 import { AgentRunnerService } from "../agents/agent-runner.service";
 import { CharactersService } from "../characters/characters.service";
 import { ConnectionsService } from "../connections/connections.service";
+import { ConversationAutonomousService } from "../conversation/conversation-autonomous.service";
 import { LorebooksService } from "../lorebooks/lorebooks.service";
 import { PersonasService } from "../personas/personas.service";
 import { PresetsService } from "../presets/presets.service";
 import { RegexesService } from "../regexes/regexes.service";
+import { TwatterService } from "../twatter/twatter.service";
 import { ChatEntity } from "./chat.entity";
+import { ChatSummaryService } from "./chat-summary.service";
+import { ConversationSummaryService } from "./conversation-summary.service";
 
 type StreamEmit = (event: ChatStreamEvent) => void;
 type ResolvedConnection = Awaited<ReturnType<ConnectionsService["findOne"]>>;
@@ -78,10 +114,94 @@ export class ChatsService {
     private readonly personas: PersonasService,
     private readonly lorebooks: LorebooksService,
     private readonly loreRetrieval: LoreRetrievalService,
-    private readonly chatMemory: ChatMemoryService,
     private readonly agentRunner: AgentRunnerService,
     private readonly regexes: RegexesService,
+    private readonly twatter: TwatterService,
+    private readonly chatSummary: ChatSummaryService,
+    private readonly conversationSummary: ConversationSummaryService,
+    @Inject(forwardRef(() => ConversationAutonomousService))
+    private readonly conversationAutonomous: ConversationAutonomousService,
   ) {}
+
+  /** Active group members for prompts; optionally include extra ids (e.g. regenerate target). */
+  private async loadPromptCharacters(
+    settings: ChatSettings,
+    includeCharacterIds: string[] = [],
+  ): Promise<Character[]> {
+    const rosterIds = settings.character_ids.filter(Boolean);
+    const promptIds = [
+      ...new Set([
+        ...activeCharacterIds(settings),
+        ...includeCharacterIds.filter((id) => rosterIds.includes(id)),
+      ]),
+    ];
+    const list: Character[] = [];
+    for (const characterId of promptIds) {
+      list.push(await this.characters.findOne(characterId));
+    }
+    return list;
+  }
+
+  /** Merge update_about_me tool overrides from agent_state into settings. */
+  private withAboutMeAgentOverrides(
+    settings: ChatSettings,
+    agentState: Record<string, unknown>,
+  ): ChatSettings {
+    const raw = agentState.__about_me_overrides;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return settings;
+    const overrides: Record<string, string> = {
+      ...settings.conversation_about_me_overrides,
+    };
+    for (const [id, value] of Object.entries(raw)) {
+      if (typeof value === "string" && value.trim()) overrides[id] = value;
+    }
+    return defaultChatSettings({
+      ...settings,
+      conversation_about_me_overrides: overrides,
+    });
+  }
+
+  /** Mark offline schedule members inactive for this generation pass. */
+  private async applyConversationPresenceFilter(
+    settings: ChatSettings,
+  ): Promise<ChatSettings> {
+    const activeIds = activeCharacterIds(settings);
+    if (!activeIds.length) return settings;
+
+    const timezone =
+      settings.conversation_timezone ?? settings.prompt_timezone;
+    const now = new Date();
+    const wall = toConversationScheduleWallClockDate(now, timezone);
+    const statusMap: Record<string, ConversationPresenceStatus> = {};
+
+    for (const characterId of activeIds) {
+      const schedule = settings.conversation_schedules_enabled
+        ? settings.character_schedules[characterId]
+        : undefined;
+      const status = getEffectiveCurrentStatus(
+        schedule,
+        settings.conversation_status_overrides[characterId],
+        now,
+        "free time",
+        wall,
+      );
+      statusMap[characterId] = status.status;
+    }
+
+    const onlineIds = filterOnlineCharacterIds({
+      characterIds: activeIds,
+      statuses: statusMap,
+    });
+    if (onlineIds.length === activeIds.length) return settings;
+
+    const offlineIds = activeIds.filter((id) => !onlineIds.includes(id));
+    return defaultChatSettings({
+      ...settings,
+      inactive_character_ids: [
+        ...new Set([...settings.inactive_character_ids, ...offlineIds]),
+      ],
+    });
+  }
 
   async findAll(): Promise<ChatListItem[]> {
     const rows = await this.chats.find({
@@ -158,15 +278,17 @@ export class ChatsService {
       settings,
       messages,
       summary: "",
+      summary_entries: [],
+      last_automatic_summary_message_id: null,
+      day_summaries: {},
+      week_summaries: {},
+      conversation_summary_failures: { days: {}, weeks: {} },
       agent_state: {},
       parent_chat_id: input.parent_chat_id?.trim() || null,
       created_at: now,
       updated_at: now,
     });
     const saved = await this.chats.save(entity);
-    if (messages.length > 0) {
-      void this.chatMemory.indexMessages(saved.id, messages);
-    }
     return this.toChat(saved);
   }
 
@@ -203,7 +325,6 @@ export class ChatsService {
       await this.unlinkCharacterDm(row.parent_chat_id, id);
     }
     await this.chats.delete({ id });
-    void this.chatMemory.deleteChat(id);
   }
 
   /**
@@ -285,100 +406,295 @@ export class ChatsService {
     await this.chats.save(parent);
   }
 
+  private async appendChatMessage(
+    chatId: string,
+    input: {
+      role: ChatMessage["role"];
+      content: string;
+      character_id?: string | null;
+      roleplay_dm_source?: ChatMessage["roleplay_dm_source"];
+    },
+  ): Promise<ChatMessage> {
+    const row = await this.requireRow(chatId);
+    const message = createChatMessage({
+      role: input.role,
+      content: input.content.trim(),
+      id: randomUUID(),
+      character_id: input.character_id ?? null,
+      roleplay_dm_source: input.roleplay_dm_source ?? null,
+      ...branchParentOf(row.messages),
+    });
+    row.messages = [...normalizeChatMessages(row.messages), message];
+    row.updated_at = new Date().toISOString();
+    await this.chats.save(row);
+    return message;
+  }
+
   /**
-   * Applies Character DM agent JSON: open/continue side DMs and kick generation.
+   * Marinara-style `[dm: character="…" message="…"]` post-processing.
    */
-  private async applyCharacterDmAgent(
-    parentId: string,
-    state: unknown,
-    settings: ChatSettings,
-  ): Promise<{
-    state: Record<string, unknown>;
-    character_dm_chat_ids?: Record<string, string>;
-  }> {
-    if (!state || typeof state !== "object" || Array.isArray(state)) {
-      return { state: { error: "invalid character-dm state" } };
-    }
-    const record = { ...(state as Record<string, unknown>) };
-    if (record.error) return { state: record };
+  private async applyRoleplayDmCommands(input: {
+    parentId: string;
+    content: string;
+    settings: ChatSettings;
+    characterList: Character[];
+    allCharacters: CharacterListItem[];
+    historyMessages: ChatMessage[];
+    emit: StreamEmit;
+  }): Promise<string> {
+    const parsed = parseDirectMessageCommands(input.content);
+    if (parsed.commands.length === 0) return input.content;
 
-    const rawDms = Array.isArray(record.dms) ? record.dms : [];
-    const maxDms = 2;
-    const started: Array<{
-      characterId: string;
-      chatId: string;
-      reason?: string;
-      title?: string;
-    }> = [];
-    const errors: string[] = [];
-    let map = { ...settings.character_dm_chat_ids };
+    const roleplayCharacters = input.characterList.map((character) => ({
+      id: character.id,
+      name: character.data.name.trim() || "Character",
+    }));
+    const allForResolve = input.allCharacters.map((character) => ({
+      id: character.id,
+      data: { name: character.name },
+    }));
 
-    for (const item of rawDms.slice(0, maxDms)) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-      const entry = item as Record<string, unknown>;
-      const characterId = String(entry.characterId ?? "").trim();
-      if (!characterId) continue;
-      if (!settings.character_ids.includes(characterId)) {
-        errors.push(`skipped unknown characterId ${characterId}`);
+    const sourceUserMessage = [...input.historyMessages]
+      .reverse()
+      .find((message) => message.role === "user");
+    const sourceUserText = sourceUserMessage
+      ? activeMessageText(sourceUserMessage).trim()
+      : "";
+
+    let nextContent = input.content;
+
+    for (const command of parsed.commands) {
+      const target = resolveRoleplayDmTarget(
+        command.character,
+        roleplayCharacters,
+        allForResolve,
+      );
+      if (!target) {
+        nextContent = replaceRoleplayDmCommandText(
+          nextContent,
+          command,
+          formatUnresolvedRoleplayDmFallback(command),
+        );
         continue;
       }
 
-      const reason =
-        typeof entry.reason === "string" ? entry.reason.trim() : "";
-      const openingMessage =
-        typeof entry.openingMessage === "string"
-          ? entry.openingMessage.trim()
-          : "";
+      nextContent = replaceRoleplayDmCommandText(nextContent, command, "");
 
-      try {
-        const dm = await this.getOrCreateCharacterDm(parentId, characterId);
-        map = { ...map, [characterId]: dm.id };
+      const settings = defaultChatSettings(input.settings);
+      const existingId = settings.character_dm_chat_ids[target.id];
+      const dm = await this.getOrCreateCharacterDm(input.parentId, target.id);
 
-        if (openingMessage) {
-          await this.addMessage(dm.id, {
+      if (sourceUserMessage && sourceUserText) {
+        const dmRow = await this.requireRow(dm.id);
+        const alreadyMirrored = dmRow.messages.some((message) => {
+          const source = message.roleplay_dm_source;
+          if (!source) return false;
+          if (source.source_chat_id !== input.parentId) return false;
+          if (source.source_user_message_id !== sourceUserMessage.id) {
+            return false;
+          }
+          return source.target_character_id === target.id;
+        });
+        if (!alreadyMirrored) {
+          await this.appendChatMessage(dm.id, {
             role: "user",
-            content: openingMessage,
-          });
-        } else if (dm.messages.length === 0 && reason) {
-          await this.addMessage(dm.id, {
-            role: "system",
-            content: `Private side conversation. Context: ${reason}`,
+            content: sourceUserText,
+            roleplay_dm_source: {
+              source_chat_id: input.parentId,
+              source_user_message_id: sourceUserMessage.id,
+              target_character_id: target.id,
+            },
           });
         }
+      }
 
-        void this.generate(dm.id, { forCharacterId: characterId }, () => {}).catch(
-          (error) => {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            this.logger.warn(
-              `Character DM generate failed for ${dm.id}: ${message}`,
+      await this.appendChatMessage(dm.id, {
+        role: "assistant",
+        content: command.message.trim(),
+        character_id: target.id,
+      });
+
+      input.emit({
+        type: "roleplay_dm",
+        action: existingId ? "posted" : "created",
+        chat_id: dm.id,
+        chat_title: dm.title,
+        character_id: target.id,
+        character_name: target.name,
+      });
+    }
+
+    return nextContent.replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  private async applyConversationCommands(input: {
+    row: ChatEntity;
+    content: string;
+    settings: ChatSettings;
+    characterList: Character[];
+    characterId: string | null;
+    historyMessages: ChatMessage[];
+    emit: StreamEmit;
+  }): Promise<string> {
+    const parsed = parseConversationCommands(input.content);
+    const commands = filterEnabledConversationCommands(
+      parsed.commands,
+      input.settings.conversation_command_toggles,
+    );
+    if (!commands.length) return parsed.cleanContent || input.content;
+
+    let settings = defaultChatSettings(input.settings);
+    const messages = [...normalizeChatMessages(input.row.messages)];
+
+    for (const command of commands) {
+      if (command.type === "react") {
+        const target =
+          [...input.historyMessages].reverse().find((message) => {
+            if (message.role !== "user" && message.role !== "assistant") {
+              return false;
+            }
+            if (!command.targetName) return message.role === "user";
+            const name = message.character_id
+              ? input.characterList.find((c) => c.id === message.character_id)
+                  ?.data.name
+              : null;
+            return (
+              name &&
+              name.toLowerCase().includes(command.targetName.toLowerCase())
             );
-          },
-        );
-
-        started.push({
-          characterId,
-          chatId: dm.id,
-          reason: reason || undefined,
-          title: dm.title,
+          }) ??
+          [...input.historyMessages].reverse().find((m) => m.role === "user");
+        if (target) {
+          const index = messages.findIndex((m) => m.id === target.id);
+          if (index >= 0) {
+            const existing = messages[index]!;
+            messages[index] = {
+              ...existing,
+              reactions: [
+                ...(existing.reactions ?? []),
+                {
+                  emoji: command.emoji,
+                  character_id: input.characterId,
+                  created_at: new Date().toISOString(),
+                },
+              ],
+            };
+          }
+        }
+        input.emit({
+          type: "conversation_command",
+          command: "react",
+          character_id: input.characterId,
+          detail: command.emoji,
         });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
-        errors.push(`${characterId}: ${message}`);
-        this.logger.warn(`Character DM apply failed: ${message}`);
+      }
+
+      if (command.type === "schedule_update") {
+        const status =
+          command.status === "online" ||
+          command.status === "idle" ||
+          command.status === "dnd" ||
+          command.status === "offline"
+            ? command.status
+            : "idle";
+        if (input.characterId) {
+          settings = defaultChatSettings({
+            ...settings,
+            conversation_status_overrides: {
+              ...settings.conversation_status_overrides,
+              [input.characterId]: {
+                status,
+                activity: command.activity,
+                expiresAt: command.duration
+                  ? new Date(
+                      Date.now() +
+                        Math.max(1, Number.parseInt(command.duration, 10) || 30) *
+                          60_000,
+                    ).toISOString()
+                  : null,
+              },
+            },
+          });
+        }
+        input.emit({
+          type: "conversation_command",
+          command: "schedule_update",
+          character_id: input.characterId,
+          detail: `${status}${command.activity ? ` · ${command.activity}` : ""}`,
+        });
+      }
+
+      if (command.type === "memory") {
+        const target = input.characterList.find(
+          (character) =>
+            character.id === command.target.trim() ||
+            character.data.name
+              .toLowerCase()
+              .includes(command.target.toLowerCase()),
+        );
+        const targetId = target?.id ?? input.characterId;
+        if (targetId) {
+          const prev = settings.character_memories[targetId] ?? [];
+          settings = defaultChatSettings({
+            ...settings,
+            character_memories: {
+              ...settings.character_memories,
+              [targetId]: [...prev, command.summary].slice(-20),
+            },
+          });
+        }
+        input.emit({
+          type: "conversation_command",
+          command: "memory",
+          character_id: targetId,
+          detail: command.summary.slice(0, 120),
+        });
+      }
+
+      if (command.type === "cross_post") {
+        const allChats = await this.chats.find({
+          order: { updated_at: "DESC" },
+        });
+        const targetChat = allChats.find((candidate) => {
+          if (candidate.id === input.row.id) return false;
+          if (candidate.mode !== "conversation") return false;
+          const candidateSettings = defaultChatSettings(candidate.settings);
+          const titleMatch = candidate.title
+            .toLowerCase()
+            .includes(command.target.toLowerCase());
+          const shared = candidateSettings.character_ids.some((id) =>
+            input.settings.character_ids.includes(id),
+          );
+          const nameMatch = candidateSettings.character_ids.some((id) => {
+            const character = input.characterList.find((c) => c.id === id);
+            return character?.data.name
+              .toLowerCase()
+              .includes(command.target.toLowerCase());
+          });
+          return shared && (titleMatch || nameMatch);
+        });
+        if (targetChat) {
+          await this.appendChatMessage(targetChat.id, {
+            role: "assistant",
+            content: parsed.cleanContent || command.raw,
+            character_id: input.characterId,
+          });
+          input.emit({
+            type: "conversation_command",
+            command: "cross_post",
+            character_id: input.characterId,
+            detail: targetChat.title,
+            chat_id: targetChat.id,
+          });
+        }
       }
     }
 
-    return {
-      state: {
-        ...record,
-        started,
-        ...(errors.length ? { applyErrors: errors } : {}),
-        appliedAt: new Date().toISOString(),
-      },
-      character_dm_chat_ids: map,
-    };
+    input.row.settings = settings;
+    input.row.messages = messages;
+    input.row.updated_at = new Date().toISOString();
+    await this.chats.save(input.row);
+    return parsed.cleanContent;
   }
 
   async applyAgentProposal(
@@ -489,12 +805,12 @@ export class ChatsService {
       content,
       id: randomUUID(),
       character_id: characterId,
+      roleplay_dm_source: input.roleplay_dm_source ?? null,
       ...branchParentOf(row.messages),
     });
     row.messages = [...normalizeChatMessages(row.messages), message];
     row.updated_at = new Date().toISOString();
     const saved = await this.chats.save(row);
-    void this.chatMemory.indexMessage(id, message);
     return this.toChat(saved);
   }
 
@@ -516,15 +832,12 @@ export class ChatsService {
         row.messages = removeChatMessageSubtree(row.messages, messageId);
         row.updated_at = new Date().toISOString();
         const saved = await this.chats.save(row);
-        void this.chatMemory.deleteMessage(id, messageId);
         return this.toChat(saved);
       }
       const swipeId = existing.swipe_id;
       row.messages = removeChatMessageSwipe(row.messages, messageId, swipeId);
       row.updated_at = new Date().toISOString();
       const saved = await this.chats.save(row);
-      const updated = saved.messages.find((message) => message.id === messageId);
-      if (updated) void this.chatMemory.indexMessage(id, updated);
       return this.toChat(saved);
     }
 
@@ -547,7 +860,6 @@ export class ChatsService {
     );
     row.updated_at = new Date().toISOString();
     const saved = await this.chats.save(row);
-    void this.chatMemory.indexMessage(id, message);
     return this.toChat(saved);
   }
 
@@ -560,7 +872,6 @@ export class ChatsService {
     row.messages = removeChatMessageSubtree(row.messages, messageId);
     row.updated_at = new Date().toISOString();
     const saved = await this.chats.save(row);
-    void this.chatMemory.deleteMessage(id, messageId);
     return this.toChat(saved);
   }
 
@@ -596,8 +907,10 @@ export class ChatsService {
       row.messages = [...row.messages, userMessage];
       row.updated_at = new Date().toISOString();
       await this.chats.save(row);
-      void this.chatMemory.indexMessage(row.id, userMessage);
       emit({ type: "user_message", message: userMessage });
+      if (row.mode === "conversation") {
+        this.conversationAutonomous.recordUserActivity(row.id);
+      }
     }
 
     await this.runCompletion(row, emit, {
@@ -607,6 +920,9 @@ export class ChatsService {
       generationGuide: input.generationGuide?.trim() || undefined,
       impersonate: Boolean(input.impersonate),
       runDirector: Boolean(input.runDirector),
+      autonomous: Boolean(input.autonomous),
+      autonomousIntentKey: input.autonomous_intent_key,
+      skipPresenceDelay: Boolean(input.skip_presence_delay),
     });
   }
 
@@ -685,24 +1001,15 @@ export class ChatsService {
   ): Promise<PeekPromptResult> {
     const row = await this.requireRow(id);
     const settings = defaultChatSettings(row.settings);
-    const characterList: Character[] = [];
-    for (const characterId of settings.character_ids) {
-      characterList.push(await this.characters.findOne(characterId));
-    }
     const persona = await this.resolvePersona(settings.persona_id);
     const lorebooks = await this.resolveLorebooks(settings);
-    const nameByCharacterId = new Map(
-      characterList.map((character) => [
-        character.id,
-        character.data.name.trim() || "Character",
-      ]),
-    );
     const preset = settings.preset_id
       ? await this.presets.findOne(settings.preset_id)
       : await this.presets.findDefault(row.mode);
 
-    let historyMessages = visibleChatMessages(row.messages);
+    let historyMessages = promptVisibleChatMessages(row.messages);
     let turn: SpeakerTurn = { kind: "merged" };
+    const includeCharacterIds: string[] = [];
 
     if (messageId) {
       const index = row.messages.findIndex((message) => message.id === messageId);
@@ -711,30 +1018,68 @@ export class ChatsService {
       }
       const target = row.messages[index];
       if (target.role === "assistant") {
-        historyMessages = ancestorChatMessages(row.messages, messageId);
+        historyMessages = ancestorChatMessages(row.messages, messageId).filter(
+          (message) => !isMessageHiddenFromPrompt(message),
+        );
         turn =
           target.character_id &&
           settings.character_ids.includes(target.character_id)
             ? { kind: "character", characterId: target.character_id }
             : { kind: "merged" };
       } else if (target.role === "user") {
-        historyMessages = ancestorChatMessages(row.messages, messageId);
+        historyMessages = ancestorChatMessages(row.messages, messageId).filter(
+          (message) => !isMessageHiddenFromPrompt(message),
+        );
         turn = { kind: "impersonate" };
       } else {
-        // Peek "next reply after this message"
         historyMessages = [
           ...ancestorChatMessages(row.messages, messageId),
           target,
-        ];
+        ].filter((message) => !isMessageHiddenFromPrompt(message));
+        const primaryId = primaryCharacterId(settings);
         turn =
-          settings.group_mode === "individual" && settings.character_ids[0]
-            ? { kind: "character", characterId: settings.character_ids[0] }
+          settings.group_mode === "individual" && primaryId
+            ? { kind: "character", characterId: primaryId }
             : { kind: "merged" };
       }
     }
 
+    if (turn.kind === "character") {
+      includeCharacterIds.push(turn.characterId);
+    }
+
+    const characterList = await this.loadPromptCharacters(
+      settings,
+      includeCharacterIds,
+    );
+    const nameByCharacterId = new Map(
+      characterList.map((character) => [
+        character.id,
+        character.data.name.trim() || "Character",
+      ]),
+    );
+
+    let chatHistoryOverride: string | undefined;
+    let conversationMemory: string | undefined;
+    if (row.mode === "conversation") {
+      const prepared = await this.conversationSummary.prepareConversationPrompt({
+        row,
+        historyMessages,
+        personaName: persona?.name?.trim() || "User",
+        nameByCharacterId,
+        wrapFormat: preset.wrap_format,
+      });
+      if (prepared.rowPatches) {
+        Object.assign(row, prepared.rowPatches);
+        row.updated_at = new Date().toISOString();
+        await this.chats.save(row);
+      }
+      chatHistoryOverride = prepared.chatHistory;
+      conversationMemory = prepared.importantMemory ?? undefined;
+    }
+
     return this.buildTurnPrompt({
-      chatId: row.id,
+      mode: row.mode,
       settings,
       preset,
       characterList,
@@ -744,6 +1089,9 @@ export class ChatsService {
       turn,
       historyMessages,
       chatSummary: row.summary,
+      parentChatId: row.parent_chat_id,
+      chatHistoryOverride,
+      conversationMemory,
     });
   }
 
@@ -758,13 +1106,21 @@ export class ChatsService {
       generationGuide?: string;
       impersonate?: boolean;
       runDirector?: boolean;
+      autonomous?: boolean;
+      autonomousIntentKey?: string;
+      skipPresenceDelay?: boolean;
     },
   ): Promise<void> {
-    const settings = defaultChatSettings(row.settings);
-    row.settings = settings;
+    const storedSettings = defaultChatSettings(row.settings);
+    row.settings = storedSettings;
 
-    const connection = settings.connection_id
-      ? await this.connections.findOne(settings.connection_id)
+    const promptSettings =
+      row.mode === "conversation" && !options.impersonate
+        ? await this.applyConversationPresenceFilter(storedSettings)
+        : storedSettings;
+
+    const connection = promptSettings.connection_id
+      ? await this.connections.findOne(promptSettings.connection_id)
       : await this.connections.findDefault();
 
     if (!connection.api_key.trim()) {
@@ -778,20 +1134,33 @@ export class ChatsService {
       );
     }
 
-    const preset = settings.preset_id
-      ? await this.presets.findOne(settings.preset_id)
+    const preset = promptSettings.preset_id
+      ? await this.presets.findOne(promptSettings.preset_id)
       : await this.presets.findDefault(row.mode);
 
-    const characterList: Character[] = [];
-    for (const characterId of settings.character_ids) {
-      characterList.push(await this.characters.findOne(characterId));
+    const includeCharacterIds: string[] = [];
+    if (options.forCharacterId) {
+      includeCharacterIds.push(options.forCharacterId);
     }
-    const persona = await this.resolvePersona(settings.persona_id);
-    const lorebooks = await this.resolveLorebooks(settings);
+    if (options.mode === "regenerate" && options.targetIndex !== undefined) {
+      const existing = row.messages[options.targetIndex];
+      if (existing?.character_id) {
+        includeCharacterIds.push(existing.character_id);
+      }
+    }
+
+    const characterList = await this.loadPromptCharacters(
+      promptSettings,
+      includeCharacterIds,
+    );
+    const persona = await this.resolvePersona(promptSettings.persona_id);
+    const lorebooks = await this.resolveLorebooks(promptSettings);
     const nameByCharacterId = new Map(
       characterList.map((character) => [
         character.id,
-        character.data.name.trim() || "Character",
+        character.data.convo_display_name?.trim() ||
+          character.data.name.trim() ||
+          "Character",
       ]),
     );
 
@@ -801,7 +1170,7 @@ export class ChatsService {
         existing.role === "user"
           ? { kind: "impersonate" }
           : existing.character_id &&
-              settings.character_ids.includes(existing.character_id)
+              storedSettings.character_ids.includes(existing.character_id)
             ? { kind: "character", characterId: existing.character_id }
             : { kind: "merged" };
       await this.runSingleTurn({
@@ -814,17 +1183,22 @@ export class ChatsService {
         lorebooks,
         nameByCharacterId,
         turn,
-        historyMessages: ancestorChatMessages(row.messages, existing.id),
+        historyMessages: ancestorChatMessages(row.messages, existing.id).filter(
+          (message) => !isMessageHiddenFromPrompt(message),
+        ),
         regenerateIndex: options.targetIndex,
         generationGuide: options.generationGuide,
         runDirector: options.runDirector,
+        promptSettings,
+        autonomous: options.autonomous,
+        autonomousIntentKey: options.autonomousIntentKey,
       });
       return;
     }
 
     const visibleMessages = visibleChatMessages(row.messages);
     const turns = await this.resolveTurns({
-      settings,
+      settings: promptSettings,
       characterList,
       messages: visibleMessages,
       userMessage: options.queueUserMessage,
@@ -846,9 +1220,12 @@ export class ChatsService {
         lorebooks,
         nameByCharacterId,
         turn,
-        historyMessages: visibleChatMessages(row.messages),
+        historyMessages: promptVisibleChatMessages(row.messages),
         generationGuide: options.generationGuide,
         runDirector: options.runDirector,
+        promptSettings,
+        autonomous: options.autonomous,
+        autonomousIntentKey: options.autonomousIntentKey,
       });
     }
   }
@@ -896,7 +1273,7 @@ export class ChatsService {
     }
 
     const fallback = fallbackSpeakerId(
-      input.settings.character_ids,
+      activeCharacterIds(input.settings),
       input.messages,
     );
     if (!fallback) {
@@ -925,10 +1302,10 @@ export class ChatsService {
     );
 
     const prompt = [
-      "You are selecting which character(s) should speak next in a roleplay group chat.",
+      "You are selecting which character(s) should speak next in a group chat.",
       'Return ONLY a JSON array of character id strings, e.g. ["id-1"].',
       "Usually pick exactly one character. Pick multiple only when several have a strong reason to speak now.",
-      "Prefer more talkative characters when the scene is ambiguous.",
+      "Prefer more talkative / online characters when the scene is ambiguous.",
       "",
       "<recent_messages>",
       recent || "(none)",
@@ -965,6 +1342,9 @@ export class ChatsService {
     regenerateIndex?: number;
     generationGuide?: string;
     runDirector?: boolean;
+    promptSettings?: ChatSettings;
+    autonomous?: boolean;
+    autonomousIntentKey?: string;
   }): Promise<void> {
     const {
       row,
@@ -980,8 +1360,11 @@ export class ChatsService {
       regenerateIndex,
       generationGuide,
       runDirector,
+      promptSettings,
+      autonomous,
+      autonomousIntentKey,
     } = input;
-    const settings = defaultChatSettings(row.settings);
+    const settings = promptSettings ?? defaultChatSettings(row.settings);
 
     const selectedAgents = await this.agentRunner.loadSelectedAgents({
       settings,
@@ -1040,9 +1423,32 @@ export class ChatsService {
       agentCtxBase.chat = this.toChat(row);
     }
 
+    let chatHistoryOverride: string | undefined;
+    let conversationMemory: string | undefined;
+    if (row.mode === "conversation") {
+      const prepared = await this.conversationSummary.prepareConversationPrompt({
+        row,
+        historyMessages,
+        personaName: persona?.name?.trim() || "User",
+        nameByCharacterId,
+        wrapFormat: preset.wrap_format,
+      });
+      if (prepared.rowPatches) {
+        Object.assign(row, prepared.rowPatches);
+        row.updated_at = new Date().toISOString();
+        await this.chats.save(row);
+        agentCtxBase.chat = this.toChat(row);
+      }
+      chatHistoryOverride = prepared.chatHistory;
+      conversationMemory = prepared.importantMemory ?? undefined;
+    }
+
     const built = await this.buildTurnPrompt({
-      chatId: row.id,
-      settings,
+      mode: row.mode,
+      settings: this.withAboutMeAgentOverrides(
+        settings,
+        mutable.agentState,
+      ),
       preset,
       characterList,
       persona,
@@ -1053,6 +1459,10 @@ export class ChatsService {
       chatSummary: row.summary,
       generationGuide,
       agentInjectTexts: pre.injectTexts,
+      parentChatId: row.parent_chat_id,
+      chatHistoryOverride,
+      conversationMemory,
+      chatId: row.id,
     });
 
     const { characterId, characterName, role, messages: promptMessages } =
@@ -1101,21 +1511,45 @@ export class ChatsService {
       };
 
       if (
+        row.mode === "roleplay" &&
         !row.parent_chat_id &&
         settings.allow_character_dms &&
-        mutable.agentState["character-dm"]
+        turn.kind !== "impersonate"
       ) {
-        const applied = await this.applyCharacterDmAgent(
-          row.id,
-          mutable.agentState["character-dm"],
-          settings,
-        );
-        mutable.agentState["character-dm"] = applied.state;
-        if (applied.character_dm_chat_ids) {
-          row.settings = defaultChatSettings({
-            ...defaultChatSettings(row.settings),
-            character_dm_chat_ids: applied.character_dm_chat_ids,
-          });
+        const allCharacters = await this.characters.findAll();
+        content = await this.applyRoleplayDmCommands({
+          parentId: row.id,
+          content,
+          settings: defaultChatSettings(row.settings),
+          characterList,
+          allCharacters,
+          historyMessages,
+          emit,
+        });
+        const refreshed = await this.chats.findOneBy({ id: row.id });
+        if (refreshed) {
+          row.settings = refreshed.settings;
+        }
+      }
+
+      if (
+        row.mode === "conversation" &&
+        settings.character_commands !== false &&
+        turn.kind !== "impersonate"
+      ) {
+        content = await this.applyConversationCommands({
+          row,
+          content,
+          settings: defaultChatSettings(row.settings),
+          characterList,
+          characterId,
+          historyMessages,
+          emit,
+        });
+        const refreshed = await this.chats.findOneBy({ id: row.id });
+        if (refreshed) {
+          row.settings = refreshed.settings;
+          row.messages = refreshed.messages;
         }
       }
 
@@ -1154,16 +1588,56 @@ export class ChatsService {
     row.updated_at = new Date().toISOString();
     const saved = await this.chats.save(row);
     Object.assign(row, saved);
-    void this.chatMemory.indexMessage(row.id, savedMessage);
+
+    if (row.mode === "conversation" && savedMessage.role === "assistant") {
+      this.conversationAutonomous.recordAssistantActivity(
+        row.id,
+        savedMessage.character_id,
+      );
+      if (autonomous && savedMessage.character_id) {
+        await this.conversationAutonomous.bumpAutonomousBudget(
+          row.id,
+          savedMessage.character_id,
+          autonomousIntentKey,
+        );
+        const refreshed = await this.chats.findOneBy({ id: row.id });
+        if (refreshed) Object.assign(row, refreshed);
+      }
+    }
+
+    let chatForDone = this.toChat(row);
+    if (
+      roleplaySummaryEnabled(row.mode) &&
+      savedMessage.role === "assistant" &&
+      !regenerateIndex
+    ) {
+      const summaryChat = await this.chatSummary.maybeRunAutomaticSummary(
+        row.id,
+        savedMessage.id,
+      );
+      if (summaryChat) {
+        chatForDone = summaryChat;
+        const latestEntry =
+          summaryChat.summary_entries[summaryChat.summary_entries.length - 1];
+        if (latestEntry?.origin === "automated") {
+          emit({
+            type: "chat_summary",
+            chat: summaryChat,
+            entry_id: latestEntry.id,
+          });
+        }
+      }
+    }
+
     emit({
       type: "done",
       message: savedMessage,
-      chat: this.toChat(saved),
+      chat: chatForDone,
     });
   }
 
   private async buildTurnPrompt(input: {
-    chatId: string;
+    mode: ChatMode;
     settings: ChatSettings;
     preset: ResolvedPreset;
     characterList: Character[];
@@ -1175,6 +1649,10 @@ export class ChatsService {
     chatSummary: string;
     generationGuide?: string;
     agentInjectTexts?: string[];
+    parentChatId?: string | null;
+    chatHistoryOverride?: string;
+    conversationMemory?: string;
+    chatId?: string;
   }): Promise<{
     messages: LlmChatMessage[];
     character_id: string | null;
@@ -1184,11 +1662,9 @@ export class ChatsService {
     role: ChatMessage["role"];
     lore_hits: PeekPromptLoreHit[];
     lore_token_estimate: number;
-    memory_hits: PeekPromptMemoryHit[];
-    memory_token_estimate: number;
   }> {
     const {
-      chatId,
+      mode,
       settings,
       preset,
       characterList,
@@ -1197,23 +1673,22 @@ export class ChatsService {
       nameByCharacterId,
       turn,
       historyMessages: rawHistory,
-      chatSummary: rawSummary,
+      chatSummary,
       generationGuide,
       agentInjectTexts,
+      parentChatId,
+      chatHistoryOverride,
+      conversationMemory,
+      chatId,
     } = input;
+    const promptCharacterIds = activeCharacterIds(settings);
     const primary = characterList[0] ?? null;
 
-    const memory = await this.chatMemory.preparePromptMemory({
-      chatId,
-      settings,
-      historyMessages: rawHistory,
-      chatSummary: rawSummary,
-      nameByCharacterId,
-      charName: primary?.data.name,
-      userName: persona?.name,
-    });
-    const historyMessages = memory.historyMessages;
-    const chatSummary = memory.chatSummary;
+    const depth = Math.max(1, settings.history_depth || 24);
+    const historyMessages =
+      rawHistory.length <= depth
+        ? rawHistory
+        : rawHistory.slice(rawHistory.length - depth);
 
     let characterId: string | null = null;
     let characterName = "Narrator";
@@ -1242,12 +1717,9 @@ export class ChatsService {
       }
       characterId = speaker.id;
       characterName = speaker.data.name.trim() || "Character";
-      promptCharacters = [
-        speaker,
-        ...characterList.filter((c) => c.id !== speaker.id),
-      ];
+      promptCharacters = [speaker];
       if (
-        settings.add_turn_to_prompt &&
+        settings.add_turn_to_prompt !== false &&
         settings.character_ids.length > 1 &&
         settings.group_mode === "individual"
       ) {
@@ -1260,8 +1732,141 @@ export class ChatsService {
     if (generationGuide?.trim()) {
       extraSystemParts.push(generationGuide.trim());
     }
+
+    const groupInstructions = buildGroupChatRuntimeInstructions({
+      mode,
+      settings,
+      characterNames: promptCharacterIds.map(
+        (id) => nameByCharacterId.get(id) ?? "Character",
+      ),
+      wrapFormat: preset.wrap_format,
+    });
+    if (groupInstructions) {
+      extraSystemParts.push(groupInstructions);
+    }
+
+    if (conversationMemory?.trim()) {
+      extraSystemParts.push(conversationMemory.trim());
+    }
+
+    if (mode === "conversation" && settings.conversation_about_me_inject) {
+      const aboutEntries: Array<{ name: string; about: string }> = [];
+      for (const character of promptCharacters) {
+        const override =
+          settings.conversation_about_me_overrides[character.id]?.trim() ?? "";
+        const about =
+          override ||
+          character.data.about_me?.trim() ||
+          "";
+        if (about) {
+          aboutEntries.push({
+            name:
+              character.data.convo_display_name?.trim() ||
+              character.data.name.trim() ||
+              "Character",
+            about,
+          });
+        }
+      }
+      if (persona) {
+        const override =
+          settings.conversation_about_me_overrides[persona.id]?.trim() ?? "";
+        const about = override || persona.about_me?.trim() || "";
+        if (about) {
+          aboutEntries.push({
+            name: persona.name.trim() || "User",
+            about,
+          });
+        }
+      }
+      const aboutBlock = buildAboutMePromptBlock({ entries: aboutEntries });
+      if (aboutBlock) extraSystemParts.push(aboutBlock);
+    }
+
+    if (mode === "conversation" && parentChatId) {
+      try {
+        const parentRow = await this.chats.findOneBy({ id: parentChatId });
+        if (parentRow) {
+          const parentChat = this.toChat(parentRow);
+          const parentNameById = new Map(nameByCharacterId);
+          for (const characterId of parentChat.settings.character_ids) {
+            if (parentNameById.has(characterId)) continue;
+            try {
+              const character = await this.characters.findOne(characterId);
+              parentNameById.set(
+                characterId,
+                character.data.name.trim() || "Character",
+              );
+            } catch {
+              // Character may have been deleted; keep id fallback in block.
+            }
+          }
+          const connected = buildConnectedParentChatBlock({
+            parentChat,
+            personaName: persona?.name?.trim() || "User",
+            nameByCharacterId: parentNameById,
+          });
+          if (connected) extraSystemParts.push(connected);
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to inject parent chat context for ${parentChatId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    if (
+      mode === "conversation" &&
+      settings.cross_chat_awareness !== false &&
+      chatId
+    ) {
+      const otherRows = await this.chats.find({
+        order: { updated_at: "DESC" },
+        take: 40,
+      });
+      const otherChats = otherRows
+        .filter((candidate) => candidate.id !== chatId)
+        .map((candidate) => this.toChat(candidate));
+      const latestUser = [...historyMessages]
+        .reverse()
+        .find((message) => message.role === "user");
+      const awareness = buildAwarenessBlock({
+        currentChatId: chatId,
+        characterIds: promptCharacterIds,
+        otherChats,
+        latestUserText: latestUser
+          ? activeMessageText(latestUser)
+          : undefined,
+        characterMemories: settings.character_memories,
+        nameByCharacterId,
+      });
+      if (awareness) extraSystemParts.push(awareness);
+    }
+
+    if (mode === "conversation" && settings.enable_memory_recall) {
+      const latestUser = [...historyMessages]
+        .reverse()
+        .find((message) => message.role === "user");
+      const memories = recallLexicalMemories({
+        query: latestUser ? activeMessageText(latestUser) : "",
+        messages: historyMessages,
+      });
+      if (memories) extraSystemParts.push(memories);
+    }
+
     if (agentInjectTexts?.length) {
       extraSystemParts.push(...agentInjectTexts.filter(Boolean));
+    }
+
+    const twatterBlock = await this.twatter.buildCarryoverBlock({
+      chatMode: mode,
+      characterIds: promptCharacterIds,
+      personaId: settings.persona_id,
+    });
+    if (twatterBlock) {
+      extraSystemParts.push(twatterBlock);
     }
 
     const {
@@ -1273,19 +1878,30 @@ export class ChatsService {
       historyMessages,
     });
 
+    const prefixHistorySpeakers = groupHistoryUsesSpeakerPrefix(mode, settings);
+
+    const chatHistoryText =
+      chatHistoryOverride ??
+      formatChatHistoryMarker(historyMessages, {
+        charName: primary?.data.name,
+        userName: persona?.name,
+        nameByCharacterId,
+        prefixSpeakerNames: prefixHistorySpeakers,
+      });
+
     const promptContext = buildPresetPromptContext({
       characters: promptCharacters,
+      groupCharacters:
+        settings.character_ids.length > 1 && turn.kind === "character"
+          ? characterList
+          : undefined,
       persona,
       lorebooks: filteredLorebooks,
       variables: {
         ...selectedVariableValues(preset.variables),
         ...settings.variables,
       },
-      chatHistory: formatChatHistoryMarker(historyMessages, {
-        charName: primary?.data.name,
-        userName: persona?.name,
-        nameByCharacterId,
-      }),
+      chatHistory: chatHistoryText,
       chatSummary,
       scenarioOverride: settings.scenario_override,
     });
@@ -1299,6 +1915,29 @@ export class ChatsService {
       promptMessages = [
         ...promptMessages,
         { role: "system", content: extraSystemParts.join("\n") },
+      ];
+    }
+
+    if (
+      mode === "conversation" &&
+      settings.character_ids.length > 1 &&
+      turn.kind !== "impersonate"
+    ) {
+      const turnCharacterName =
+        turn.kind === "character" ? characterName : null;
+      promptMessages = [
+        ...promptMessages,
+        {
+          role: "user",
+          content: buildConversationGroupOutputFormat({
+            wrapFormat: preset.wrap_format,
+            characterNames: promptCharacterIds.map(
+              (id) => nameByCharacterId.get(id) ?? "Character",
+            ),
+            userName: persona?.name?.trim() || "User",
+            turnCharacterName,
+          }),
+        },
       ];
     }
 
@@ -1320,6 +1959,75 @@ export class ChatsService {
       }));
     }
 
+    if (
+      mode === "roleplay" &&
+      settings.allow_character_dms &&
+      !parentChatId &&
+      turn.kind !== "impersonate"
+    ) {
+      const reminder = buildRoleplayDmCommandReminder({
+        characterNames: promptCharacterIds.map(
+          (id) => nameByCharacterId.get(id) ?? "Character",
+        ),
+        userName: persona?.name?.trim() || "the user",
+      });
+      let lastUserIndex = -1;
+      for (let index = promptMessages.length - 1; index >= 0; index -= 1) {
+        if (promptMessages[index]?.role === "user") {
+          lastUserIndex = index;
+          break;
+        }
+      }
+      if (lastUserIndex >= 0) {
+        const target = promptMessages[lastUserIndex]!;
+        promptMessages = promptMessages.map((message, index) =>
+          index === lastUserIndex
+            ? { ...message, content: `${target.content}\n\n${reminder}` }
+            : message,
+        );
+      } else {
+        promptMessages = [...promptMessages, { role: "user", content: reminder }];
+      }
+    }
+
+    if (
+      mode === "conversation" &&
+      settings.character_commands !== false &&
+      turn.kind !== "impersonate"
+    ) {
+      const enabledKeys = CONVERSATION_COMMAND_KEYS.filter(
+        (key) => settings.conversation_command_toggles[key] !== false,
+      );
+      if (enabledKeys.length) {
+        const reminder = buildConversationCommandsReminder({
+          characterNames: promptCharacterIds.map(
+            (id) => nameByCharacterId.get(id) ?? "Character",
+          ),
+          enabledKeys,
+        });
+        let lastUserIndex = -1;
+        for (let index = promptMessages.length - 1; index >= 0; index -= 1) {
+          if (promptMessages[index]?.role === "user") {
+            lastUserIndex = index;
+            break;
+          }
+        }
+        if (lastUserIndex >= 0) {
+          const target = promptMessages[lastUserIndex]!;
+          promptMessages = promptMessages.map((message, index) =>
+            index === lastUserIndex
+              ? { ...message, content: `${target.content}\n\n${reminder}` }
+              : message,
+          );
+        } else {
+          promptMessages = [
+            ...promptMessages,
+            { role: "user", content: reminder },
+          ];
+        }
+      }
+    }
+
     return {
       messages: promptMessages,
       character_id: characterId,
@@ -1339,13 +2047,6 @@ export class ChatsService {
         preview: (hit.entry.content ?? "").trim().slice(0, 240),
       })),
       lore_token_estimate: loreTokenEstimate,
-      memory_hits: memory.hits.map((hit) => ({
-        message_id: hit.message_id,
-        role: hit.role,
-        score: hit.score,
-        preview: hit.content.slice(0, 240),
-      })),
-      memory_token_estimate: memory.tokenEstimate,
     };
   }
 
@@ -1381,13 +2082,26 @@ export class ChatsService {
   }
 
   private toChat(row: ChatEntity): Chat {
+    const summaryEntries = normalizeChatSummaryEntries(row.summary_entries ?? [], {
+      legacy_summary: row.summary,
+    });
+    const compiledSummary =
+      compileChatSummaryEntries(summaryEntries) || row.summary || "";
     return {
       id: row.id,
       title: row.title,
       mode: row.mode,
       settings: defaultChatSettings(row.settings),
       messages: normalizeChatMessages(row.messages ?? []),
-      summary: row.summary ?? "",
+      summary: compiledSummary,
+      summary_entries: summaryEntries,
+      last_automatic_summary_message_id:
+        row.last_automatic_summary_message_id ?? null,
+      day_summaries: normalizeDaySummaries(row.day_summaries),
+      week_summaries: normalizeWeekSummaries(row.week_summaries),
+      conversation_summary_failures: normalizeConversationSummaryFailures(
+        row.conversation_summary_failures,
+      ),
       agent_state: row.agent_state ?? {},
       parent_chat_id: row.parent_chat_id ?? null,
       created_at: row.created_at,

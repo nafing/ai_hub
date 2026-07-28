@@ -40,7 +40,9 @@ export type PresetCategory =
   | "conversation"
   | "character_generator"
   | "persona_generator"
-  | "lorebook_generator";
+  | "lorebook_generator"
+  | "twatter_refresh"
+  | "chat_summary";
 
 export type SectionRole = "system" | "user" | "assistant";
 

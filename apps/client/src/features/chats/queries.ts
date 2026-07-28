@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateChatInput,
+  GenerateChatSummaryInput,
+  SummaryEntriesPatchBody,
   UpdateChatInput,
   UpdateChatMessageInput,
 } from "@ai-hub/shared";
@@ -8,9 +10,11 @@ import {
   createChat,
   deleteChat,
   deleteChatMessage,
+  generateChatSummary,
   getChat,
   getOrCreateCharacterDm,
   listChats,
+  patchChatSummaryEntries,
   updateChat,
   updateChatMessage,
 } from "./api";
@@ -114,6 +118,36 @@ export function useDeleteChatMessage() {
     onSuccess: (chat) => {
       void queryClient.setQueryData(chatKeys.detail(chat.id), chat);
       void queryClient.invalidateQueries({ queryKey: chatKeys.list() });
+    },
+  });
+}
+
+export function useGenerateChatSummary() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      chatId,
+      ...input
+    }: GenerateChatSummaryInput & { chatId: string }) =>
+      generateChatSummary(chatId, input),
+    onSuccess: (chat) => {
+      void queryClient.setQueryData(chatKeys.detail(chat.id), chat);
+    },
+  });
+}
+
+export function usePatchSummaryEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      chatId,
+      body,
+    }: {
+      chatId: string;
+      body: SummaryEntriesPatchBody;
+    }) => patchChatSummaryEntries(chatId, body),
+    onSuccess: (chat) => {
+      void queryClient.setQueryData(chatKeys.detail(chat.id), chat);
     },
   });
 }

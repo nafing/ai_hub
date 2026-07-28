@@ -11,6 +11,9 @@ export class CreatePersonaDto {
   personality!: string;
 
   @IsString()
+  about_me!: string;
+
+  @IsString()
   notes!: string;
 
   @IsBoolean()

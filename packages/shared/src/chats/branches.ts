@@ -98,6 +98,23 @@ export function ancestorChatMessages(
   return chain.reverse();
 }
 
+/** Active branch messages included in LLM prompt history. */
+export function promptVisibleChatMessages(messages: ChatMessage[]): ChatMessage[] {
+  return visibleChatMessages(messages).filter(
+    (message) => message.hidden_from_prompt !== true,
+  );
+}
+
+/** Prompt-visible messages up to and including `messageId`. */
+export function promptVisibleChatMessagesThrough(
+  messages: ChatMessage[],
+  messageId: string,
+): ChatMessage[] {
+  return visibleChatMessagesThrough(messages, messageId).filter(
+    (message) => message.hidden_from_prompt !== true,
+  );
+}
+
 /** Visible messages up to and including `messageId` (for regenerate UI). */
 export function visibleChatMessagesThrough(
   messages: ChatMessage[],

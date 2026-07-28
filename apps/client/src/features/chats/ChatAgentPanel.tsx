@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Link } from "@tanstack/react-router";
 import type { Chat, ChatAgentSettingsMap } from "@ai-hub/shared";
 import { Button, Modal, Select, TextInput, notifications } from "@/components/ui";
 import { useAgents } from "@/features/agents/queries";
@@ -78,18 +77,6 @@ export function ChatAgentPanel({
     | undefined;
   const keeper = state["lorebook-keeper"] as
     | { applied?: string[]; warning?: string; error?: string }
-    | undefined;
-  const characterDm = state["character-dm"] as
-    | {
-        started?: Array<{
-          characterId?: string;
-          chatId?: string;
-          reason?: string;
-          title?: string;
-        }>;
-        applyErrors?: string[];
-        error?: string;
-      }
     | undefined;
 
   const echoAgent = selectedAgents.find((agent) => agent.slug === "echo-chamber");
@@ -358,45 +345,6 @@ export function ChatAgentPanel({
           </section>
         ) : null}
 
-        {characterDm?.started?.length ||
-        characterDm?.applyErrors?.length ||
-        characterDm?.error ? (
-          <section className={classes.section}>
-            <p className={classes.sectionTitle}>Character DM</p>
-            {characterDm.error ? (
-              <p className={classes.error}>{characterDm.error}</p>
-            ) : null}
-            {characterDm.started?.length ? (
-              <ul className={classes.list}>
-                {characterDm.started.map((item) => (
-                  <li key={item.chatId || item.characterId}>
-                    {item.chatId ? (
-                      <Link
-                        to="/chats/$chatId"
-                        params={{ chatId: item.chatId }}
-                        className={classes.dmLink}
-                        onClick={onClose}
-                      >
-                        {item.title || "Open DM"}
-                      </Link>
-                    ) : (
-                      <strong>{item.title || item.characterId || "DM"}</strong>
-                    )}
-                    {item.reason ? (
-                      <p className={classes.muted}>{item.reason}</p>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            {characterDm.applyErrors?.length ? (
-              <p className={classes.muted}>
-                {characterDm.applyErrors.join(" · ")}
-              </p>
-            ) : null}
-          </section>
-        ) : null}
-
         {knowledge?.extracted ||
         knowledge?.error ||
         keeper?.applied?.length ||
@@ -465,9 +413,5 @@ export function chatAgentPanelHasActivity(chat: Chat): boolean {
   ) {
     return true;
   }
-  const characterDm = state["character-dm"] as
-    | { started?: unknown[]; error?: string }
-    | undefined;
-  if (characterDm?.started?.length || characterDm?.error) return true;
   return false;
 }

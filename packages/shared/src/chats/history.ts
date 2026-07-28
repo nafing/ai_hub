@@ -18,10 +18,16 @@ export function formatChatHistoryMarker(
     charName?: string;
     userName?: string;
     nameByCharacterId?: Map<string, string> | Record<string, string>;
+    /**
+     * When false, assistant lines use raw text (Marinara individual mode default).
+     * User lines still use the persona label.
+     */
+    prefixSpeakerNames?: boolean;
   } = {},
 ): string {
   const userLabel = options.userName?.trim() || "User";
   const charLabel = options.charName?.trim() || "Char";
+  const prefixSpeakerNames = options.prefixSpeakerNames !== false;
   const nameMap =
     options.nameByCharacterId instanceof Map
       ? options.nameByCharacterId
@@ -38,8 +44,16 @@ export function formatChatHistoryMarker(
         label = userLabel;
       } else if (message.role === "system") {
         label = "System";
-      } else if (message.character_id && nameMap?.has(message.character_id)) {
+      } else if (
+        prefixSpeakerNames &&
+        message.character_id &&
+        nameMap?.has(message.character_id)
+      ) {
         label = nameMap.get(message.character_id) || charLabel;
+      } else if (prefixSpeakerNames) {
+        label = charLabel;
+      } else if (message.role === "assistant") {
+        return text;
       } else {
         label = charLabel;
       }

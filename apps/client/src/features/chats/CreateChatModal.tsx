@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import type { ChatMode, CreateChatInput } from "@ai-hub/shared";
+import {
+  type ChatMode,
+  type CreateChatInput,
+} from "@ai-hub/shared";
 import { Button,
   Modal,
   MultiSelect,
@@ -36,7 +39,8 @@ export function CreateChatModal({ opened, onClose }: CreateChatModalProps) {
   const [connectionId, setConnectionId] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<string | null>(null);
 
-  const defaultPresetQuery = useDefaultPreset(mode);
+  const presetCategory = mode;
+  const defaultPresetQuery = useDefaultPreset(presetCategory);
 
   const defaultConnectionId =
     connectionsQuery.data?.find((c) => c.is_default)?.id ??
@@ -61,9 +65,17 @@ export function CreateChatModal({ opened, onClose }: CreateChatModalProps) {
       setPresetId(defaultPresetQuery.data.id);
       return;
     }
-    const fallback = (presetsQuery.data ?? []).find((p) => p.category === mode);
+    const fallback = (presetsQuery.data ?? []).find(
+      (p) => p.category === presetCategory,
+    );
     if (fallback) setPresetId(fallback.id);
-  }, [opened, mode, defaultPresetQuery.data?.id, presetsQuery.data]);
+  }, [
+    opened,
+    mode,
+    presetCategory,
+    defaultPresetQuery.data?.id,
+    presetsQuery.data,
+  ]);
 
   const characterOptions = useMemo(
     () =>
@@ -95,12 +107,12 @@ export function CreateChatModal({ opened, onClose }: CreateChatModalProps) {
   const presetOptions = useMemo(
     () =>
       (presetsQuery.data ?? [])
-        .filter((preset) => preset.category === mode)
+        .filter((preset) => preset.category === presetCategory)
         .map((preset) => ({
           value: preset.id,
           label: preset.name || "Unnamed",
         })),
-    [presetsQuery.data, mode],
+    [presetsQuery.data, presetCategory],
   );
 
   async function handleCreate() {

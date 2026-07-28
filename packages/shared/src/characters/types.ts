@@ -65,6 +65,14 @@ export type CharacterCardData = {
    * Hub field (not part of official chara_card_v2).
    */
   talkativeness: number;
+  /** Conversation bio shown as About Me (hub field). */
+  about_me: string;
+  /** Hex/CSS color for speaker name labels in conversation. */
+  name_color: string | null;
+  /** Hex/CSS color for dialogue text in conversation/roleplay. */
+  dialogue_color: string | null;
+  /** Optional display alias for conversation grouping. */
+  convo_display_name: string;
 };
 
 /**

@@ -42,6 +42,12 @@ export function defaultCharacterCardData(
     tags: [],
     creator: "",
     character_version: "",
+    about_me: typeof rest.about_me === "string" ? rest.about_me : "",
+    name_color: typeof rest.name_color === "string" ? rest.name_color : null,
+    dialogue_color:
+      typeof rest.dialogue_color === "string" ? rest.dialogue_color : null,
+    convo_display_name:
+      typeof rest.convo_display_name === "string" ? rest.convo_display_name : "",
     ...rest,
     talkativeness: normalizeTalkativeness(
       talkOverride ?? DEFAULT_TALKATIVENESS,
@@ -130,6 +136,30 @@ export function normalizeCharacterCardData(
     talkativeness: normalizeTalkativeness(
       input.talkativeness !== undefined ? input.talkativeness : legacyTalk,
     ),
+    about_me:
+      typeof input.about_me === "string"
+        ? input.about_me
+        : typeof legacyExtensions?.aboutMe === "string"
+          ? (legacyExtensions.aboutMe as string)
+          : base.about_me,
+    name_color:
+      typeof input.name_color === "string"
+        ? input.name_color
+        : typeof legacyExtensions?.nameColor === "string"
+          ? (legacyExtensions.nameColor as string)
+          : null,
+    dialogue_color:
+      typeof input.dialogue_color === "string"
+        ? input.dialogue_color
+        : typeof legacyExtensions?.dialogueColor === "string"
+          ? (legacyExtensions.dialogueColor as string)
+          : null,
+    convo_display_name:
+      typeof input.convo_display_name === "string"
+        ? input.convo_display_name
+        : typeof legacyExtensions?.convoDisplayName === "string"
+          ? (legacyExtensions.convoDisplayName as string)
+          : "",
   };
 
   if (

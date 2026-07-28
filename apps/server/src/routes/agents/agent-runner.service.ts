@@ -112,10 +112,6 @@ export class AgentRunnerService {
       }
       if (!agentAllowedForMode(agent, input.mode)) return false;
       if (agent.slug === "director" && !input.runDirector) return false;
-      if (agent.slug === "character-dm") {
-        if (!input.settings.allow_character_dms) return false;
-        if (input.parentChatId) return false;
-      }
       const interval = resolveAgentRunInterval(
         agent,
         input.settings.agent_settings,
@@ -511,25 +507,12 @@ export class AgentRunnerService {
       );
     }
 
-    if (
-      (agent.slug === "card-evolution-auditor" ||
-        agent.slug === "character-dm") &&
-      ctx.characterCards
-    ) {
+    if (agent.slug === "card-evolution-auditor" && ctx.characterCards) {
       parts.push(
         "",
         "<character_cards>",
         ctx.characterCards,
         "</character_cards>",
-      );
-    }
-
-    if (agent.slug === "character-dm") {
-      parts.push(
-        "",
-        "<existing_character_dms>",
-        JSON.stringify(ctx.settings.character_dm_chat_ids ?? {}, null, 2),
-        "</existing_character_dms>",
       );
     }
 

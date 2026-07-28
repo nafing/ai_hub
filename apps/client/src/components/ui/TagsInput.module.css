@@ -5,18 +5,31 @@
 
 .control {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--space-xs);
   width: 100%;
-  min-height: 2.25rem;
-  padding: 0.3rem 0.45rem;
+  height: var(--control-height);
+  padding: 0 0.45rem;
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
+}
+
+.control::-webkit-scrollbar {
+  height: 4px;
+}
+
+.control::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: var(--radius-pill);
 }
 
 .root:focus-within .control {
@@ -30,6 +43,7 @@
 
 .pill {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 0.2rem;
   max-width: 100%;
@@ -66,15 +80,17 @@
 }
 
 .input {
-  flex: 1;
+  flex: 1 0 6rem;
   min-width: 6rem;
-  min-height: 1.65rem;
-  padding: 0.15rem 0.35rem;
+  height: 100%;
+  padding: 0 0.35rem;
   color: var(--color-text);
   border: 0;
   background: transparent;
   outline: none;
   font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.25;
 }
 
 .input::placeholder {

@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsNumber,
@@ -29,6 +30,11 @@ class CreateChatSettingsDto {
 
   @IsOptional()
   character_ids?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  inactive_character_ids?: string[];
 
   @IsOptional()
   @IsString()
@@ -66,6 +72,14 @@ class CreateChatSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  group_speaker_tags?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  group_speaker_names_in_history?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   allow_twatter_references?: boolean;
 
   @IsOptional()
@@ -75,6 +89,18 @@ class CreateChatSettingsDto {
   @IsOptional()
   @IsObject()
   character_dm_chat_ids?: Record<string, string>;
+
+  @IsOptional()
+  @IsBoolean()
+  automatic_summary_enabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  hide_summarised_messages?: boolean;
+
+  @IsOptional()
+  @IsString()
+  summary_preset_id?: string | null;
 }
 
 export class CreateChatDto {

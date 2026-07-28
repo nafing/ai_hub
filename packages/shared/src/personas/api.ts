@@ -11,6 +11,7 @@ export type PersonaListItem = Pick<
   | "name"
   | "description"
   | "personality"
+  | "about_me"
   | "notes"
   | "is_default"
 >;

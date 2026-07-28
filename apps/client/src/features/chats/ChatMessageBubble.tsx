@@ -21,6 +21,10 @@ type ChatMessageBubbleProps = {
   displayText: string;
   /** Persona / character display name shown next to the timestamp. */
   speakerName?: string | null;
+  /** Optional CSS color for the speaker name. */
+  nameColor?: string | null;
+  /** Optional CSS color for dialogue/body text. */
+  dialogueColor?: string | null;
   avatarUrl?: string | null;
   /** Substitutes `{{char}}` / `{{user}}` (and other macros) in the body. */
   macroValues?: PresetVariableValues;
@@ -46,6 +50,8 @@ export function ChatMessageBubble({
   message,
   displayText,
   speakerName,
+  nameColor,
+  dialogueColor,
   avatarUrl,
   macroValues,
   isStreaming = false,
@@ -88,7 +94,14 @@ export function ChatMessageBubble({
   }
 
   return (
-    <div className={classes.root}>
+    <div
+      className={[
+        classes.root,
+        message.hidden_from_prompt ? classes.rootHiddenFromPrompt : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <div
         className={[classes.card, isUser ? classes.cardUser : ""]
           .filter(Boolean)
@@ -105,7 +118,12 @@ export function ChatMessageBubble({
             )}
           </span>
           <div className={classes.meta}>
-            <p className={classes.name}>{name}</p>
+            <p
+              className={classes.name}
+              style={nameColor ? { color: nameColor } : undefined}
+            >
+              {name}
+            </p>
             {timeLabel ? <p className={classes.time}>{timeLabel}</p> : null}
           </div>
         </div>
@@ -156,7 +174,10 @@ export function ChatMessageBubble({
             </div>
           </div>
         ) : (
-          <p className={classes.body}>
+          <p
+            className={classes.body}
+            style={dialogueColor ? { color: dialogueColor } : undefined}
+          >
             <RuntimeText
               values={macroValues}
               highlightUnresolved={false}
@@ -167,6 +188,20 @@ export function ChatMessageBubble({
             {isStreaming ? "▍" : ""}
           </p>
         )}
+
+        {message.reactions && message.reactions.length > 0 ? (
+          <div className={classes.reactions} aria-label="Reactions">
+            {message.reactions.map((reaction, index) => (
+              <span
+                key={`${reaction.emoji}-${reaction.created_at}-${index}`}
+                className={classes.reactionChip}
+                title={reaction.character_id ?? undefined}
+              >
+                {reaction.emoji}
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         {canSwipe || showActions ? (
           <div className={classes.actions}>

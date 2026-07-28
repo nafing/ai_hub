@@ -1,5 +1,5 @@
 import type { Variable } from "../presets/types";
-import type { Chat, ChatMessage, ChatMode, ChatSettings } from "./types";
+import type { Chat, ChatMessage, ChatMode, ChatSettings, RoleplayDmSource } from "./types";
 
 export type CreateChatInput = {
   mode: ChatMode;
@@ -25,6 +25,8 @@ export type CreateChatMessageInput = {
   content: string;
   /** Speaker for assistant messages (e.g. `/as Character "line"`). */
   character_id?: string | null;
+  /** Marinara-style mirror dedupe when copying roleplay user turns into DM threads. */
+  roleplay_dm_source?: RoleplayDmSource | null;
 };
 
 export type UpdateChatMessageInput = {
@@ -61,6 +63,12 @@ export type GenerateChatInput = {
    * and inject its direction into the main prompt.
    */
   runDirector?: boolean;
+  /** Autonomous poller turn (conversation messenger). */
+  autonomous?: boolean;
+  /** Optional intent key for autonomous cooldown bookkeeping. */
+  autonomous_intent_key?: string;
+  /** Client already waited for busy-delay; skip server presence delay. */
+  skip_presence_delay?: boolean;
 };
 
 export type ChatListItem = Pick<
@@ -94,27 +102,39 @@ export type ChatStreamEvent =
       error?: string;
     }
   | { type: "needs_preset_variables"; presetId: string; variables: Variable[] }
+  | {
+      type: "chat_summary";
+      chat: Chat;
+      entry_id: string;
+    }
   | { type: "error"; message: string }
+  | {
+      type: "roleplay_dm";
+      action: "posted" | "created";
+      chat_id: string;
+      chat_title: string;
+      character_id: string;
+      character_name: string;
+    }
+  | {
+      type: "conversation_command";
+      command: "react" | "schedule_update" | "memory" | "cross_post";
+      character_id?: string | null;
+      detail?: string;
+      chat_id?: string;
+    }
   | {
       type: "done";
       message: ChatMessage;
       chat: Chat;
     };
 
-/** Lore entry selected for a turn (constant / keyword / vector). */
+/** Lore entry selected for a turn (constant / keyword). */
 export type PeekPromptLoreHit = {
   lorebook_id: string;
   lorebook_name: string;
   entry_name: string;
-  source: "constant" | "keyword" | "vector";
-  score: number;
-  preview: string;
-};
-
-/** Older chat message retrieved into memory for a turn. */
-export type PeekPromptMemoryHit = {
-  message_id: string;
-  role: string;
+  source: "constant" | "keyword";
   score: number;
   preview: string;
 };
@@ -124,12 +144,8 @@ export type PeekPromptResult = {
   messages: Array<{ role: string; content: string }>;
   character_id: string | null;
   character_name: string;
-  /** Hybrid lore retrieval hits that survived token budget. */
+  /** Lore retrieval hits that survived token budget. */
   lore_hits: PeekPromptLoreHit[];
   /** Rough token estimate of injected lore content. */
   lore_token_estimate: number;
-  /** Semantic chat memory hits injected beside the manual summary. */
-  memory_hits: PeekPromptMemoryHit[];
-  /** Rough token estimate of retrieved memory text. */
-  memory_token_estimate: number;
 };

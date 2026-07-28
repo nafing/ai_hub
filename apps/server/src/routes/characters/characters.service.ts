@@ -334,6 +334,8 @@ export class CharactersService {
       creator: character.data.creator,
       character_version: character.data.character_version,
       tags: character.data.tags,
+      name_color: character.data.name_color ?? null,
+      dialogue_color: character.data.dialogue_color ?? null,
     };
   }
 }

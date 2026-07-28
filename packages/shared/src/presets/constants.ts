@@ -8,16 +8,30 @@ export const PRESET_CATEGORIES = [
   "character_generator",
   "persona_generator",
   "lorebook_generator",
+  "twatter_refresh",
+  "chat_summary",
 ] as const;
+
+/** Chat preset categories (1:1 and group share the same templates). */
+export const CHAT_PRESET_CATEGORIES = [
+  "roleplay",
+  "conversation",
+] as const satisfies readonly PresetCategory[];
 
 /** Categories that run through the `/generators` API (not chat presets). */
 export const GENERATOR_CATEGORIES = [
   "character_generator",
   "persona_generator",
   "lorebook_generator",
+  "twatter_refresh",
 ] as const satisfies readonly PresetCategory[];
 
 export type GeneratorCategory = (typeof GENERATOR_CATEGORIES)[number];
+
+/** Presets that drive rolling roleplay chat summaries. */
+export const CHAT_SUMMARY_PRESET_CATEGORIES = [
+  "chat_summary",
+] as const satisfies readonly PresetCategory[];
 
 export const PRESET_CATEGORY_LABELS: Record<PresetCategory, string> = {
   roleplay: "Roleplay",
@@ -25,6 +39,8 @@ export const PRESET_CATEGORY_LABELS: Record<PresetCategory, string> = {
   character_generator: "Character Generator",
   persona_generator: "Persona Generator",
   lorebook_generator: "Lorebook Generator",
+  twatter_refresh: "Twatter Refresh",
+  chat_summary: "Chat Summary",
 };
 
 export const SECTION_ROLES = ["system", "user", "assistant"] as const;

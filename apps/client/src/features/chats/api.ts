@@ -117,6 +117,40 @@ export async function dismissAgentProposal(
   return data;
 }
 
+export async function generateChatSummary(
+  id: string,
+  input: import("@ai-hub/shared").GenerateChatSummaryInput = {},
+): Promise<Chat> {
+  const { data } = await api.post<Chat>(`/chats/${id}/generate-summary`, input);
+  return data;
+}
+
+export async function patchChatSummaryEntries(
+  id: string,
+  body: import("@ai-hub/shared").SummaryEntriesPatchBody,
+): Promise<Chat> {
+  const { data } = await api.patch<Chat>(`/chats/${id}/summary-entries`, body);
+  return data;
+}
+
+export async function patchConversationSummaries(
+  id: string,
+  body: import("@ai-hub/shared").ConversationSummariesPatchBody,
+): Promise<Chat> {
+  const { data } = await api.patch<Chat>(`/chats/${id}/summaries`, body);
+  return data;
+}
+
+export async function backfillConversationSummaries(
+  id: string,
+  input: import("@ai-hub/shared").ConversationSummaryBackfillInput = {},
+): Promise<
+  import("@ai-hub/shared").ConversationSummaryBackfillResult & { chat: Chat }
+> {
+  const { data } = await api.post(`/chats/${id}/backfill-summaries`, input);
+  return data;
+}
+
 function apiBaseUrl(): string {
   const base = api.defaults.baseURL ?? "/v1/api";
   if (base.startsWith("http")) return base.replace(/\/$/, "");

@@ -8,7 +8,6 @@ export type {
   CreateLorebookInput,
   UpdateLorebookInput,
   LorebookListItem,
-  LoreIndexStatus,
 } from "./api";
 export {
   LOREBOOK_ENTRY_POSITIONS,

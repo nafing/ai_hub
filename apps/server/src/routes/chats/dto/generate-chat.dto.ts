@@ -24,4 +24,16 @@ export class GenerateChatDto {
   @IsOptional()
   @IsBoolean()
   runDirector?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  autonomous?: boolean;
+
+  @IsOptional()
+  @IsString()
+  autonomous_intent_key?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  skip_presence_delay?: boolean;
 }

@@ -3,6 +3,15 @@
   width: 100%;
 }
 
+.rootHiddenFromPrompt {
+  opacity: 0.55;
+}
+
+.rootHiddenFromPrompt .card {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
 .root:hover .actions {
   opacity: 1;
 }
@@ -151,6 +160,27 @@
   font-size: 0.875rem;
   line-height: 1.55;
   white-space: pre-wrap;
+}
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+  padding-left: calc(1.85rem + 0.55rem);
+}
+
+.reactionChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface-elevated) 88%, transparent);
+  border: 1px solid var(--color-border);
+  font-size: 0.875rem;
+  line-height: 1.2;
 }
 
 .actions {

@@ -1,6 +1,12 @@
 import type { CreatePresetInput } from "./api";
 import type { PresetCategory, Section, Variable } from "./types";
 import { defaultPresetId } from "./defaults";
+import {
+  NSFW_CONTENT_RULES,
+  NSFW_WRITING_RULES,
+  ROLEPLAY_FORMATTING_RULES,
+  ROLEPLAY_FORMATTING_REMINDER,
+} from "./formatting-rules";
 
 export type DefaultPresetDefinition = CreatePresetInput & {
   /** Stable key → DB id `default:{key}`. */
@@ -197,8 +203,15 @@ Core rules:
 - {{user}} controls only their own actions and dialogue. Never decide {{user}}'s choices, speech, or internal monologue.
 - Advance the scene with concrete actions, sensory detail, and dialogue. Avoid summarizing what just happened.
 - Keep continuity with Chat History / Chat Summary and any lorebook entries.
-- If information is unknown, improvise consistently rather than breaking character to ask meta questions.
+{{if group}}- Other cast present: {{group}}. Treat them as known from Character Info / Other cast members; do not speak or narrate for them.
+{{/if}}- If information is unknown, improvise consistently rather than breaking character to ask meta questions.
 - OOC notes from {{user}} in ((double parentheses)) or /cmd style are instructions; follow them without quoting them in-character.
+
+${ROLEPLAY_FORMATTING_RULES}
+
+${NSFW_CONTENT_RULES}
+
+${NSFW_WRITING_RULES}
 
 {{response_length}}
 {{narration_style}}
@@ -319,8 +332,13 @@ Goals:
 - Respond naturally to the latest message. Prefer dialogue and short turns over long narrative scenes.
 - Ask clarifying questions when useful; do not lecture unless asked.
 - Remember prior turns from Chat History / Chat Summary.
-- {{tone}}
+{{if group}}- Other cast present: {{group}}. Treat them as known from Character Info; do not speak for them.
+{{/if}}- {{tone}}
 - {{language}}
+
+${NSFW_CONTENT_RULES}
+
+${NSFW_WRITING_RULES}
 
 Do not roleplay multi-paragraph scenes unless {{user}} clearly asks for that.`,
       }),
@@ -465,13 +483,17 @@ Field guidance:
 - description: appearance, presence, and durable facts the model should know.
 - personality: traits, speech patterns, values, flaws, boundaries.
 - scenario: default scene setup with {{user}} and {{char}}.
-- first_mes: opening greeting in-character; may use {{user}} / {{char}}.
-- mes_example: 1–3 short example exchanges using {{user}}: / {{char}}: lines.
+- first_mes: opening beat in-character (narration + quoted speech); may use {{user}} / {{char}}.
+- mes_example: 1–3 short exchanges; after {{user}}: / {{char}}: prefixes, use quoted dialogue and *italic* thoughts in the line body.
 - creator_notes: OOC tips for the human player (not injected as lore).
 - system_prompt: optional extra in-character directives; empty string if none.
 - post_history_instructions: optional jailbreak/UJB-style reminders; empty if none.
 - tags: short genre/trope tags.
 - alternate_greetings: 0–3 alternate first messages.
+
+${ROLEPLAY_FORMATTING_RULES}
+
+Use this markup in first_mes, mes_example, and every alternate_greetings entry.
 
 Multi-character detection (when generating full cards / all card fields):
 - Read the Generator Brief AND any Reference Characters section.
@@ -659,9 +681,16 @@ Each array item must be a complete card with all keys listed above.
 {{if target_field == alternate_greetings}}
 Return JSON for the single character "{{char || (unnamed)}}" only:
 {"alternate_greetings":["greeting 1","greeting 2"]}
+${ROLEPLAY_FORMATTING_REMINDER}
+{{else}}
+{{if target_field == first_mes || target_field == mes_example}}
+Return JSON for the single character "{{char || (unnamed)}}" only (one key):
+{ "{{target_field}}": "..." }
+${ROLEPLAY_FORMATTING_REMINDER}
 {{else}}
 Return JSON for the single character "{{char || (unnamed)}}" only (one key):
 { "{{target_field}}": "..." }
+{{/if}}
 {{/if}}
 {{/if}}
 {{/if}}
@@ -909,6 +938,116 @@ Rules:
         group: "instructions",
         position: "ordered",
         content: `Create a lorebook JSON object from the Generator Brief (and Related Character if present). Output only the JSON object.`,
+      }),
+    ],
+  },
+
+  {
+    key: "twatter_refresh",
+    name: "Default Twatter Refresh",
+    description:
+      "Generates one batch of fictional Twatter timeline activity (posts, replies, likes, reposts, follows) for invited characters.",
+    wrap_format: "xml",
+    category: "twatter_refresh" satisfies PresetCategory,
+    is_default: true,
+    author: AUTHOR,
+    groups: ["instructions"],
+    variables: [languageVariable("twatter_refresh")],
+    sections: [
+      section("twatter_refresh", "system", {
+        kind: "prompt_block",
+        name: "Twatter System",
+        role: "system",
+        group: "instructions",
+        position: "ordered",
+        content: `You write a fake social media timeline for AI Hub's in-app parody site called Twatter.
+
+{{language}}
+
+Rules:
+- Structured actions are limited to posts, polls, follows, likes, reposts, replies, and poll votes.
+- Generated interactions may target existing posts included in the Timeline Brief or posts you create in this response.
+- To respond directly to an existing comment, create a reply interaction for its post and set parentInteractionId to that comment's exact id.
+- Never generate posts, replies, likes, reposts, poll votes, or follows as a persona account. Personas may only be mentioned or targeted by other accounts.
+- Every persona account is a separate user identity.
+- Never reuse the same message text for more than one post or reply by the same account.
+- For each interaction, set either targetTempId or targetPostId and set the unused target field to null.
+- pollOptionIndex must be a zero-based integer for votes and null for every other interaction.
+- An exact @handle in post or reply text tags that active account.
+- Characters should post like real people online — funny, messy, petty, affectionate, or dramatic as fits their bio.
+- Return JSON only with keys: posts, interactions, follows, digests. No markdown fences or commentary.`,
+      }),
+      section("twatter_refresh", "generator_brief", {
+        kind: "generator_brief",
+        name: "Timeline Brief",
+        role: "system",
+        group: "instructions",
+        position: "ordered",
+        content: "",
+      }),
+      section("twatter_refresh", "user", {
+        kind: "prompt_block",
+        name: "Refresh Request",
+        role: "user",
+        group: "instructions",
+        position: "ordered",
+        content: `Generate one batch of Twatter timeline activity from the Timeline Brief above.
+
+Output only a JSON object:
+{"posts":[{"tempId":"p1","authorHandle":"@name","content":"..."}],"interactions":[{"actorHandle":"@name","targetPostId":"...","type":"like"}],"follows":[{"actorHandle":"@name","targetHandle":"@other"}],"digests":[{"accountEntityIds":["character-id"],"content":"short summary"}]}`,
+      }),
+    ],
+  },
+
+  {
+    key: "chat_summary",
+    name: "Default Chat Summary",
+    description:
+      "Rolling roleplay summary: append only NEW durable events as JSON { summary }.",
+    wrap_format: "xml",
+    category: "chat_summary" satisfies PresetCategory,
+    is_default: true,
+    author: AUTHOR,
+    groups: ["instructions"],
+    variables: [],
+    sections: [
+      section("chat_summary", "system", {
+        kind: "prompt_block",
+        name: "Summary System",
+        role: "system",
+        group: "instructions",
+        position: "ordered",
+        content: `You are Automatic Chat Summary. Summarize only NEW durable roleplay events not already captured in the existing summary.
+Focus on plot turns, character developments, relationships, current situation, locations, quests, goals, threats, and unresolved tension.
+Write an appendable continuation. Do not rewrite or repeat the previous summary. If nothing durable changed, return an empty summary. Match the existing summary style.
+Return only valid JSON:
+{
+  "summary": "new summary text to append, or empty string"
+}`,
+      }),
+      section("chat_summary", "chat_summary", {
+        kind: "chat_summary",
+        name: "Previous Summary",
+        role: "system",
+        group: "instructions",
+        position: "ordered",
+        content: "",
+      }),
+      section("chat_summary", "chat_history", {
+        kind: "chat_history",
+        name: "Recent Conversation",
+        role: "system",
+        group: "instructions",
+        position: "ordered",
+        content: "",
+      }),
+      section("chat_summary", "user", {
+        kind: "prompt_block",
+        name: "Summarize Request",
+        role: "user",
+        group: "instructions",
+        position: "ordered",
+        content: `Using the previous summary and recent conversation above, produce the JSON summary append. Output only valid JSON.`,
       }),
     ],
   },

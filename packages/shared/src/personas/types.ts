@@ -12,6 +12,8 @@ export type Persona = {
   description: string;
   /** Trait / personality block. */
   personality: string;
+  /** Conversation About Me bio. */
+  about_me: string;
   /** Optional user-facing notes (not injected into prompts). */
   notes: string;
   /** When true, this is the active default persona for new chats. */

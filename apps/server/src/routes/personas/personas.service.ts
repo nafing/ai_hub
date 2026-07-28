@@ -77,6 +77,7 @@ export class PersonasService {
       name: input.name ?? row.name,
       description: input.description ?? row.description,
       personality: input.personality ?? row.personality,
+      about_me: input.about_me ?? row.about_me,
       notes: input.notes ?? row.notes,
       is_default:
         input.is_default !== undefined ? input.is_default : row.is_default,
@@ -186,6 +187,7 @@ export class PersonasService {
         name: row.name,
         description: row.description,
         personality: row.personality,
+        about_me: row.about_me ?? "",
         notes: row.notes,
         is_default: row.is_default,
       }),
@@ -200,6 +202,7 @@ export class PersonasService {
       name: persona.name,
       description: persona.description,
       personality: persona.personality,
+      about_me: persona.about_me,
       notes: persona.notes,
       is_default: persona.is_default,
     };

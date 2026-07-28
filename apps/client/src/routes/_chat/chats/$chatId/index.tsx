@@ -1,9 +1,16 @@
 import { useState } from "react";
-import { IconArrowLeft, IconSettings } from "@tabler/icons-react";
+import {
+  IconArrowLeft,
+  IconNotebook,
+  IconSettings,
+  IconUsers,
+} from "@tabler/icons-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ActionIcon } from "@/components/ui";
 import { ChatSession } from "@/features/chats/ChatSession";
 import { ChatSettingsPanel } from "@/features/chats/ChatSettingsPanel";
+import { ConversationPresenceModal } from "@/features/chats/ConversationPresenceModal";
+import { SummaryPopover } from "@/features/chats/SummaryPopover";
 import { useChat } from "@/features/chats/queries";
 import classes from "./index.module.css";
 
@@ -16,6 +23,8 @@ function RouteComponent() {
   const { chatId } = Route.useParams();
   const { data: chat, isLoading, isError } = useChat(chatId);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [presenceOpen, setPresenceOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -65,15 +74,37 @@ function RouteComponent() {
             </p>
           </div>
         </div>
-        <ActionIcon
-          type="button"
-          variant={settingsOpen ? "primary" : "default"}
-          aria-label="Toggle settings"
-          aria-pressed={settingsOpen}
-          onClick={() => setSettingsOpen((open) => !open)}
-        >
-          <IconSettings size={18} />
-        </ActionIcon>
+        <div className={classes.headerActions}>
+          {chat.mode === "conversation" ? (
+            <ActionIcon
+              type="button"
+              variant={presenceOpen ? "primary" : "default"}
+              aria-label="Presence"
+              aria-pressed={presenceOpen}
+              onClick={() => setPresenceOpen(true)}
+            >
+              <IconUsers size={18} />
+            </ActionIcon>
+          ) : null}
+          <ActionIcon
+            type="button"
+            variant={summaryOpen ? "primary" : "default"}
+            aria-label="Chat summary"
+            aria-pressed={summaryOpen}
+            onClick={() => setSummaryOpen(true)}
+          >
+            <IconNotebook size={18} />
+          </ActionIcon>
+          <ActionIcon
+            type="button"
+            variant={settingsOpen ? "primary" : "default"}
+            aria-label="Toggle settings"
+            aria-pressed={settingsOpen}
+            onClick={() => setSettingsOpen((open) => !open)}
+          >
+            <IconSettings size={18} />
+          </ActionIcon>
+        </div>
       </header>
 
       <main className={classes.main}>
@@ -95,6 +126,18 @@ function RouteComponent() {
         </div>
         <ChatSettingsPanel chat={chat} />
       </aside>
+
+      <SummaryPopover
+        chat={chat}
+        opened={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+      />
+
+      <ConversationPresenceModal
+        chat={chat}
+        opened={presenceOpen}
+        onClose={() => setPresenceOpen(false)}
+      />
     </div>
   );
 }

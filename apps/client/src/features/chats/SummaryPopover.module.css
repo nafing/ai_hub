@@ -1,0 +1,114 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.heading {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.meta,
+.note,
+.entryMeta {
+  color: var(--color-text-dimmed);
+  font-size: 0.8125rem;
+}
+
+.compiled {
+  margin: 0;
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius-md) * var(--radius-scale));
+  background: var(--color-bg);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  line-height: 1.45;
+  max-height: 14rem;
+  overflow: auto;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-text-dimmed);
+}
+
+.field input {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius-md) * var(--radius-scale));
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.entryList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.entryCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius-md) * var(--radius-scale));
+  background: var(--color-bg);
+}
+
+.entryHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-xs);
+}
+
+.entryContent {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.entryActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.sourceRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.rangeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-sm);
+}

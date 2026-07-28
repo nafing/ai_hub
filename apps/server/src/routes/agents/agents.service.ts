@@ -35,6 +35,8 @@ export class AgentsService implements OnModuleInit {
   async seedDefaultAgents(): Promise<void> {
     let created = 0;
     let promoted = 0;
+    let removed = 0;
+    const activeSlugs = new Set(DEFAULT_AGENTS.map((def) => def.slug));
     for (const def of DEFAULT_AGENTS) {
       const id = defaultAgentId(def.slug);
       const byId = await this.agents.findOneBy({ id });
@@ -66,9 +68,20 @@ export class AgentsService implements OnModuleInit {
       );
       created += 1;
     }
-    if (created > 0 || promoted > 0) {
+
+    const retiredBuiltIns = await this.agents.find({
+      where: { is_built_in: true },
+    });
+    for (const row of retiredBuiltIns) {
+      if (!activeSlugs.has(row.slug)) {
+        await this.agents.delete({ id: row.id });
+        removed += 1;
+      }
+    }
+
+    if (created > 0 || promoted > 0 || removed > 0) {
       this.logger.log(
-        `Default agents: seeded ${created}, marked built-in ${promoted}`,
+        `Default agents: seeded ${created}, marked built-in ${promoted}, removed ${removed}`,
       );
     }
   }

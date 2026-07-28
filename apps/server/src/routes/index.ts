@@ -8,3 +8,6 @@ export { CharactersModule } from "./characters/characters.module";
 export { LorebooksModule } from "./lorebooks/lorebooks.module";
 export { PersonasModule } from "./personas/personas.module";
 export { ChatsModule } from "./chats/chats.module";
+export { TwatterModule } from "./twatter/twatter.module";
+export { AppSettingsModule } from "./app-settings/app-settings.module";
+export { ConversationModule } from "./conversation/conversation.module";
