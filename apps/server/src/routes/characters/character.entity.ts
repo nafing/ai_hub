@@ -10,6 +10,13 @@ export class CharacterEntity {
   @Column("text", { nullable: true })
   avatar!: string | null;
 
+  /**
+   * Extra gallery images (imports / generations) for chat backgrounds.
+   * Files live under uploads/characters/{id}/gallery/.
+   */
+  @Column("simple-json", { default: "[]" })
+  gallery!: unknown[];
+
   /** Denormalized from active version data.name for sorting / list queries. */
   @Column("text", { default: "" })
   name!: string;

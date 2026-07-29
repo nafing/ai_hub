@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
+  IconBraces,
   IconMessage,
   IconPaperclip,
   IconPlayerStop,
@@ -52,6 +53,15 @@ import {
   useUpdateChatMessage,
 } from "./queries";
 import classes from "./ChatSession.module.css";
+
+const CHAT_INSERT_MACROS: Array<{ syntax: string; label: string }> = [
+  { syntax: "{{user}}", label: "Persona name" },
+  { syntax: "{{char}}", label: "Primary character" },
+  { syntax: "{{characters}}", label: "All characters" },
+  { syntax: "{{group}}", label: "Other cast (excl. char)" },
+  { syntax: "{{user_appearance}}", label: "Persona appearance" },
+  { syntax: "{{char_appearance}}", label: "Character appearance" },
+];
 
 type ChatSessionProps = {
   chat: Chat;
@@ -119,12 +129,17 @@ export function ChatSession({
   const characterColorsById = useMemo(() => {
     const map = new Map<
       string,
-      { nameColor: string | null; dialogueColor: string | null }
+      {
+        nameColor: string | null;
+        dialogueColor: string | null;
+        messageBoxColor: string | null;
+      }
     >();
     for (const character of charactersQuery.data ?? []) {
       map.set(character.id, {
         nameColor: character.name_color ?? null,
         dialogueColor: character.dialogue_color ?? null,
+        messageBoxColor: character.message_box_color ?? null,
       });
     }
     return map;
@@ -189,14 +204,22 @@ export function ChatSession({
   function colorsForCharacterId(characterId: string | null | undefined): {
     nameColor: string | null;
     dialogueColor: string | null;
+    messageBoxColor: string | null;
   } {
     if (!characterId) {
       const primaryId = primaryCharacterId(chat.settings);
-      if (!primaryId) return { nameColor: null, dialogueColor: null };
+      if (!primaryId) {
+        return {
+          nameColor: null,
+          dialogueColor: null,
+          messageBoxColor: null,
+        };
+      }
       return (
         characterColorsById.get(primaryId) ?? {
           nameColor: null,
           dialogueColor: null,
+          messageBoxColor: null,
         }
       );
     }
@@ -204,6 +227,7 @@ export function ChatSession({
       characterColorsById.get(characterId) ?? {
         nameColor: null,
         dialogueColor: null,
+        messageBoxColor: null,
       }
     );
   }
@@ -243,6 +267,7 @@ export function ChatSession({
   >([]);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(
     primaryCharacterId(chat.settings),
   );
@@ -874,6 +899,22 @@ export function ChatSession({
     setSelectedIndex(0);
   }
 
+  function insertMacro(syntax: string) {
+    if (streaming) return;
+    const el = composerInputRef.current;
+    const start = el?.selectionStart ?? draft.length;
+    const end = el?.selectionEnd ?? draft.length;
+    const next = `${draft.slice(0, start)}${syntax}${draft.slice(end)}`;
+    const caret = start + syntax.length;
+    onDraftChange(next);
+    requestAnimationFrame(() => {
+      const input = composerInputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(caret, caret);
+    });
+  }
+
   const streamingCharacterId =
     streamSpeaker?.character_id ?? primaryCharacterId(chat.settings);
   const streamingSpeakerName =
@@ -892,8 +933,24 @@ export function ChatSession({
   const deleteSwipeCount = deleteTarget?.swipes.length ?? 0;
   const deleteHasMultipleSwipes = deleteSwipeCount > 1;
 
+  const backgroundSrc = characterAvatarSrc(
+    chat.settings.background_image_url,
+    apiBase,
+  );
+
   return (
-    <div className={classes.root}>
+    <div
+      className={[classes.root, backgroundSrc ? classes.rootWithBg : ""]
+        .filter(Boolean)
+        .join(" ")}
+      style={
+        backgroundSrc
+          ? ({
+              "--chat-bg-image": `url(${JSON.stringify(backgroundSrc)})`,
+            } as CSSProperties)
+          : undefined
+      }
+    >
       <div ref={viewportRef} className={classes.messages}>
         <div className={classes.messageList}>
           {displayMessages.map(
@@ -918,7 +975,11 @@ export function ChatSession({
               const colors =
                 message.role === "assistant"
                   ? colorsForCharacterId(colorSourceId)
-                  : { nameColor: null, dialogueColor: null };
+                  : {
+                      nameColor: null,
+                      dialogueColor: null,
+                      messageBoxColor: null,
+                    };
 
               return (
                 <ChatMessageBubble
@@ -928,6 +989,8 @@ export function ChatSession({
                   speakerName={resolvedSpeakerName}
                   nameColor={colors.nameColor}
                   dialogueColor={colors.dialogueColor}
+                  messageBoxColor={colors.messageBoxColor}
+                  elevated={Boolean(backgroundSrc)}
                   avatarUrl={resolvedAvatar}
                   macroValues={macroValues}
                   disabled={streaming || generateImageMutation.isPending}
@@ -993,6 +1056,10 @@ export function ChatSession({
               dialogueColor={
                 colorsForCharacterId(streamingCharacterId).dialogueColor
               }
+              messageBoxColor={
+                colorsForCharacterId(streamingCharacterId).messageBoxColor
+              }
+              elevated={Boolean(backgroundSrc)}
               avatarUrl={
                 streamingCharacterId
                   ? characterAvatarById.get(streamingCharacterId) ?? null
@@ -1083,9 +1150,15 @@ export function ChatSession({
         <div className={classes.composerBar} data-glass-surface>
           <div className={classes.composerInputWrap}>
             {pendingAttachments.length > 0 ? (
-              <div className={classes.composerAttachments} aria-label="Pending attachments">
+              <div
+                className={classes.composerAttachments}
+                aria-label="Pending attachments"
+              >
                 {pendingAttachments.map((item) => (
-                  <div key={item.localId} className={classes.composerAttachmentChip}>
+                  <div
+                    key={item.localId}
+                    className={classes.composerAttachmentChip}
+                  >
                     {item.previewUrl ? (
                       <img
                         className={classes.composerAttachmentThumb}
@@ -1183,10 +1256,12 @@ export function ChatSession({
             ) : null}
 
             <Textarea
+              ref={composerInputRef}
               className={classes.composerInput}
-              placeholder="Write your response, / for commands"
+              placeholder="Write a message…  (/ commands, @ mentions)"
               value={draft}
               disabled={streaming}
+              rows={1}
               onChange={(event) => onDraftChange(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (showSuggestions) {
@@ -1220,144 +1295,203 @@ export function ChatSession({
             />
           </div>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,.md,.txt,.pdf,.json"
-            className={classes.hiddenFileInput}
-            onChange={(event) => handlePickAttachments(event.target.files)}
-          />
-          <ActionIcon
-            type="button"
-            variant="ghost"
-            aria-label="Attach files"
-            title="Attach images or files"
-            disabled={streaming || uploadingAttachments}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <IconPaperclip size={16} />
-          </ActionIcon>
+          <div className={classes.composerFooter}>
+            <div className={classes.composerTools}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,.md,.txt,.pdf,.json"
+                className={classes.hiddenFileInput}
+                onChange={(event) => handlePickAttachments(event.target.files)}
+              />
+              <ActionIcon
+                type="button"
+                variant="subtle"
+                aria-label="Attach files"
+                title="Attach images or files"
+                disabled={streaming || uploadingAttachments}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <IconPaperclip size={17} stroke={1.6} />
+              </ActionIcon>
 
-          {chat.settings.allow_character_dms &&
-          characterSelectOptions.length > 0 ? (
-            <Menu>
-              <Menu.Target>
+              <Menu>
+                <Menu.Target>
+                  <ActionIcon
+                    type="button"
+                    variant="subtle"
+                    aria-label="Insert macro"
+                    title="Insert roleplay macro"
+                    disabled={streaming}
+                  >
+                    <IconBraces size={17} stroke={1.6} />
+                  </ActionIcon>
+                </Menu.Target>
+                <Menu.Dropdown className={classes.menuDropdownAbove}>
+                  <Menu.Label>Roleplay macros</Menu.Label>
+                  {CHAT_INSERT_MACROS.map((macro) => (
+                    <Menu.Item
+                      key={macro.syntax}
+                      onClick={() => insertMacro(macro.syntax)}
+                    >
+                      <span className={classes.macroMenuItem}>
+                        <span className={classes.macroSyntax}>
+                          {macro.syntax}
+                        </span>
+                        <span className={classes.macroLabel}>{macro.label}</span>
+                      </span>
+                    </Menu.Item>
+                  ))}
+                </Menu.Dropdown>
+              </Menu>
+
+              {chat.settings.allow_character_dms &&
+              characterSelectOptions.length > 0 ? (
+                <Menu>
+                  <Menu.Target>
+                    <ActionIcon
+                      type="button"
+                      variant="subtle"
+                      aria-label="Open character DM"
+                      title="Open character DM"
+                      disabled={streaming || openDmMutation.isPending}
+                    >
+                      <IconMessage size={17} stroke={1.6} />
+                    </ActionIcon>
+                  </Menu.Target>
+                  <Menu.Dropdown className={classes.menuDropdownAbove}>
+                    <Menu.Label>Character DMs</Menu.Label>
+                    {characterSelectOptions.map((option) => {
+                      const avatarUrl =
+                        characterAvatarById.get(option.value) || null;
+                      return (
+                        <Menu.Item
+                          key={option.value}
+                          className={
+                            streaming || openDmMutation.isPending
+                              ? classes.menuItemDisabled
+                              : undefined
+                          }
+                          leftSection={
+                            <span className={classes.menuAvatar}>
+                              {avatarUrl ? (
+                                <img src={avatarUrl} alt="" />
+                              ) : (
+                                option.label.slice(0, 1).toUpperCase()
+                              )}
+                            </span>
+                          }
+                          onClick={() => {
+                            if (streaming || openDmMutation.isPending) return;
+                            void handleOpenCharacterDm(option.value);
+                          }}
+                        >
+                          {option.label}
+                        </Menu.Item>
+                      );
+                    })}
+                  </Menu.Dropdown>
+                </Menu>
+              ) : null}
+
+              {showResponseAsPicker ? (
+                <Menu>
+                  <Menu.Target>
+                    <ActionIcon
+                      type="button"
+                      variant="subtle"
+                      aria-label="Response as"
+                      title="Response as"
+                      disabled={streaming}
+                    >
+                      <IconUsers size={17} stroke={1.6} />
+                    </ActionIcon>
+                  </Menu.Target>
+                  <Menu.Dropdown className={classes.menuDropdownAbove}>
+                    <Menu.Label>Response as</Menu.Label>
+                    {characterSelectOptions.map((option) => {
+                      const avatarUrl =
+                        characterAvatarById.get(option.value) || null;
+                      return (
+                        <Menu.Item
+                          key={option.value}
+                          className={
+                            streaming ? classes.menuItemDisabled : undefined
+                          }
+                          leftSection={
+                            <span className={classes.menuAvatar}>
+                              {avatarUrl ? (
+                                <img src={avatarUrl} alt="" />
+                              ) : (
+                                option.label.slice(0, 1).toUpperCase()
+                              )}
+                            </span>
+                          }
+                          onClick={() => {
+                            if (streaming) return;
+                            void handleTriggerResponse(option.value);
+                          }}
+                        >
+                          {option.label}
+                        </Menu.Item>
+                      );
+                    })}
+                  </Menu.Dropdown>
+                </Menu>
+              ) : null}
+            </div>
+
+            <div className={classes.composerSendGroup}>
+              <span className={classes.composerHint}>
+                {streaming
+                  ? "Generating…"
+                  : uploadingAttachments
+                    ? "Uploading…"
+                    : draft.trim() || pendingAttachments.length > 0
+                      ? "Enter to send · Shift+Enter for new line"
+                      : "Empty send impersonates"}
+              </span>
+              {streaming ? (
                 <ActionIcon
                   type="button"
-                  variant="ghost"
-                  aria-label="Open character DM"
-                  title="Open character DM"
-                  disabled={streaming || openDmMutation.isPending}
+                  variant="ghostDanger"
+                  className={classes.composerSend}
+                  aria-label="Stop"
+                  title="Stop"
+                  onClick={handleStop}
                 >
-                  <IconMessage size={16} />
+                  <IconPlayerStop size={18} stroke={1.6} />
                 </ActionIcon>
-              </Menu.Target>
-              <Menu.Dropdown className={classes.menuDropdownAbove}>
-                <Menu.Label>Character DMs</Menu.Label>
-                {characterSelectOptions.map((option) => {
-                  const avatarUrl =
-                    characterAvatarById.get(option.value) || null;
-                  return (
-                    <Menu.Item
-                      key={option.value}
-                      className={
-                        streaming || openDmMutation.isPending
-                          ? classes.menuItemDisabled
-                          : undefined
-                      }
-                      leftSection={
-                        <span className={classes.menuAvatar}>
-                          {avatarUrl ? (
-                            <img src={avatarUrl} alt="" />
-                          ) : (
-                            option.label.slice(0, 1).toUpperCase()
-                          )}
-                        </span>
-                      }
-                      onClick={() => {
-                        if (streaming || openDmMutation.isPending) return;
-                        void handleOpenCharacterDm(option.value);
-                      }}
-                    >
-                      {option.label}
-                    </Menu.Item>
-                  );
-                })}
-              </Menu.Dropdown>
-            </Menu>
-          ) : null}
-
-          {showResponseAsPicker ? (
-            <Menu>
-              <Menu.Target>
+              ) : (
                 <ActionIcon
                   type="button"
-                  variant="ghost"
-                  aria-label="Response as"
-                  title="Response as"
-                  disabled={streaming}
+                  variant={
+                    draft.trim() || pendingAttachments.length > 0
+                      ? "primary"
+                      : "default"
+                  }
+                  className={classes.composerSend}
+                  aria-label={
+                    draft.trim() || pendingAttachments.length > 0
+                      ? "Send"
+                      : "Impersonate"
+                  }
+                  title={
+                    uploadingAttachments
+                      ? "Uploading…"
+                      : draft.trim() || pendingAttachments.length > 0
+                        ? "Send"
+                        : "Impersonate (empty send writes as your persona)"
+                  }
+                  disabled={!canSend(draft)}
+                  onClick={() => void handleSend()}
                 >
-                  <IconUsers size={16} />
+                  <IconSend size={17} stroke={1.7} />
                 </ActionIcon>
-              </Menu.Target>
-              <Menu.Dropdown className={classes.menuDropdownAbove}>
-                <Menu.Label>Response as</Menu.Label>
-                {characterSelectOptions.map((option) => {
-                  const avatarUrl =
-                    characterAvatarById.get(option.value) || null;
-                  return (
-                    <Menu.Item
-                      key={option.value}
-                      className={streaming ? classes.menuItemDisabled : undefined}
-                      leftSection={
-                        <span className={classes.menuAvatar}>
-                          {avatarUrl ? (
-                            <img src={avatarUrl} alt="" />
-                          ) : (
-                            option.label.slice(0, 1).toUpperCase()
-                          )}
-                        </span>
-                      }
-                      onClick={() => {
-                        if (streaming) return;
-                        void handleTriggerResponse(option.value);
-                      }}
-                    >
-                      {option.label}
-                    </Menu.Item>
-                  );
-                })}
-              </Menu.Dropdown>
-            </Menu>
-          ) : null}
-
-          {streaming ? (
-            <ActionIcon type="button" variant="ghostDanger" aria-label="Stop" title="Stop" onClick={handleStop}>
-              <IconPlayerStop size={16} />
-            </ActionIcon>
-          ) : (
-            <ActionIcon
-              type="button"
-              variant="ghost"
-              aria-label={
-                draft.trim() || pendingAttachments.length > 0
-                  ? "Send"
-                  : "Impersonate"
-              }
-              title={
-                uploadingAttachments
-                  ? "Uploading…"
-                  : draft.trim() || pendingAttachments.length > 0
-                    ? "Send"
-                    : "Impersonate (empty send writes as your persona)"
-              }
-              disabled={!canSend(draft)}
-              onClick={() => void handleSend()}
-            >
-              <IconSend size={16} />
-            </ActionIcon>
-          )}
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

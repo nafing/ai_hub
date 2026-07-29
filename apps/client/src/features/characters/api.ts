@@ -57,14 +57,32 @@ export async function uploadCharacterAvatar(
 ): Promise<Character> {
   const form = new FormData();
   form.append("file", file, fileName);
-  const { data } = await api.put<Character>(`/characters/${id}/avatar`, form, {
-    // Let the browser set multipart boundary (default api Content-Type is JSON).
-    headers: { "Content-Type": undefined },
-  });
+  const { data } = await api.put<Character>(`/characters/${id}/avatar`, form);
   return data;
 }
 
 export async function deleteCharacterAvatar(id: string): Promise<Character> {
   const { data } = await api.delete<Character>(`/characters/${id}/avatar`);
+  return data;
+}
+
+export async function uploadCharacterGalleryImage(
+  id: string,
+  file: Blob,
+  fileName = "image.png",
+): Promise<Character> {
+  const form = new FormData();
+  form.append("file", file, fileName);
+  const { data } = await api.post<Character>(`/characters/${id}/gallery`, form);
+  return data;
+}
+
+export async function deleteCharacterGalleryImage(
+  id: string,
+  imageId: string,
+): Promise<Character> {
+  const { data } = await api.delete<Character>(
+    `/characters/${id}/gallery/${imageId}`,
+  );
   return data;
 }

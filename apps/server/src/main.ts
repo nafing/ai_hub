@@ -3,9 +3,10 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from "@nestjs/platform-fastify";
-import { AppModule } from "./app.module";
-import { ValidationPipe } from "@nestjs/common";
+import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
+import { ValidationPipe } from "@nestjs/common";
+import { AppModule } from "./app.module";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -17,6 +18,12 @@ async function bootstrap() {
 
   const globalPrefix = process.env.SERVER_GLOBAL_PREFIX ?? "/api";
   app.setGlobalPrefix(globalPrefix);
+
+  // Reflect any Origin (browser, Capacitor https://localhost, LAN devices).
+  await app.register(cors, {
+    origin: true,
+    credentials: true,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -30,11 +37,11 @@ async function bootstrap() {
     limits: { fileSize: 50 * 1024 * 1024 },
   });
 
+  const host = process.env.SERVER_HOST || "0.0.0.0";
+  const port = Number(process.env.SERVER_PORT) || 5174;
+
   await app.listen(
-    {
-      host: process.env.SERVER_HOST,
-      port: Number(process.env.SERVER_PORT) || 5174,
-    },
+    { host, port },
     (err, address) => {
       if (err) console.error(err);
       console.log(`Server is running on ${address}`);

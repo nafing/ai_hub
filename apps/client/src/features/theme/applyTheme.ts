@@ -1,5 +1,7 @@
 import { hslToHex, mixHex, withAlpha, hexToRgb } from "./colorUtils";
-import type { BaseColors, ThemeMode } from "./presets";
+import { DEFAULT_PRESET, type BaseColors, type ThemeMode } from "./presets";
+
+const DEFAULT_EMPHASIS = DEFAULT_PRESET.colors.emphasis;
 
 function resolveMode(mode: ThemeMode): "dark" | "light" {
   if (mode !== "system") return mode;
@@ -127,6 +129,10 @@ export function applyThemeToDocument(input: ApplyThemeInput) {
   root.style.setProperty("--color-warning", baseColors.warning);
   root.style.setProperty("--color-speech", baseColors.speech);
   root.style.setProperty("--color-thoughts", baseColors.thoughts);
+  root.style.setProperty(
+    "--color-emphasis",
+    baseColors.emphasis ?? DEFAULT_EMPHASIS,
+  );
   root.style.setProperty("--color-sidebar-text", sidebarText);
 
   // Aliases used by migrated CSS Modules UI.

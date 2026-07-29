@@ -1,4 +1,5 @@
 import type { Character } from "../characters/types";
+import { applyConvoBehaviorToCharacterCard } from "../characters/defaults";
 import type { Lorebook } from "../lorebooks/types";
 import type { Persona } from "../personas/types";
 import type { PresetMarkerContent, PresetVariableValues } from "./build-prompt";
@@ -34,31 +35,43 @@ export function formatCharacterInfoMarker(
   } = {},
 ): string {
   const { data } = character;
+  const displayName =
+    options.forConversation &&
+    data.declare_convo_name_on_card &&
+    data.convo_display_name.trim()
+      ? data.convo_display_name.trim()
+      : data.name;
+
+  let card: string;
   if (options.forImage) {
-    return joinBlocks([
-      { label: "Name", value: data.name },
+    card = joinBlocks([
+      { label: "Name", value: displayName },
       { label: "Appearance", value: data.appearance },
     ]);
-  }
-  if (options.omitScenario || options.forConversation) {
-    return joinBlocks([
-      { label: "Name", value: data.name },
+  } else if (options.omitScenario || options.forConversation) {
+    card = joinBlocks([
+      { label: "Name", value: displayName },
       { label: "Description", value: data.description },
       { label: "Appearance", value: data.appearance },
       { label: "Personality", value: data.personality },
     ]);
+  } else {
+    const override = options.scenarioOverride?.trim();
+    card = joinBlocks([
+      { label: "Name", value: displayName },
+      { label: "Description", value: data.description },
+      { label: "Appearance", value: data.appearance },
+      { label: "Personality", value: data.personality },
+      {
+        label: "Scenario",
+        value: override || data.scenario,
+      },
+    ]);
   }
-  const override = options.scenarioOverride?.trim();
-  return joinBlocks([
-    { label: "Name", value: data.name },
-    { label: "Description", value: data.description },
-    { label: "Appearance", value: data.appearance },
-    { label: "Personality", value: data.personality },
-    {
-      label: "Scenario",
-      value: override || data.scenario,
-    },
-  ]);
+
+  if (!options.forConversation) return card;
+
+  return applyConvoBehaviorToCharacterCard(card, data);
 }
 
 /** Text for the `dialogue_examples` marker section. */
@@ -223,6 +236,8 @@ export function buildPresetPromptContext(
     if (appearance) variables.char_appearance = appearance;
     const examples = formatDialogueExamplesMarker(primary);
     if (examples && !forConversation) markers.dialogue_examples = examples;
+    const convoBehavior = primary.data.convo_behavior?.trim() || "";
+    if (convoBehavior) variables.convo_behavior = convoBehavior;
   }
 
   const allNames = groupCharacterList

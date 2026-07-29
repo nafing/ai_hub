@@ -9,7 +9,7 @@ export function TwatterAppBackButton() {
       className={classes.appBackBtn}
       aria-label="Back to app home"
     >
-      <IconArrowLeft size={20} />
+      <IconArrowLeft size={18} />
     </Link>
   );
 }

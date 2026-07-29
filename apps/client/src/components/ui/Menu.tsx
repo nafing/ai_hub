@@ -106,7 +106,6 @@ function Dropdown({
           id={menuId}
           role="menu"
           className={[classes.dropdown, className].filter(Boolean).join(" ")}
-          data-glass-surface
           initial={{ opacity: 0, y: -4, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -4, scale: 0.98 }}

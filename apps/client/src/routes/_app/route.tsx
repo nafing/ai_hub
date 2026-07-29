@@ -70,6 +70,7 @@ const NAVBAR_ITEMS: NavItem[] = [
 function RouteComponent() {
   const [navbarOpen, setNavbarOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isHome = pathname === "/";
   const runningJobs = useGeneratorJobsStore((state) => state.activeCount());
   const importAttention = useCharacterImportSessionStore((state) =>
     state.attentionCount(),
@@ -180,7 +181,11 @@ function RouteComponent() {
       </nav>
 
       <main className={classes.main}>
-        <div className={classes.container}>
+        <div
+          className={
+            isHome ? classes.containerBleed : classes.container
+          }
+        >
           <Outlet />
         </div>
       </main>

@@ -1,9 +1,9 @@
 import type { Character, CharacterCardData, CharacterVersion } from "./types";
 
-/** Create payload — avatar is uploaded separately via PUT /characters/:id/avatar. */
+/** Create payload — avatar/gallery are uploaded separately. */
 export type CreateCharacterInput = Omit<
   Character,
-  "id" | "avatar" | "active_version_id" | "versions"
+  "id" | "avatar" | "gallery" | "active_version_id" | "versions"
 >;
 
 export type UpdateCharacterInput = Partial<CreateCharacterInput> & {
@@ -28,4 +28,5 @@ export type CharacterListItem = {
   tags: string[];
   name_color?: string | null;
   dialogue_color?: string | null;
+  message_box_color?: string | null;
 };

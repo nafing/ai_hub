@@ -16,6 +16,8 @@ import {
   normalizeCharacterCardData,
   normalizeCharacterVersions,
   type Character,
+  type CharacterGalleryImage,
+  type CharacterGalleryImageSource,
   type CharacterListItem,
   type CreateCharacterInput,
   type UpdateCharacterInput,
@@ -30,6 +32,17 @@ import {
   deleteAvatarFile,
   writeAvatarPng,
 } from "./avatar-storage";
+import {
+  characterGalleryImageExists,
+  copyCharacterGallery,
+  deleteCharacterGalleryDir,
+  deleteCharacterGalleryImageFile,
+  normalizeGalleryRecords,
+  openCharacterGalleryImageStream,
+  toPublicGalleryImage,
+  writeCharacterGalleryImage,
+  type CharacterGalleryImageRecord,
+} from "./gallery-storage";
 
 @Injectable()
 export class CharactersService {
@@ -62,6 +75,7 @@ export class CharactersService {
     const entity = this.characters.create({
       id,
       avatar: null,
+      gallery: [],
       name: version.data.name,
       data: version.data,
       active_version_id: version.id,
@@ -200,11 +214,13 @@ export class CharactersService {
     await this.lorebooks.unlinkCharacter(id);
     await this.characterFolders.unlinkCharacter(id);
     await deleteAvatarFile(id);
+    await deleteCharacterGalleryDir(id);
     await this.characters.delete({ id: row.id });
   }
 
   async duplicate(id: string): Promise<Character> {
     const source = await this.findOne(id);
+    const sourceRow = await this.requireRow(id);
     const now = new Date().toISOString();
     const versions = source.versions.map((version) =>
       createCharacterVersion({
@@ -226,9 +242,15 @@ export class CharactersService {
     const active = versions[activeIndex] ?? versions[versions.length - 1];
 
     const createdId = randomUUID();
+    const copiedGallery = await copyCharacterGallery(
+      id,
+      createdId,
+      normalizeGalleryRecords(sourceRow.gallery),
+    );
     const entity = this.characters.create({
       id: createdId,
       avatar: null,
+      gallery: copiedGallery,
       name: active.data.name,
       data: active.data,
       active_version_id: active.id,
@@ -278,6 +300,81 @@ export class CharactersService {
     return this.toCharacter(saved);
   }
 
+  async listGallery(id: string): Promise<CharacterGalleryImage[]> {
+    const row = await this.requireRow(id);
+    return this.publicGallery(row);
+  }
+
+  async getGalleryImageStream(
+    id: string,
+    imageId: string,
+  ): Promise<StreamableFile> {
+    const row = await this.requireRow(id);
+    const record = normalizeGalleryRecords(row.gallery).find(
+      (item) => item.id === imageId,
+    );
+    if (!record || !(await characterGalleryImageExists(id, record))) {
+      throw new NotFoundException(
+        `Gallery image ${imageId} for character ${id} not found`,
+      );
+    }
+    return new StreamableFile(
+      openCharacterGalleryImageStream(id, record.id, record.ext),
+      {
+        type: record.mime,
+        disposition: `inline; filename="${record.name.replace(/"/g, "")}"`,
+      },
+    );
+  }
+
+  async addGalleryImage(
+    id: string,
+    buffer: Buffer,
+    options: {
+      mime: string;
+      name: string;
+      source?: CharacterGalleryImageSource;
+      prompt?: string;
+    },
+  ): Promise<Character> {
+    const row = await this.requireRow(id);
+    const imageId = randomUUID();
+    let record: CharacterGalleryImageRecord;
+    try {
+      record = await writeCharacterGalleryImage({
+        characterId: id,
+        imageId,
+        buffer,
+        mime: options.mime,
+        name: options.name,
+        source: options.source,
+        prompt: options.prompt,
+      });
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : "Invalid gallery image",
+      );
+    }
+    row.gallery = [...normalizeGalleryRecords(row.gallery), record];
+    const saved = await this.characters.save(row);
+    return this.toCharacter(saved);
+  }
+
+  async removeGalleryImage(id: string, imageId: string): Promise<Character> {
+    const row = await this.requireRow(id);
+    const gallery = normalizeGalleryRecords(row.gallery);
+    const record = gallery.find((item) => item.id === imageId);
+    if (!record) {
+      throw new NotFoundException(
+        `Gallery image ${imageId} for character ${id} not found`,
+      );
+    }
+    await deleteCharacterGalleryImageFile(id, record);
+    row.gallery = gallery.filter((item) => item.id !== imageId);
+    const saved = await this.characters.save(row);
+    return this.toCharacter(saved);
+  }
+
   private async requireRow(id: string): Promise<CharacterEntity> {
     const row = await this.characters.findOneBy({ id });
     if (!row) {
@@ -293,6 +390,23 @@ export class CharactersService {
 
   private avatarRelativePath(characterId: string): string {
     return `characters/${characterId}.png`;
+  }
+
+  private async publicGallery(
+    row: CharacterEntity,
+  ): Promise<CharacterGalleryImage[]> {
+    const records = normalizeGalleryRecords(row.gallery);
+    const existing: CharacterGalleryImageRecord[] = [];
+    for (const record of records) {
+      if (await characterGalleryImageExists(row.id, record)) {
+        existing.push(record);
+      }
+    }
+    if (existing.length !== records.length) {
+      row.gallery = existing;
+      await this.characters.save(row);
+    }
+    return existing.map((record) => toPublicGalleryImage(row.id, record));
   }
 
   private async toCharacter(row: CharacterEntity): Promise<Character> {
@@ -319,6 +433,7 @@ export class CharactersService {
     return {
       id: row.id,
       avatar: hasAvatar ? this.avatarPublicUrl(row.id) : null,
+      gallery: await this.publicGallery(row),
       spec: CHARA_CARD_SPEC,
       spec_version: CHARA_CARD_SPEC_VERSION,
       data: normalized.data,
@@ -328,17 +443,23 @@ export class CharactersService {
   }
 
   private async toListItem(row: CharacterEntity): Promise<CharacterListItem> {
-    const character = await this.toCharacter(row);
+    const hasAvatar = await avatarExists(row.id);
+    const normalized = normalizeCharacterVersions({
+      data: row.data ?? {},
+      versions: row.versions,
+      active_version_id: row.active_version_id,
+    });
     return {
-      id: character.id,
-      avatar: character.avatar,
-      name: character.data.name,
-      description: character.data.description,
-      creator: character.data.creator,
-      character_version: character.data.character_version,
-      tags: character.data.tags,
-      name_color: character.data.name_color ?? null,
-      dialogue_color: character.data.dialogue_color ?? null,
+      id: row.id,
+      avatar: hasAvatar ? this.avatarPublicUrl(row.id) : null,
+      name: normalized.data.name,
+      description: normalized.data.description,
+      creator: normalized.data.creator,
+      character_version: normalized.data.character_version,
+      tags: normalized.data.tags,
+      name_color: normalized.data.name_color ?? null,
+      dialogue_color: normalized.data.dialogue_color ?? null,
+      message_box_color: normalized.data.message_box_color ?? null,
     };
   }
 }

@@ -24,6 +24,17 @@ out/
 build
 dist
 
+# Capacitor / Android local artifacts
+apps/client/android/.gradle/
+apps/client/android/app/build/
+apps/client/android/build/
+apps/client/android/local.properties
+apps/client/android/captures/
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+
 
 # Debug
 npm-debug.log*

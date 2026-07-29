@@ -25,6 +25,7 @@
   --color-teal: #c4b5fd;
   --color-teal-deep: #7c6bb8;
   --color-thoughts: #e5e7eb;
+  --color-emphasis: #fbbf24;
 
   /* UI aliases */
   --color-bg: var(--color-paper);

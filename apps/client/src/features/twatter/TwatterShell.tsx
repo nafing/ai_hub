@@ -93,7 +93,7 @@ function TwatterShellInner() {
                 aria-label="Settings"
                 onClick={() => void navigate({ to: "/twatter/settings" })}
               >
-                <IconSettings size={20} />
+                <IconSettings size={18} />
               </button>
             </div>
           </header>
@@ -105,7 +105,7 @@ function TwatterShellInner() {
 
         <aside className={classes.rightSidebar} aria-label="Twatter widgets">
           <Link to="/twatter/search" className={classes.searchLink}>
-            <IconSearch size={18} />
+            <IconSearch size={16} />
             Search Twatter
           </Link>
 
@@ -147,7 +147,11 @@ function TwatterShellInner() {
         </aside>
       </div>
 
-      <aside className={classes.sidebar} aria-label="Twatter navigation">
+      <aside
+        className={classes.sidebar}
+        aria-label="Twatter navigation"
+        data-glass-surface
+      >
         <div className={classes.sidebarInner}>
           <div className={classes.sidebarLogoRow}>
             <span className={classes.desktopOnly}>
@@ -178,7 +182,7 @@ function TwatterShellInner() {
                   className={active ? classes.navLinkActive : classes.navLink}
                 >
                   <span className={classes.navIconWrap}>
-                    <Icon size={26} stroke={active ? 2.4 : 1.8} />
+                    <Icon size={18} stroke={active ? 2.1 : 1.6} />
                     {showBadge ? (
                       <span className={classes.navBadge}>
                         {unreadCount > 99 ? "99+" : unreadCount}
@@ -197,7 +201,7 @@ function TwatterShellInner() {
             onClick={() => setComposeOpen(true)}
           >
             <span className={classes.postBtnLabel}>Post</span>
-            <IconPlus size={24} className={classes.postBtnIcon} />
+            <IconPlus size={18} className={classes.postBtnIcon} />
           </button>
 
           <div className={classes.sidebarFooter}>
@@ -243,7 +247,7 @@ function TwatterShellInner() {
           aria-label="Create post"
           onClick={() => setComposeOpen(true)}
         >
-          <IconPlus size={24} />
+          <IconPlus size={20} />
         </button>
       ) : null}
 

@@ -96,9 +96,6 @@ export async function uploadChatAttachment(
   const { data } = await api.post<ChatMessageAttachment>(
     `/chats/${chatId}/attachments`,
     form,
-    {
-      headers: { "Content-Type": undefined },
-    },
   );
   return data;
 }

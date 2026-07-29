@@ -1,9 +1,22 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { IconMessages, IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CHAT_MODE_LABELS, type ChatListItem } from "@ai-hub/shared";
-import { ActionIcon, Button, Modal, notifications, RuntimeText } from "@/components/ui";
+import {
+  CHAT_MODES,
+  CHAT_MODE_LABELS,
+  type ChatListItem,
+  type ChatMode,
+} from "@ai-hub/shared";
+import {
+  ActionIcon,
+  Button,
+  Modal,
+  MultiSelect,
+  notifications,
+  RuntimeText,
+  TextInput,
+} from "@/components/ui";
 import { CreateChatModal } from "@/features/chats/CreateChatModal";
 import { useChats, useDeleteChat } from "@/features/chats/queries";
 import classes from "./index.module.css";
@@ -20,8 +33,57 @@ type DeleteTarget = {
 function RouteComponent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [query, setQuery] = useState("");
+  const [modeFilter, setModeFilter] = useState<ChatMode[]>([]);
+
   const { data, isLoading, isError } = useChats();
   const deleteMutation = useDeleteChat();
+
+  const modeOptions = useMemo(
+    () =>
+      CHAT_MODES.map((mode) => ({
+        value: mode,
+        label: CHAT_MODE_LABELS[mode],
+      })),
+    [],
+  );
+
+  const hasActiveFilters = query.trim().length > 0 || modeFilter.length > 0;
+
+  const filteredChats = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return (data ?? []).filter((chat) => {
+      if (modeFilter.length > 0 && !modeFilter.includes(chat.mode)) {
+        return false;
+      }
+      if (!normalizedQuery) return true;
+      return (
+        chat.title.toLowerCase().includes(normalizedQuery) ||
+        (chat.preview?.toLowerCase().includes(normalizedQuery) ?? false)
+      );
+    });
+  }, [data, modeFilter, query]);
+
+  const grouped = useMemo(() => {
+    const byMode = new Map<ChatMode, ChatListItem[]>();
+    for (const mode of CHAT_MODES) {
+      byMode.set(mode, []);
+    }
+    for (const chat of filteredChats) {
+      const list = byMode.get(chat.mode) ?? [];
+      list.push(chat);
+      byMode.set(chat.mode, list);
+    }
+    return CHAT_MODES.map((mode) => ({
+      mode,
+      chats: byMode.get(mode) ?? [],
+    })).filter((group) => group.chats.length > 0);
+  }, [filteredChats]);
+
+  function clearFilters() {
+    setQuery("");
+    setModeFilter([]);
+  }
 
   function handleConfirmDelete() {
     if (!deleteTarget) return;
@@ -50,15 +112,54 @@ function RouteComponent() {
       <header className={classes.header}>
         <div className={classes.headerRow}>
           <h2 className={classes.title}>Chats</h2>
-          <ActionIcon type="button" variant="default" aria-label="New chat" onClick={() => setCreateOpen(true)}
+          <ActionIcon
+            type="button"
+            variant="default"
+            aria-label="New chat"
+            onClick={() => setCreateOpen(true)}
           >
             <IconPlus size={16} />
           </ActionIcon>
         </div>
         <p className={classes.subtitle}>
           Roleplay and conversation sessions.
+          {!isLoading && !isError && hasActiveFilters
+            ? ` Showing ${filteredChats.length} of ${data?.length ?? 0}.`
+            : null}
         </p>
       </header>
+
+      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
+        <div className={classes.filters}>
+          <TextInput
+            className={classes.searchInput}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Search title, preview…"
+            aria-label="Search chats"
+          />
+          <MultiSelect
+            className={classes.modeFilter}
+            searchable
+            clearable
+            data={modeOptions}
+            value={modeFilter}
+            onChange={(value) => setModeFilter(value as ChatMode[])}
+            placeholder="All modes"
+            searchPlaceholder="Filter modes…"
+          />
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="default"
+              className={classes.clearFilters}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className={classes.loading}>
@@ -74,20 +175,41 @@ function RouteComponent() {
         <p className={classes.status}>No chats yet. Create one with +.</p>
       ) : null}
 
-      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
-        <div className={classes.grid}>
-          {(data ?? []).map((chat) => (
-            <ChatCard
-              key={chat.id}
-              chat={chat}
-              onDelete={(item) =>
-                setDeleteTarget({ id: item.id, title: item.title })
-              }
-              deletePending={deleteMutation.isPending}
-            />
-          ))}
-        </div>
+      {!isLoading &&
+      !isError &&
+      (data?.length ?? 0) > 0 &&
+      grouped.length === 0 ? (
+        <p className={classes.status}>
+          No chats match your filters.{" "}
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className={classes.clearFiltersLink}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </p>
       ) : null}
+
+      {grouped.map(({ mode, chats }) => (
+        <section key={mode} className={classes.group}>
+          <h3 className={classes.groupTitle}>{CHAT_MODE_LABELS[mode]}</h3>
+          <div className={classes.grid}>
+            {chats.map((chat) => (
+              <ChatCard
+                key={chat.id}
+                chat={chat}
+                onDelete={(item) =>
+                  setDeleteTarget({ id: item.id, title: item.title })
+                }
+                deletePending={deleteMutation.isPending}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
 
       <CreateChatModal
         opened={createOpen}
@@ -105,13 +227,18 @@ function RouteComponent() {
           cannot be undone.
         </p>
         <div className={classes.modalActions}>
-          <Button variant="default" type="button"
+          <Button
+            variant="default"
+            type="button"
             onClick={() => setDeleteTarget(null)}
           >
             Cancel
           </Button>
-          <Button variant="dangerSolid" type="button"
-            onClick={handleConfirmDelete}>
+          <Button
+            variant="dangerSolid"
+            type="button"
+            onClick={handleConfirmDelete}
+          >
             Delete
           </Button>
         </div>
@@ -131,6 +258,7 @@ function ChatCard({
 }) {
   return (
     <motion.div
+      className={classes.cardWrap}
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.16 }}
@@ -141,22 +269,14 @@ function ChatCard({
         className={classes.card}
       >
         <div className={classes.cardTop}>
-          <div className={classes.cardIdentity}>
-            <IconMessages size={20} className={classes.cardIcon} />
-            <div className={classes.cardText}>
-              <p className={classes.cardName}>{chat.title || "Untitled"}</p>
-              <div className={classes.cardMeta}>
-                <span className={classes.badge}>
-                  {CHAT_MODE_LABELS[chat.mode]}
-                </span>
-                <p className={classes.cardCount}>
-                  {chat.message_count} messages
-                </p>
-              </div>
-            </div>
-          </div>
+          <p className={classes.cardName}>{chat.title || "Untitled"}</p>
           <div className={classes.cardActions}>
-            <ActionIcon type="button" variant="ghostDanger" aria-label="Delete chat" disabled={deletePending} onClick={(event) => {
+            <ActionIcon
+              type="button"
+              variant="ghostDanger"
+              aria-label="Delete chat"
+              disabled={deletePending}
+              onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 onDelete(chat);
@@ -172,6 +292,10 @@ function ChatCard({
           ) : (
             "Empty chat"
           )}
+        </p>
+        <p className={classes.cardMeta}>
+          {chat.message_count}{" "}
+          {chat.message_count === 1 ? "message" : "messages"}
         </p>
       </Link>
     </motion.div>

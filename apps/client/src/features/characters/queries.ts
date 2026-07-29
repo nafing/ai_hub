@@ -4,12 +4,14 @@ import {
   createCharacter,
   deleteCharacter,
   deleteCharacterAvatar,
+  deleteCharacterGalleryImage,
   deleteCharacterVersion,
   duplicateCharacter,
   getCharacter,
   listCharacters,
   updateCharacter,
   uploadCharacterAvatar,
+  uploadCharacterGalleryImage,
 } from "./api";
 import { lorebookKeys } from "@/features/lorebooks/queries";
 import { characterFolderKeys } from "./foldersQueries";
@@ -126,6 +128,36 @@ export function useDeleteCharacterAvatar() {
   return useMutation({
     mutationFn: (id: string) => deleteCharacterAvatar(id),
     onSuccess: (character) => {
+      void queryClient.invalidateQueries({ queryKey: characterKeys.list() });
+      void queryClient.invalidateQueries({
+        queryKey: characterKeys.detail(character.id),
+      });
+    },
+  });
+}
+
+export function useUploadCharacterGalleryImage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file, fileName }: { id: string; file: Blob; fileName?: string }) =>
+      uploadCharacterGalleryImage(id, file, fileName),
+    onSuccess: (character) => {
+      queryClient.setQueryData(characterKeys.detail(character.id), character);
+      void queryClient.invalidateQueries({ queryKey: characterKeys.list() });
+      void queryClient.invalidateQueries({
+        queryKey: characterKeys.detail(character.id),
+      });
+    },
+  });
+}
+
+export function useDeleteCharacterGalleryImage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, imageId }: { id: string; imageId: string }) =>
+      deleteCharacterGalleryImage(id, imageId),
+    onSuccess: (character) => {
+      queryClient.setQueryData(characterKeys.detail(character.id), character);
       void queryClient.invalidateQueries({ queryKey: characterKeys.list() });
       void queryClient.invalidateQueries({
         queryKey: characterKeys.detail(character.id),

@@ -246,6 +246,11 @@ export type ChatSettings = {
   image_aspect_ratio: string;
   /** Resolution tier for character [send_image] generations. */
   image_resolution: string;
+  /**
+   * Chat stage background — API path to a character gallery image
+   * (e.g. `/characters/{id}/gallery/{imageId}`), or null for default stage.
+   */
+  background_image_url: string | null;
 };
 
 export type Chat = {

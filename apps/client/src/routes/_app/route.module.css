@@ -182,6 +182,11 @@
   margin-inline: auto;
 }
 
+.containerBleed {
+  width: 100%;
+  max-width: none;
+}
+
 .burger {
   display: none;
   flex-direction: column;

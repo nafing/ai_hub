@@ -1,6 +1,7 @@
 import { Type } from "class-transformer";
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsNumber,
   IsObject,
@@ -13,6 +14,7 @@ import {
   CHARA_CARD_SPEC_VERSION,
   type CharacterBook,
   type CharacterCardData,
+  type CharacterConvoBehaviorInsertion,
 } from "@ai-hub/shared";
 
 export class CharacterCardDataDto implements CharacterCardData {
@@ -84,7 +86,30 @@ export class CharacterCardDataDto implements CharacterCardData {
 
   @IsOptional()
   @IsString()
+  message_box_color!: string | null;
+
+  @IsOptional()
+  @IsString()
   convo_display_name!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  declare_convo_name_on_card!: boolean;
+
+  @IsOptional()
+  @IsString()
+  convo_behavior!: string;
+
+  @IsOptional()
+  @IsIn([
+    "constant_after_card",
+    "constant_before_card",
+    "append_to_post_history",
+    "prepend_to_post_history",
+    "replace_post_history",
+    "marker_only",
+  ])
+  convo_behavior_insertion!: CharacterConvoBehaviorInsertion;
 }
 
 export class CreateCharacterDto {

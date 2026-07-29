@@ -47,9 +47,7 @@ export async function uploadPersonaAvatar(
 ): Promise<Persona> {
   const form = new FormData();
   form.append("file", file, fileName);
-  const { data } = await api.put<Persona>(`/personas/${id}/avatar`, form, {
-    headers: { "Content-Type": undefined },
-  });
+  const { data } = await api.put<Persona>(`/personas/${id}/avatar`, form);
   return data;
 }
 

@@ -9,8 +9,18 @@
 
 .italic {
   font-style: italic;
+  color: var(--color-thoughts);
+}
+
+.bold {
+  font-weight: 700;
+  color: var(--color-emphasis);
 }
 
 .dialogue {
   color: var(--color-speech);
+}
+
+.dialogueBold {
+  font-weight: 700;
 }

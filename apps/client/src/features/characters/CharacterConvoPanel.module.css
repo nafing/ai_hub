@@ -1,0 +1,22 @@
+.checkbox {
+  margin-top: 0.15rem;
+}
+
+.insertionRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.insertionLabel {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-dimmed);
+}
+
+.insertionRow > :last-child {
+  flex: 1 1 14rem;
+  min-width: 0;
+}

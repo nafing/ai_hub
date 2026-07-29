@@ -35,6 +35,7 @@ import {
   usePresets,
 } from "@/features/presets/queries";
 import { useUpdateChat } from "./queries";
+import { ChatBackgroundPicker } from "./ChatBackgroundPicker";
 import { SummariesEditorModal } from "./SummariesEditorModal";
 import { api } from "@/lib/api";
 import classes from "./ChatSettingsPanel.module.css";
@@ -387,6 +388,19 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
             })}
           </ul>
         ) : null}
+      </Field>
+
+      <Field
+        label="Background image"
+        hint="Pick a gallery image from any character in this chat. Manage images on each character's Gallery tab."
+      >
+        <ChatBackgroundPicker
+          characterIds={chat.settings.character_ids}
+          value={chat.settings.background_image_url}
+          onChange={(background_image_url) =>
+            patchSettings({ background_image_url })
+          }
+        />
       </Field>
 
       {isGroup ? (

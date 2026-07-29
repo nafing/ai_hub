@@ -32,6 +32,7 @@ interface ThemeState {
   setAccentCustom: () => void;
   setAccentHsl: (partial: { h?: number; s?: number; l?: number }) => void;
   setEditingKey: (key: BaseColorKey) => void;
+  setBaseColor: (key: BaseColorKey, hex: string) => void;
   setEditingHex: (hex: string) => void;
   setEditingRgb: (channel: "r" | "g" | "b", value: number) => void;
   setEditingHue: (h: number) => void;
@@ -111,6 +112,28 @@ export const useThemeStore = create<ThemeState>()(
 
       setEditingKey: (key) => set({ editingKey: key }),
 
+      setBaseColor: (key, hex) => {
+        const normalized = hex.startsWith("#") ? hex : `#${hex}`;
+        const rgb = hexToRgb(normalized);
+        if (!rgb) return;
+        const nextHex = rgbToHex(rgb.r, rgb.g, rgb.b);
+        const nextColors = {
+          ...get().baseColors,
+          [key]: nextHex,
+        };
+        const patch: Partial<ThemeState> = { baseColors: nextColors };
+        if (key === "primary") {
+          const hsl = hexToHsl(nextHex);
+          if (hsl) {
+            patch.accentH = hsl.h;
+            patch.accentS = hsl.s;
+            patch.accentL = hsl.l;
+            patch.accentSource = "custom";
+          }
+        }
+        set(patch);
+      },
+
       setEditingHex: (hex) => {
         const normalized = hex.startsWith("#") ? hex : `#${hex}`;
         const rgb = hexToRgb(normalized);
@@ -182,6 +205,19 @@ export const useThemeStore = create<ThemeState>()(
       setUiScale: (v) => set({ uiScale: v }),
       setGlassEffects: (v) => set({ glassEffects: v }),
     }),
-    { name: "ai-hub-theme" },
+    {
+      name: "ai-hub-theme",
+      merge: (persisted, current) => {
+        const stored = (persisted ?? {}) as Partial<ThemeState>;
+        return {
+          ...current,
+          ...stored,
+          baseColors: {
+            ...current.baseColors,
+            ...stored.baseColors,
+          },
+        };
+      },
+    },
   ),
 );

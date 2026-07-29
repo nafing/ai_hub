@@ -69,13 +69,42 @@ export type CharacterCardData = {
   talkativeness: number;
   /** Conversation bio shown as About Me (hub field). */
   about_me: string;
-  /** Hex/CSS color for speaker name labels in conversation. */
+  /**
+   * CSS color or gradient for speaker name labels in conversation.
+   * Gradients use background-clip:text in the client.
+   */
   name_color: string | null;
-  /** Hex/CSS color for dialogue text in conversation/roleplay. */
+  /**
+   * CSS color for quoted dialogue spans in chat messages
+   * ("", '', «», 「」, 『』).
+   */
   dialogue_color: string | null;
-  /** Optional display alias for conversation grouping. */
+  /**
+   * Background color for this character's chat message bubbles
+   * (prefer semi-transparent rgba).
+   */
+  message_box_color: string | null;
+  /** Optional display alias for conversation grouping / About Me labels. */
   convo_display_name: string;
+  /**
+   * When true, Character Info in conversation prompts uses `convo_display_name`
+   * instead of `name` (falls back to `name` when empty).
+   */
+  declare_convo_name_on_card: boolean;
+  /** How this character should text in conversation mode (hub field). */
+  convo_behavior: string;
+  /** Where to inject `convo_behavior` relative to the character card. */
+  convo_behavior_insertion: CharacterConvoBehaviorInsertion;
 };
+
+/** Insertion mode for conversation behavior text. */
+export type CharacterConvoBehaviorInsertion =
+  | "constant_after_card"
+  | "constant_before_card"
+  | "append_to_post_history"
+  | "prepend_to_post_history"
+  | "replace_post_history"
+  | "marker_only";
 
 /**
  * Full Character Card V2 document.
@@ -89,8 +118,25 @@ export type CharacterCardV2 = {
 /**
  * Persisted hub character: card v2 + hub metadata.
  * `avatar` is an API path to the stored PNG (e.g. `/characters/{id}/avatar`), or null.
+ * `gallery` holds extra images (imports / generations) for backgrounds and reuse.
  * `data` always mirrors the active version snapshot (used by chats / export).
  */
+export type CharacterGalleryImageSource = "upload" | "generated" | "import";
+
+/** One image in a character's gallery (not the primary avatar). */
+export type CharacterGalleryImage = {
+  id: string;
+  /** Public API path, e.g. `/characters/{id}/gallery/{imageId}`. */
+  url: string;
+  mime: string;
+  name: string;
+  size: number;
+  source: CharacterGalleryImageSource;
+  created_at: string;
+  /** Generation prompt when `source` is `generated`. */
+  prompt?: string;
+};
+
 export type CharacterVersion = {
   id: string;
   /** Label shown in the version Select (also written to data.character_version). */
@@ -104,6 +150,8 @@ export type Character = CharacterCardV2 & {
   id: string;
   /** Public API path for the avatar image, or null when none. */
   avatar: string | null;
+  /** Extra images available for chat backgrounds and reuse. */
+  gallery: CharacterGalleryImage[];
   active_version_id: string;
   versions: CharacterVersion[];
 };

@@ -68,7 +68,7 @@ function RouteComponent() {
     <div
       className={`${classes.shell}${settingsOpen ? ` ${classes.shellAsideOpen}` : ""}`}
     >
-      <header className={classes.header} data-glass-surface>
+      <header className={classes.header}>
         <div className={classes.headerLeft}>
           <ActionIcon
             type="button"

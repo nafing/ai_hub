@@ -245,6 +245,9 @@ export type {
   CharacterBookEntryPosition,
   CharacterCardData,
   CharacterCardV2,
+  CharacterConvoBehaviorInsertion,
+  CharacterGalleryImage,
+  CharacterGalleryImageSource,
   CharacterVersion,
 } from "./characters/types";
 export {
@@ -262,6 +265,9 @@ export {
   defaultCharacterCardData,
   normalizeAlternateGreetings,
   normalizeCharacterCardData,
+  normalizeConvoBehaviorInsertion,
+  applyConvoBehaviorToCharacterCard,
+  resolveConvoPostHistoryBlock,
   toCharacterCardV2,
 } from "./characters/defaults";
 export {

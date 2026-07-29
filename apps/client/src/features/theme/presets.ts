@@ -9,7 +9,8 @@ export type BaseColorKey =
   | "success"
   | "warning"
   | "speech"
-  | "thoughts";
+  | "thoughts"
+  | "emphasis";
 
 export type BaseColors = Record<BaseColorKey, string>;
 
@@ -54,8 +55,9 @@ export const BASE_COLOR_META: { key: BaseColorKey; label: string }[] = [
   { key: "danger", label: "Danger" },
   { key: "success", label: "Success" },
   { key: "warning", label: "Warning" },
-  { key: "speech", label: "Speech" },
-  { key: "thoughts", label: "Thoughts" },
+  { key: "speech", label: 'Speech ("…")' },
+  { key: "thoughts", label: "Thoughts (*…*)" },
+  { key: "emphasis", label: "Emphasis (**…**)" },
 ];
 
 export const THEME_PRESETS: ThemePreset[] = [
@@ -74,6 +76,7 @@ export const THEME_PRESETS: ThemePreset[] = [
       warning: "#f59e0b",
       speech: "#c4b5fd",
       thoughts: "#e5e7eb",
+      emphasis: "#fbbf24",
     },
   },
   {
@@ -91,6 +94,7 @@ export const THEME_PRESETS: ThemePreset[] = [
       warning: "#fbbf24",
       speech: "#93c5fd",
       thoughts: "#cbd5e1",
+      emphasis: "#fbbf24",
     },
   },
   {
@@ -108,6 +112,7 @@ export const THEME_PRESETS: ThemePreset[] = [
       warning: "#fbbf24",
       speech: "#6ee7b7",
       thoughts: "#d1fae5",
+      emphasis: "#fde68a",
     },
   },
   {
@@ -125,6 +130,7 @@ export const THEME_PRESETS: ThemePreset[] = [
       warning: "#fbbf24",
       speech: "#fda4af",
       thoughts: "#fecdd3",
+      emphasis: "#fbbf24",
     },
   },
   {
@@ -142,6 +148,7 @@ export const THEME_PRESETS: ThemePreset[] = [
       warning: "#fbbf24",
       speech: "#fcd34d",
       thoughts: "#fde68a",
+      emphasis: "#fb923c",
     },
   },
   {
@@ -159,6 +166,7 @@ export const THEME_PRESETS: ThemePreset[] = [
       warning: "#fbbf24",
       speech: "#cbd5e1",
       thoughts: "#e2e8f0",
+      emphasis: "#fbbf24",
     },
   },
   {
@@ -176,6 +184,7 @@ export const THEME_PRESETS: ThemePreset[] = [
       warning: "#d97706",
       speech: "#8b5cf6",
       thoughts: "#4b5563",
+      emphasis: "#d97706",
     },
   },
   {
@@ -193,6 +202,7 @@ export const THEME_PRESETS: ThemePreset[] = [
       warning: "#fbbf24",
       speech: "#a78bfa",
       thoughts: "#ddd6fe",
+      emphasis: "#fbbf24",
     },
   },
   {
@@ -211,6 +221,7 @@ export const THEME_PRESETS: ThemePreset[] = [
       warning: "#f59e0b",
       speech: "#f9a8d4",
       thoughts: "#93c5fd",
+      emphasis: "#fbbf24",
     },
   },
 ];

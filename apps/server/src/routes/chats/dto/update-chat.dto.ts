@@ -228,6 +228,10 @@ class UpdateChatSettingsDto {
   @IsOptional()
   @IsString()
   image_resolution?: string;
+
+  @IsOptional()
+  @IsString()
+  background_image_url?: string | null;
 }
 
 export class UpdateChatDto {

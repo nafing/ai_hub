@@ -8,7 +8,9 @@ import {
   CHARA_CARD_SPEC_VERSION,
   DEFAULT_TALKATIVENESS,
   characterTalkativeness,
+  normalizeConvoBehaviorInsertion,
   setCharacterTalkativeness,
+  type CharacterConvoBehaviorInsertion,
   type CreateCharacterInput,
 } from "@ai-hub/shared";
 import {
@@ -22,6 +24,8 @@ import {
   Button,
 } from "@/components/ui";
 import { AlternateGreetingsEditor } from "./AlternateGreetingsEditor";
+import { CharacterColorsPanel } from "./CharacterColorsPanel";
+import { CharacterConvoPanel } from "./CharacterConvoPanel";
 import { CharacterGeneratePanel } from "./CharacterGeneratePanel";
 import classes from "./CharacterForm.module.css";
 
@@ -43,6 +47,10 @@ type CharacterFormProps = {
   onSubmit: (values: CharacterFormValues) => Promise<void> | void;
   /** Avatar controls rendered in the Metadata tab. */
   avatarSection?: ReactNode;
+  /** Optional avatar URL for Colors preview / extract. */
+  avatarUrl?: string | null;
+  /** Gallery images panel rendered in the Gallery tab. */
+  gallerySection?: ReactNode;
   /** Linked lorebooks list rendered in the Lorebooks tab. */
   lorebooksSection?: ReactNode;
   /**
@@ -85,6 +93,8 @@ export function CharacterForm({
   initialValues,
   onSubmit,
   avatarSection,
+  avatarUrl = null,
+  gallerySection,
   lorebooksSection,
   versionSelect,
 }: CharacterFormProps) {
@@ -149,6 +159,9 @@ export function CharacterForm({
         <Tabs.List>
           <Tabs.Tab value="metadata">Metadata</Tabs.Tab>
           <Tabs.Tab value="card">Card</Tabs.Tab>
+          <Tabs.Tab value="convo">Convo</Tabs.Tab>
+          <Tabs.Tab value="colors">Colors</Tabs.Tab>
+          <Tabs.Tab value="gallery">Gallery</Tabs.Tab>
           <Tabs.Tab value="lorebooks">Lorebooks</Tabs.Tab>
           <Tabs.Tab value="advanced">Advanced</Tabs.Tab>
           <Tabs.Tab value="generate">Generate with AI</Tabs.Tab>
@@ -246,6 +259,35 @@ export function CharacterForm({
                 }
               />
             </Field>
+            <div className={classes.field}>
+              <span className={classes.fieldLabel}>Talkativeness</span>
+              <p className={classes.fieldHint}>
+                How often this character should speak in Smart group chat (0–1).
+              </p>
+              <div className={classes.sliderWrap}>
+                <Slider
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={talkativeness}
+                  marks={[
+                    { value: 0, label: "0" },
+                    { value: 0.5, label: "0.5" },
+                    { value: 1, label: "1" },
+                  ]}
+                  onChange={(value) =>
+                    setValues((current) => ({
+                      ...current,
+                      data: setCharacterTalkativeness(current.data, value),
+                    }))
+                  }
+                />
+                <p className={classes.sliderValue}>
+                  {talkativeness.toFixed(2)}
+                  {talkativeness === DEFAULT_TALKATIVENESS ? " (default)" : ""}
+                </p>
+              </div>
+            </div>
           </div>
         </Tabs.Panel>
 
@@ -292,73 +334,6 @@ export function CharacterForm({
               />
             </Field>
             <Field
-              label="About Me"
-              hint="Public bio for conversation chats (About Me inject / update_about_me)."
-            >
-              <Textarea
-                className={classes.textarea}
-                value={values.data.about_me}
-                onChange={(event) =>
-                  setDataField("about_me", event.target.value)
-                }
-              />
-            </Field>
-            <div className={classes.twoCol}>
-              <Field label="Name color" hint="CSS color for speaker labels.">
-                <TextInput
-                  value={values.data.name_color ?? ""}
-                  placeholder="#7aa2ff"
-                  onChange={(event) =>
-                    setDataField(
-                      "name_color",
-                      event.target.value.trim() || null,
-                    )
-                  }
-                />
-              </Field>
-              <Field label="Dialogue color" hint="Optional body tint.">
-                <TextInput
-                  value={values.data.dialogue_color ?? ""}
-                  placeholder="#c8d0e0"
-                  onChange={(event) =>
-                    setDataField(
-                      "dialogue_color",
-                      event.target.value.trim() || null,
-                    )
-                  }
-                />
-              </Field>
-            </div>
-            <div className={classes.field}>
-              <span className={classes.fieldLabel}>Talkativeness</span>
-              <p className={classes.fieldHint}>
-                How often this character should speak in Smart group chat (0–1).
-              </p>
-              <div className={classes.sliderWrap}>
-                <Slider
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={talkativeness}
-                  marks={[
-                    { value: 0, label: "0" },
-                    { value: 0.5, label: "0.5" },
-                    { value: 1, label: "1" },
-                  ]}
-                  onChange={(value) =>
-                    setValues((current) => ({
-                      ...current,
-                      data: setCharacterTalkativeness(current.data, value),
-                    }))
-                  }
-                />
-                <p className={classes.sliderValue}>
-                  {talkativeness.toFixed(2)}
-                  {talkativeness === DEFAULT_TALKATIVENESS ? " (default)" : ""}
-                </p>
-              </div>
-            </div>
-            <Field
               label="First message"
               hint="Opening greeting (first_mes)."
             >
@@ -385,6 +360,62 @@ export function CharacterForm({
               onChange={(next) => setDataField("alternate_greetings", next)}
             />
           </div>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="convo">
+          <CharacterConvoPanel
+            characterName={values.data.name}
+            convoDisplayName={values.data.convo_display_name ?? ""}
+            declareConvoNameOnCard={Boolean(
+              values.data.declare_convo_name_on_card,
+            )}
+            aboutMe={values.data.about_me ?? ""}
+            convoBehavior={values.data.convo_behavior ?? ""}
+            convoBehaviorInsertion={normalizeConvoBehaviorInsertion(
+              values.data.convo_behavior_insertion,
+            )}
+            onConvoDisplayNameChange={(value) =>
+              setDataField("convo_display_name", value)
+            }
+            onDeclareConvoNameOnCardChange={(value) =>
+              setDataField("declare_convo_name_on_card", value)
+            }
+            onAboutMeChange={(value) => setDataField("about_me", value)}
+            onConvoBehaviorChange={(value) =>
+              setDataField("convo_behavior", value)
+            }
+            onConvoBehaviorInsertionChange={(value) =>
+              setDataField(
+                "convo_behavior_insertion",
+                value as CharacterConvoBehaviorInsertion,
+              )
+            }
+          />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="colors">
+          <CharacterColorsPanel
+            characterName={values.data.name}
+            avatarUrl={avatarUrl}
+            nameColor={values.data.name_color ?? null}
+            dialogueColor={values.data.dialogue_color ?? null}
+            messageBoxColor={values.data.message_box_color ?? null}
+            onNameColorChange={(value) => setDataField("name_color", value)}
+            onDialogueColorChange={(value) =>
+              setDataField("dialogue_color", value)
+            }
+            onMessageBoxColorChange={(value) =>
+              setDataField("message_box_color", value)
+            }
+          />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="gallery">
+          {gallerySection ?? (
+            <p className={classes.muted}>
+              Save the character first to manage gallery images.
+            </p>
+          )}
         </Tabs.Panel>
 
         <Tabs.Panel value="lorebooks">

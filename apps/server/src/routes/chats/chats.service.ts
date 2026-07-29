@@ -38,6 +38,7 @@ import {
   formatSmartCandidate,
   getEffectiveCurrentStatus,
   normalizeChatMessages,
+  resolveConvoPostHistoryBlock,
   parseConversationCommands,
   parseSlashCommand,
   parseSmartSpeakerIds,
@@ -2172,6 +2173,17 @@ export class ChatsService {
       }
       const aboutBlock = buildAboutMePromptBlock({ entries: aboutEntries });
       if (aboutBlock) extraSystemParts.push(aboutBlock);
+    }
+
+    if (mode === "conversation") {
+      const postHistoryBlocks = promptCharacters
+        .map((character) => resolveConvoPostHistoryBlock(character.data))
+        .filter((block): block is string => Boolean(block));
+      if (postHistoryBlocks.length === 1) {
+        extraSystemParts.push(postHistoryBlocks[0]!);
+      } else if (postHistoryBlocks.length > 1) {
+        extraSystemParts.push(postHistoryBlocks.join("\n\n---\n\n"));
+      }
     }
 
     if (mode === "conversation" && parentChatId) {

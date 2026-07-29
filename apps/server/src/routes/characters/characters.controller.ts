@@ -49,6 +49,44 @@ export class CharactersController {
     return this.charactersService.clearAvatar(id);
   }
 
+  @Get(":id/gallery")
+  listGallery(@Param("id") id: string) {
+    return this.charactersService.listGallery(id);
+  }
+
+  @Get(":id/gallery/:imageId")
+  getGalleryImage(
+    @Param("id") id: string,
+    @Param("imageId") imageId: string,
+  ): Promise<StreamableFile> {
+    return this.charactersService.getGalleryImageStream(id, imageId);
+  }
+
+  @Post(":id/gallery")
+  async uploadGalleryImage(
+    @Param("id") id: string,
+    @Req() req: FastifyRequest,
+  ): Promise<Character> {
+    const file = await req.file();
+    if (!file) {
+      throw new BadRequestException("Expected multipart file field");
+    }
+    const buffer = await file.toBuffer();
+    return this.charactersService.addGalleryImage(id, buffer, {
+      mime: file.mimetype,
+      name: file.filename || "image",
+      source: "upload",
+    });
+  }
+
+  @Delete(":id/gallery/:imageId")
+  removeGalleryImage(
+    @Param("id") id: string,
+    @Param("imageId") imageId: string,
+  ): Promise<Character> {
+    return this.charactersService.removeGalleryImage(id, imageId);
+  }
+
   @Get(":id")
   findOne(@Param("id") id: string): Promise<Character> {
     return this.charactersService.findOne(id);

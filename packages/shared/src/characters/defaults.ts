@@ -5,12 +5,91 @@ import {
   type CharacterBook,
   type CharacterBookEntry,
   type CharacterCardData,
+  type CharacterConvoBehaviorInsertion,
 } from "./types";
 import type { CreateCharacterInput } from "./api";
 import {
   DEFAULT_TALKATIVENESS,
   normalizeTalkativeness,
 } from "./talkativeness";
+
+const CONVO_BEHAVIOR_INSERTIONS = new Set<CharacterConvoBehaviorInsertion>([
+  "constant_after_card",
+  "constant_before_card",
+  "append_to_post_history",
+  "prepend_to_post_history",
+  "replace_post_history",
+  "marker_only",
+]);
+
+export function normalizeConvoBehaviorInsertion(
+  value: unknown,
+): CharacterConvoBehaviorInsertion {
+  if (value === "disabled") return "marker_only";
+  if (
+    typeof value === "string" &&
+    CONVO_BEHAVIOR_INSERTIONS.has(value as CharacterConvoBehaviorInsertion)
+  ) {
+    return value as CharacterConvoBehaviorInsertion;
+  }
+  return "constant_after_card";
+}
+
+/** Card-relative injection for conversation Character Info. */
+export function applyConvoBehaviorToCharacterCard(
+  card: string,
+  data: Pick<CharacterCardData, "convo_behavior" | "convo_behavior_insertion">,
+): string {
+  const behavior = data.convo_behavior?.trim() ?? "";
+  const insertion = normalizeConvoBehaviorInsertion(
+    data.convo_behavior_insertion,
+  );
+  if (
+    !behavior ||
+    (insertion !== "constant_after_card" &&
+      insertion !== "constant_before_card")
+  ) {
+    return card;
+  }
+  const behaviorBlock = `Convo Behavior:\n${behavior}`;
+  if (!card) return behaviorBlock;
+  if (insertion === "constant_before_card") {
+    return `${behaviorBlock}\n\n${card}`;
+  }
+  return `${card}\n\n${behaviorBlock}`;
+}
+
+/**
+ * Effective post-history text when insertion targets post-history.
+ * Returns null when this insertion mode should not inject a post-history block.
+ */
+export function resolveConvoPostHistoryBlock(
+  data: Pick<
+    CharacterCardData,
+    | "convo_behavior"
+    | "convo_behavior_insertion"
+    | "post_history_instructions"
+  >,
+): string | null {
+  const behavior = data.convo_behavior?.trim() ?? "";
+  const base = data.post_history_instructions?.trim() ?? "";
+  const insertion = normalizeConvoBehaviorInsertion(
+    data.convo_behavior_insertion,
+  );
+
+  if (insertion === "append_to_post_history") {
+    const merged = [base, behavior].filter(Boolean).join("\n\n");
+    return merged || null;
+  }
+  if (insertion === "prepend_to_post_history") {
+    const merged = [behavior, base].filter(Boolean).join("\n\n");
+    return merged || null;
+  }
+  if (insertion === "replace_post_history") {
+    return behavior || null;
+  }
+  return null;
+}
 
 /** Blank character book entry. */
 export function defaultCharacterBookEntry(): CharacterBookEntry {
@@ -47,8 +126,21 @@ export function defaultCharacterCardData(
     name_color: typeof rest.name_color === "string" ? rest.name_color : null,
     dialogue_color:
       typeof rest.dialogue_color === "string" ? rest.dialogue_color : null,
+    message_box_color:
+      typeof rest.message_box_color === "string"
+        ? rest.message_box_color
+        : null,
     convo_display_name:
       typeof rest.convo_display_name === "string" ? rest.convo_display_name : "",
+    declare_convo_name_on_card:
+      typeof rest.declare_convo_name_on_card === "boolean"
+        ? rest.declare_convo_name_on_card
+        : false,
+    convo_behavior:
+      typeof rest.convo_behavior === "string" ? rest.convo_behavior : "",
+    convo_behavior_insertion: normalizeConvoBehaviorInsertion(
+      rest.convo_behavior_insertion,
+    ),
     ...rest,
     talkativeness: normalizeTalkativeness(
       talkOverride ?? DEFAULT_TALKATIVENESS,
@@ -161,12 +253,33 @@ export function normalizeCharacterCardData(
         : typeof legacyExtensions?.dialogueColor === "string"
           ? (legacyExtensions.dialogueColor as string)
           : null,
+    message_box_color:
+      typeof input.message_box_color === "string"
+        ? input.message_box_color
+        : typeof legacyExtensions?.messageBoxColor === "string"
+          ? (legacyExtensions.messageBoxColor as string)
+          : null,
     convo_display_name:
       typeof input.convo_display_name === "string"
         ? input.convo_display_name
         : typeof legacyExtensions?.convoDisplayName === "string"
           ? (legacyExtensions.convoDisplayName as string)
           : "",
+    declare_convo_name_on_card:
+      typeof input.declare_convo_name_on_card === "boolean"
+        ? input.declare_convo_name_on_card
+        : typeof legacyExtensions?.declareConvoNameOnCard === "boolean"
+          ? (legacyExtensions.declareConvoNameOnCard as boolean)
+          : false,
+    convo_behavior:
+      typeof input.convo_behavior === "string"
+        ? input.convo_behavior
+        : typeof legacyExtensions?.convoBehavior === "string"
+          ? (legacyExtensions.convoBehavior as string)
+          : "",
+    convo_behavior_insertion: normalizeConvoBehaviorInsertion(
+      input.convo_behavior_insertion ?? legacyExtensions?.convoBehaviorInsertion,
+    ),
   };
 
   if (

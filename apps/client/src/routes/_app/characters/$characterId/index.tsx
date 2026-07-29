@@ -8,6 +8,7 @@ import {
 import { Button, Modal, notifications } from "@/components/ui";
 import { api } from "@/lib/api";
 import { CharacterForm } from "@/features/characters/CharacterForm";
+import { CharacterGalleryPanel } from "@/features/characters/CharacterGalleryPanel";
 import { characterAvatarSrc } from "@/features/characters/avatar-url";
 import { LinkedLorebooksPanel } from "@/features/lorebooks/CharacterLinkedLorebooks";
 import {
@@ -250,6 +251,7 @@ function RouteComponent() {
         key={`${data.id}:${selectedVersion.id}`}
         formId={FORM_ID}
         initialValues={formValues}
+        avatarUrl={avatarSrc}
         versionSelect={{
           options: versionOptions,
           value: selectedVersion.id,
@@ -268,6 +270,12 @@ function RouteComponent() {
             entityId={data.id}
             linkField="linked_characters"
             entityLabel="character"
+          />
+        }
+        gallerySection={
+          <CharacterGalleryPanel
+            characterId={data.id}
+            images={data.gallery ?? []}
           />
         }
         avatarSection={

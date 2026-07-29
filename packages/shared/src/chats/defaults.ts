@@ -208,6 +208,11 @@ export function defaultChatSettings(
     character_memories: normalizeStringListMap(overrides.character_memories),
     image_aspect_ratio: normalizeImageAspectRatio(overrides.image_aspect_ratio),
     image_resolution: normalizeImageResolution(overrides.image_resolution),
+    background_image_url:
+      typeof overrides.background_image_url === "string" &&
+      overrides.background_image_url.trim()
+        ? overrides.background_image_url.trim()
+        : null,
   };
 }
 
