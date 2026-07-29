@@ -16,8 +16,8 @@ export function groupSpeakerTagsEnabled(
     "character_ids" | "group_mode" | "group_speaker_tags"
   >,
 ): boolean {
+  if (mode === "conversation") return false;
   if (!isGroupChat(settings) || settings.group_mode !== "merged") return false;
-  if (mode === "conversation") return true;
   return settings.group_speaker_tags === true;
 }
 
@@ -56,8 +56,8 @@ export function groupHistoryUsesSpeakerPrefix(
   );
 }
 
-const CONVERSATION_GROUP_NAME_PREFIX_INSTRUCTION =
-  "Remember to prefix messages with `Name: message`!";
+const CONVERSATION_GROUP_SMS_INSTRUCTION =
+  "Group DM: write one short texting bubble at a time. Plain SMS — no speaker tags, no quotes, no narration.";
 
 export function buildConversationGroupOutputFormat(input: {
   wrapFormat: WrapFormat;
@@ -72,8 +72,8 @@ export function buildConversationGroupOutputFormat(input: {
   const responseBoundary = `Only respond for these characters: ${characterList || "the listed characters"}. Never respond for ${userName} or write ${userName}'s messages.`;
   const turnCharacterName = input.turnCharacterName?.trim();
   const body = turnCharacterName
-    ? `Respond only as ${turnCharacterName}.`
-    : [CONVERSATION_GROUP_NAME_PREFIX_INSTRUCTION, responseBoundary].join("\n");
+    ? `Respond only as ${turnCharacterName}. ${CONVERSATION_GROUP_SMS_INSTRUCTION}`
+    : [CONVERSATION_GROUP_SMS_INSTRUCTION, responseBoundary].join("\n");
   return wrapSectionContent("Output Format", body, input.wrapFormat);
 }
 

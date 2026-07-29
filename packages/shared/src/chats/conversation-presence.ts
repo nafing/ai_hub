@@ -77,6 +77,7 @@ export const CONVERSATION_COMMAND_KEYS = [
   "schedule_update",
   "memory",
   "cross_post",
+  "send_image",
 ] as const;
 
 export type ConversationCommandKey = (typeof CONVERSATION_COMMAND_KEYS)[number];

@@ -1,6 +1,7 @@
 import type {
   Chat,
   ChatListItem,
+  ChatMessageAttachment,
   ChatStreamEvent,
   CreateChatInput,
   CreateChatMessageInput,
@@ -82,6 +83,22 @@ export async function deleteChatMessage(
   messageId: string,
 ): Promise<Chat> {
   const { data } = await api.delete<Chat>(`/chats/${id}/messages/${messageId}`);
+  return data;
+}
+
+export async function uploadChatAttachment(
+  chatId: string,
+  file: File,
+): Promise<ChatMessageAttachment> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  const { data } = await api.post<ChatMessageAttachment>(
+    `/chats/${chatId}/attachments`,
+    form,
+    {
+      headers: { "Content-Type": undefined },
+    },
+  );
   return data;
 }
 

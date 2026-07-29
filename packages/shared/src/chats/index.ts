@@ -2,6 +2,7 @@ export type {
   Chat,
   ChatMode,
   ChatMessage,
+  ChatMessageAttachment,
   ChatMessageRole,
   ChatSettings,
   ChatAgentSetting,
@@ -116,6 +117,18 @@ export {
   recallLexicalMemories,
 } from "./conversation-awareness";
 export {
+  IMAGE_ASPECT_RATIOS,
+  IMAGE_RESOLUTIONS,
+  DEFAULT_IMAGE_ASPECT_RATIO,
+  DEFAULT_IMAGE_RESOLUTION,
+  IMAGE_ASPECT_RATIO_LABELS,
+  IMAGE_RESOLUTION_LABELS,
+  normalizeImageAspectRatio,
+  normalizeImageResolution,
+  type ImageAspectRatio,
+  type ImageResolution,
+} from "./image-settings";
+export {
   parseDirectMessageCommands,
   buildRoleplayDmCommandReminder,
   resolveRoleplayDmTarget,
@@ -138,6 +151,11 @@ export {
   type SpeakerSegment,
 } from "./speaker-segments";
 export { activeMessageText, formatChatHistoryMarker } from "./history";
+export {
+  activeMessageAttachments,
+  assignSwipeAttachments,
+  removeSwipeAttachments,
+} from "./attachments";
 export {
   normalizeChatMessages,
   visibleChatMessages,

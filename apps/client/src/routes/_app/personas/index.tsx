@@ -1,9 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { IconCopy, IconPlus, IconTrash, IconUpload } from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { PersonaListItem } from "@ai-hub/shared";
-import { ActionIcon, Button, Modal, notifications, RuntimeText } from "@/components/ui";
+import {
+  ActionIcon,
+  Button,
+  Modal,
+  notifications,
+  RuntimeText,
+  Switch,
+  TextInput,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { CreatePersonaModal } from "@/features/personas/CreatePersonaModal";
 import { ImportPersonaModal } from "@/features/personas/ImportPersonaModal";
@@ -28,9 +36,33 @@ function RouteComponent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [query, setQuery] = useState("");
+  const [defaultsOnly, setDefaultsOnly] = useState(false);
+
   const { data, isLoading, isError } = usePersonas();
   const deleteMutation = useDeletePersona();
   const duplicateMutation = useDuplicatePersona();
+
+  const hasActiveFilters = query.trim().length > 0 || defaultsOnly;
+
+  const filteredPersonas = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return (data ?? []).filter((persona) => {
+      if (defaultsOnly && !persona.is_default) return false;
+      if (!normalizedQuery) return true;
+      return (
+        persona.name.toLowerCase().includes(normalizedQuery) ||
+        persona.description.toLowerCase().includes(normalizedQuery) ||
+        persona.appearance.toLowerCase().includes(normalizedQuery) ||
+        persona.personality.toLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [data, defaultsOnly, query]);
+
+  function clearFilters() {
+    setQuery("");
+    setDefaultsOnly(false);
+  }
 
   function handleConfirmDelete() {
     if (!deleteTarget) return;
@@ -100,8 +132,39 @@ function RouteComponent() {
         <p className={classes.subtitle}>
           Player personas for <RuntimeText>{"{{user}}"}</RuntimeText>. One can
           be marked as default.
+          {!isLoading && !isError && hasActiveFilters
+            ? ` Showing ${filteredPersonas.length} of ${data?.length ?? 0}.`
+            : null}
         </p>
       </header>
+
+      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
+        <div className={classes.filters}>
+          <TextInput
+            className={classes.searchInput}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Search name, description, appearance, personality…"
+            aria-label="Search personas"
+          />
+          <Switch
+            className={classes.defaultsSwitch}
+            checked={defaultsOnly}
+            onChange={setDefaultsOnly}
+            label="Defaults only"
+          />
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="default"
+              className={classes.clearFilters}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className={classes.loading}>
@@ -117,9 +180,27 @@ function RouteComponent() {
         <p className={classes.status}>No personas yet. Create one with +.</p>
       ) : null}
 
-      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
+      {!isLoading &&
+      !isError &&
+      (data?.length ?? 0) > 0 &&
+      filteredPersonas.length === 0 ? (
+        <p className={classes.status}>
+          No personas match your filters.{" "}
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className={classes.clearFiltersLink}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+
+      {!isLoading && !isError && filteredPersonas.length > 0 ? (
         <div className={classes.grid}>
-          {(data ?? []).map((persona) => (
+          {filteredPersonas.map((persona) => (
             <PersonaCard
               key={persona.id}
               persona={persona}
@@ -153,13 +234,14 @@ function RouteComponent() {
           cannot be undone.
         </p>
         <div className={classes.modalActions}>
-          <Button variant="default" type="button"
+          <Button
+            variant="default"
+            type="button"
             onClick={() => setDeleteTarget(null)}
           >
             Cancel
           </Button>
-          <Button variant="dangerSolid" type="button"
-            onClick={handleConfirmDelete}>
+          <Button variant="dangerSolid" type="button" onClick={handleConfirmDelete}>
             Delete
           </Button>
         </div>
@@ -188,6 +270,7 @@ function PersonaCard({
 
   return (
     <motion.div
+      className={classes.cardWrap}
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.16 }}
@@ -225,7 +308,12 @@ function PersonaCard({
             </div>
           </div>
           <div className={classes.cardActions}>
-            <ActionIcon type="button" variant="ghost" aria-label="Duplicate" disabled={duplicatePending} onClick={(event) => {
+            <ActionIcon
+              type="button"
+              variant="ghost"
+              aria-label="Duplicate"
+              disabled={duplicatePending}
+              onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 onDuplicate(persona.id);
@@ -233,7 +321,12 @@ function PersonaCard({
             >
               <IconCopy size={15} />
             </ActionIcon>
-            <ActionIcon type="button" variant="ghostDanger" aria-label="Delete" disabled={deletePending} onClick={(event) => {
+            <ActionIcon
+              type="button"
+              variant="ghostDanger"
+              aria-label="Delete"
+              disabled={deletePending}
+              onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 onDelete(persona.id, persona.name);

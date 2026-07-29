@@ -23,13 +23,35 @@ export function formatCharacterInfoMarker(
     scenarioOverride?: string | null;
     /** When true, omit scenario (used for group cast + shared scenario). */
     omitScenario?: boolean;
+    /**
+     * Image presets: lead with Appearance and skip personality/scenario so the
+     * visual prompt stays focused on look.
+     */
+    forImage?: boolean;
+    /**
+     * Conversation DMs: personality/backstory only — no scenario/scene framing.
+     */
+    forConversation?: boolean;
   } = {},
 ): string {
   const { data } = character;
-  if (options.omitScenario) {
+  if (options.forImage) {
+    const appearance = data.appearance?.trim() || "";
+    return joinBlocks([
+      { label: "Name", value: data.name },
+      { label: "Appearance", value: appearance || data.description },
+      // Keep description as supporting lore only when Appearance is filled separately.
+      {
+        label: "Description",
+        value: appearance ? data.description : null,
+      },
+    ]);
+  }
+  if (options.omitScenario || options.forConversation) {
     return joinBlocks([
       { label: "Name", value: data.name },
       { label: "Description", value: data.description },
+      { label: "Appearance", value: data.appearance },
       { label: "Personality", value: data.personality },
     ]);
   }
@@ -37,6 +59,7 @@ export function formatCharacterInfoMarker(
   return joinBlocks([
     { label: "Name", value: data.name },
     { label: "Description", value: data.description },
+    { label: "Appearance", value: data.appearance },
     { label: "Personality", value: data.personality },
     {
       label: "Scenario",
@@ -54,11 +77,12 @@ export function formatDialogueExamplesMarker(
 
 /** Text for the `persona` marker section. */
 export function formatPersonaMarker(
-  persona: Pick<Persona, "name" | "description" | "personality">,
+  persona: Pick<Persona, "name" | "description" | "appearance" | "personality">,
 ): string {
   return joinBlocks([
     { label: "Name", value: persona.name },
     { label: "Description", value: persona.description },
+    { label: "Appearance", value: persona.appearance },
     { label: "Personality", value: persona.personality },
   ]);
 }
@@ -120,7 +144,10 @@ export type BuildPresetPromptContextOptions = {
    * cast members' cards into `character_info` so the speaker knows they exist.
    */
   groupCharacters?: Array<Pick<Character, "data">> | null;
-  persona?: Pick<Persona, "name" | "description" | "personality"> | null;
+  persona?: Pick<
+    Persona,
+    "name" | "description" | "appearance" | "personality"
+  > | null;
   /** Existing setup-variable values; `user` / `char` from persona/character win. */
   variables?: PresetVariableValues;
   /** Injected into `generator_brief` marker. */
@@ -141,7 +168,14 @@ export type BuildPresetPromptContextOptions = {
    * reference_characters markers.
    */
   scenarioOverride?: string | null;
+  /**
+   * How to format Character Info / Persona for image prompt presets.
+   * Prefer Appearance and expose {{char_appearance}} / {{user_appearance}}.
+   */
+  characterInfoMode?: "default" | "image" | "conversation";
 };
+
+const CONVERSATION_CHARACTER_INFO_PREAMBLE = `[Texting context — Character Info is background personality, NOT a live scene. You and {{userName || the user}} are messaging on your phones remotely. Do not write as if anyone is physically present (no "you came here", "standing in front of me", etc.) unless chat history clearly established that.]`;
 
 /**
  * Merge setup variables with `{{user}}` / `{{char}}` and marker payloads.
@@ -154,14 +188,33 @@ export function buildPresetPromptContext(
 } {
   const variables: PresetVariableValues = { ...(options.variables ?? {}) };
   const markers: PresetMarkerContent = {};
+  const forImage = options.characterInfoMode === "image";
+  const forConversation = options.characterInfoMode === "conversation";
   const scenarioOpts = {
-    scenarioOverride: options.scenarioOverride,
+    scenarioOverride: forConversation ? null : options.scenarioOverride,
+    forImage,
+    forConversation,
   };
 
   if (options.persona) {
     const name = options.persona.name.trim();
     if (name) variables.user = name;
-    const personaText = formatPersonaMarker(options.persona);
+    if (name) variables.userName = name;
+    const appearance = options.persona.appearance?.trim() || "";
+    if (appearance) variables.user_appearance = appearance;
+    const personaText = forImage
+      ? joinBlocks([
+          { label: "Name", value: options.persona.name },
+          {
+            label: "Appearance",
+            value: appearance || options.persona.description,
+          },
+          {
+            label: "Description",
+            value: appearance ? options.persona.description : null,
+          },
+        ])
+      : formatPersonaMarker(options.persona);
     if (personaText) markers.persona = personaText;
   }
 
@@ -179,8 +232,11 @@ export function buildPresetPromptContext(
   if (primary) {
     const name = primary.data.name.trim();
     if (name) variables.char = name;
+    if (name) variables.charName = name;
+    const appearance = primary.data.appearance?.trim() || "";
+    if (appearance) variables.char_appearance = appearance;
     const examples = formatDialogueExamplesMarker(primary);
-    if (examples) markers.dialogue_examples = examples;
+    if (examples && !forConversation) markers.dialogue_examples = examples;
   }
 
   const allNames = groupCharacterList
@@ -207,7 +263,10 @@ export function buildPresetPromptContext(
     if (others.length > 0) {
       const otherBlocks = others
         .map((character) =>
-          formatCharacterInfoMarker(character, { omitScenario: true }),
+          formatCharacterInfoMarker(character, {
+            omitScenario: true,
+            forConversation,
+          }),
         )
         .filter(Boolean);
       if (otherBlocks.length > 0) {
@@ -222,18 +281,24 @@ export function buildPresetPromptContext(
     }
 
     if (blocks.length > 0) {
-      markers.character_info = blocks.join("\n\n---\n\n");
+      markers.character_info = forConversation
+        ? `${CONVERSATION_CHARACTER_INFO_PREAMBLE}\n\n${blocks.join("\n\n---\n\n")}`
+        : blocks.join("\n\n---\n\n");
     }
   } else if (characterList.length > 1) {
-    const charOpts = groupScenario ? { omitScenario: true as const } : scenarioOpts;
+    const charOpts = groupScenario
+      ? { omitScenario: true as const, forConversation }
+      : scenarioOpts;
     const blocks = characterList
       .map((character) => formatCharacterInfoMarker(character, charOpts))
       .filter(Boolean);
-    if (groupScenario) {
+    if (groupScenario && !forConversation) {
       blocks.push(`Scenario:\n${groupScenario}`);
     }
     if (blocks.length > 0) {
-      markers.character_info = blocks.join("\n\n---\n\n");
+      markers.character_info = forConversation
+        ? `${CONVERSATION_CHARACTER_INFO_PREAMBLE}\n\n${blocks.join("\n\n---\n\n")}`
+        : blocks.join("\n\n---\n\n");
     }
   }
 

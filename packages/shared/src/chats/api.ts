@@ -1,5 +1,12 @@
 import type { Variable } from "../presets/types";
-import type { Chat, ChatMessage, ChatMode, ChatSettings, RoleplayDmSource } from "./types";
+import type {
+  Chat,
+  ChatMessage,
+  ChatMessageAttachment,
+  ChatMode,
+  ChatSettings,
+  RoleplayDmSource,
+} from "./types";
 
 export type CreateChatInput = {
   mode: ChatMode;
@@ -27,6 +34,8 @@ export type CreateChatMessageInput = {
   character_id?: string | null;
   /** Marinara-style mirror dedupe when copying roleplay user turns into DM threads. */
   roleplay_dm_source?: RoleplayDmSource | null;
+  /** Previously uploaded chat attachments to store on this message. */
+  attachments?: ChatMessageAttachment[];
 };
 
 export type UpdateChatMessageInput = {
@@ -46,6 +55,8 @@ export type UpdateChatMessageInput = {
 export type GenerateChatInput = {
   /** When provided, appended as a user message before generation */
   userMessage?: string;
+  /** Attachments to store on the new user message (upload first via POST attachments). */
+  attachments?: ChatMessageAttachment[];
   /**
    * Force generation for this character only (Trigger Response).
    * Skips Smart selector and Manual empty-queue rules.
@@ -120,7 +131,7 @@ export type ChatStreamEvent =
     }
   | {
       type: "conversation_command";
-      command: "react" | "schedule_update" | "memory" | "cross_post";
+      command: "react" | "schedule_update" | "memory" | "cross_post" | "send_image";
       character_id?: string | null;
       detail?: string;
       chat_id?: string;

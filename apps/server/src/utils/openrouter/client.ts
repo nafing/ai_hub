@@ -341,3 +341,457 @@ async function handleOpenRouterResponse<T>(response: Response): Promise<T> {
 
   return (await response.json()) as T;
 }
+
+export type OpenRouterImageGenerationResult = {
+  buffer: Buffer;
+  mime: "image/png" | "image/jpeg" | "image/webp";
+  model: string | null;
+};
+
+type OpenRouterImageResponse = {
+  data?: Array<{
+    b64_json?: string;
+    url?: string;
+    media_type?: string | null;
+  }>;
+  error?: { message?: string; code?: string | number };
+  model?: string;
+};
+
+/** Generate an image via OpenRouter `POST /images`. */
+export async function openRouterGenerateImage(
+  apiKey: string,
+  input: {
+    model: string;
+    prompt: string;
+    preferredProvider?: string | null;
+    aspectRatio?: string;
+    resolution?: string;
+    outputFormat?: "png" | "jpeg" | "webp";
+  },
+  options: OpenRouterRequestOptions = {},
+): Promise<OpenRouterImageGenerationResult> {
+  if (!apiKey.trim()) {
+    throw new BadRequestException("OpenRouter API key is required");
+  }
+  if (!input.model.trim()) {
+    throw new BadRequestException("Image connection model is required");
+  }
+  if (!input.prompt.trim()) {
+    throw new BadRequestException("Image prompt is required");
+  }
+
+  const capabilities = await fetchImageModelCapabilities(
+    apiKey,
+    input.model.trim(),
+    options,
+  );
+
+  const preferred = input.preferredProvider?.trim();
+  const body = buildImageRequestBody(input, capabilities, preferred);
+
+  let raw = await postOpenRouterImage(apiKey, body, options);
+
+  // Google (and some other providers) return a generic 400 for unsupported args.
+  // Retry once with only model + prompt if we sent any optional fields.
+  if (
+    isOpenRouterImageInvalidArgument(raw) &&
+    Object.keys(body).some((key) => key !== "model" && key !== "prompt")
+  ) {
+    console.warn(
+      `[openrouter] images 400 for ${input.model}; retrying with prompt-only body`,
+    );
+    raw = await postOpenRouterImage(
+      apiKey,
+      {
+        model: input.model.trim(),
+        prompt: input.prompt.trim(),
+      },
+      options,
+    );
+  }
+
+  if (raw.error?.message) {
+    throw new BadRequestException(`OpenRouter images error: ${raw.error.message}`);
+  }
+
+  const item = raw.data?.[0];
+  if (!item) {
+    throw new BadRequestException("OpenRouter returned no image data");
+  }
+
+  if (item.b64_json?.trim()) {
+    const decoded = decodeImageBase64(item.b64_json.trim(), item.media_type);
+    return {
+      buffer: decoded.buffer,
+      mime: decoded.mime,
+      model: raw.model ?? input.model,
+    };
+  }
+
+  if (item.url?.trim()) {
+    const downloaded = await downloadImageUrl(item.url.trim(), options.signal);
+    return {
+      buffer: downloaded.buffer,
+      mime: downloaded.mime,
+      model: raw.model ?? input.model,
+    };
+  }
+
+  throw new BadRequestException("OpenRouter image response missing b64_json/url");
+}
+
+type ImageParamCapability =
+  | { type: "enum"; values: string[] }
+  | { type: "range"; min: number; max: number }
+  | { type: "boolean" }
+  | { type: "unknown" };
+
+type ImageModelCapabilities = {
+  /** True when OpenRouter returned any supported_parameters for this model. */
+  known: boolean;
+  supports: (key: string) => boolean;
+  capability: (key: string) => ImageParamCapability | undefined;
+};
+
+function buildImageRequestBody(
+  input: {
+    model: string;
+    prompt: string;
+    aspectRatio?: string;
+    resolution?: string;
+    outputFormat?: "png" | "jpeg" | "webp";
+  },
+  capabilities: ImageModelCapabilities,
+  preferredProvider?: string,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: input.model.trim(),
+    prompt: input.prompt.trim(),
+  };
+
+  // Without capability metadata, only send required fields — Google rejects
+  // unknown optional args (n / output_format / unsupported resolution) with 400.
+  if (!capabilities.known) {
+    if (preferredProvider) {
+      body.provider = { order: [preferredProvider], allow_fallbacks: true };
+    }
+    return body;
+  }
+
+  if (capabilities.supports("n")) {
+    body.n = 1;
+  }
+
+  const aspectRatio = pickOptionalParam(
+    capabilities,
+    "aspect_ratio",
+    input.aspectRatio,
+  );
+  if (aspectRatio) body.aspect_ratio = aspectRatio;
+
+  const resolution = pickOptionalResolution(capabilities, input.resolution);
+  if (resolution) body.resolution = resolution;
+
+  const outputFormat = pickOptionalParam(
+    capabilities,
+    "output_format",
+    input.outputFormat,
+  );
+  if (outputFormat) body.output_format = outputFormat;
+
+  if (preferredProvider) {
+    body.provider = { order: [preferredProvider], allow_fallbacks: true };
+  }
+
+  return body;
+}
+
+async function postOpenRouterImage(
+  apiKey: string,
+  body: Record<string, unknown>,
+  options: OpenRouterRequestOptions,
+): Promise<OpenRouterImageResponse & { httpStatus?: number; httpErrorText?: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${OPENROUTER_BASE}/images`, {
+      method: "POST",
+      headers: openRouterHeaders(apiKey, options, false),
+      body: JSON.stringify(body),
+      signal: options.signal,
+    });
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    throw new BadRequestException(
+      `Failed to reach OpenRouter images: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  assertOpenRouterAuth(response);
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    // Surface as a structured error so callers can retry on invalid-argument.
+    let parsed: OpenRouterImageResponse | null = null;
+    try {
+      parsed = JSON.parse(errorBody) as OpenRouterImageResponse;
+    } catch {
+      parsed = null;
+    }
+    if (parsed?.error || response.status === 400) {
+      return {
+        ...(parsed ?? {}),
+        error: parsed?.error ?? {
+          message: errorBody || response.statusText,
+          code: response.status,
+        },
+        httpStatus: response.status,
+        httpErrorText: errorBody,
+      };
+    }
+    throw new BadRequestException(
+      `OpenRouter images error ${response.status}: ${errorBody || response.statusText}`,
+    );
+  }
+
+  return (await response.json()) as OpenRouterImageResponse;
+}
+
+function isOpenRouterImageInvalidArgument(
+  raw: OpenRouterImageResponse & { httpStatus?: number; httpErrorText?: string },
+): boolean {
+  if (raw.httpStatus === 400) return true;
+  const message = (raw.error?.message || raw.httpErrorText || "").toLowerCase();
+  return (
+    message.includes("invalid argument") ||
+    message.includes("unsupported") ||
+    message.includes("not supported")
+  );
+}
+
+async function fetchImageModelCapabilities(
+  apiKey: string,
+  modelId: string,
+  options: OpenRouterRequestOptions,
+): Promise<ImageModelCapabilities> {
+  const empty: ImageModelCapabilities = {
+    known: false,
+    supports: () => false,
+    capability: () => undefined,
+  };
+
+  try {
+    const path = modelId
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+    // Prefer per-endpoint truth; fall back to model-level union.
+    const endpointsPayload = await openRouterGetJson<{
+      data?: {
+        endpoints?: Array<{
+          supported_parameters?: Record<string, unknown> | string[];
+        }>;
+      };
+      endpoints?: Array<{
+        supported_parameters?: Record<string, unknown> | string[];
+      }>;
+    }>(`${OPENROUTER_BASE}/images/models/${path}/endpoints`, apiKey, options);
+
+    const endpoints =
+      endpointsPayload.data?.endpoints ?? endpointsPayload.endpoints ?? [];
+    const params: Record<string, ImageParamCapability> = {};
+    for (const endpoint of endpoints) {
+      mergeSupportedParameters(params, endpoint.supported_parameters);
+    }
+
+    if (Object.keys(params).length === 0) {
+      const modelsPayload = await openRouterGetJson<{
+        data?: Array<{
+          id?: string;
+          supported_parameters?: Record<string, unknown> | string[];
+        }>;
+      }>(`${OPENROUTER_BASE}/images/models`, apiKey, options);
+      const model = (modelsPayload.data ?? []).find((item) => item.id === modelId);
+      mergeSupportedParameters(params, model?.supported_parameters);
+    }
+
+    const known = Object.keys(params).length > 0;
+    return {
+      known,
+      supports: (key) => Object.prototype.hasOwnProperty.call(params, key),
+      capability: (key) => params[key],
+    };
+  } catch (error) {
+    console.warn(
+      `[openrouter] image capabilities lookup failed for ${modelId}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    // Conservative fallback: send only prompt+model (always valid).
+    return empty;
+  }
+}
+
+function mergeSupportedParameters(
+  target: Record<string, ImageParamCapability>,
+  raw: Record<string, unknown> | string[] | undefined,
+): void {
+  if (!raw) return;
+  if (Array.isArray(raw)) {
+    for (const key of raw) {
+      if (typeof key === "string" && key && !target[key]) {
+        target[key] = { type: "unknown" };
+      }
+    }
+    return;
+  }
+  for (const [key, value] of Object.entries(raw)) {
+    if (!key) continue;
+    const parsed = parseCapability(value);
+    if (!parsed) continue;
+    const existing = target[key];
+    if (!existing) {
+      target[key] = parsed;
+      continue;
+    }
+    if (existing.type === "enum" && parsed.type === "enum") {
+      target[key] = {
+        type: "enum",
+        values: Array.from(new Set([...existing.values, ...parsed.values])),
+      };
+    } else if (existing.type === "unknown" && parsed.type !== "unknown") {
+      target[key] = parsed;
+    }
+  }
+}
+
+function parseCapability(value: unknown): ImageParamCapability | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    if (value === true) return { type: "boolean" };
+    return { type: "unknown" };
+  }
+  const record = value as Record<string, unknown>;
+  if (record.type === "enum" && Array.isArray(record.values)) {
+    return {
+      type: "enum",
+      values: record.values.filter((item): item is string => typeof item === "string"),
+    };
+  }
+  if (
+    record.type === "range" &&
+    typeof record.min === "number" &&
+    typeof record.max === "number"
+  ) {
+    return { type: "range", min: record.min, max: record.max };
+  }
+  if (record.type === "boolean") return { type: "boolean" };
+  return { type: "unknown" };
+}
+
+function pickOptionalParam(
+  capabilities: ImageModelCapabilities,
+  key: string,
+  requested: string | undefined,
+): string | undefined {
+  if (!requested?.trim()) return undefined;
+  if (!capabilities.supports(key)) return undefined;
+  const value = requested.trim();
+  const cap = capabilities.capability(key);
+  if (cap?.type === "enum") {
+    if (cap.values.includes(value)) return value;
+    return undefined;
+  }
+  // Supported but untyped → pass through.
+  return value;
+}
+
+function pickOptionalResolution(
+  capabilities: ImageModelCapabilities,
+  requested: string | undefined,
+): string | undefined {
+  if (!requested?.trim()) return undefined;
+  if (!capabilities.supports("resolution")) return undefined;
+  const value = requested.trim();
+  const aliases: Record<string, string[]> = {
+    "512": ["512", "0.5K", "0.5k"],
+    "0.5K": ["0.5K", "0.5k", "512"],
+    "1K": ["1K", "1k"],
+    "2K": ["2K", "2k"],
+    "4K": ["4K", "4k"],
+  };
+  const fallbacks: Record<string, string[]> = {
+    "512": ["0.5K", "1K"],
+    "0.5K": ["512", "1K"],
+    "1K": ["2K"],
+    "2K": ["1K", "4K"],
+    "4K": ["2K", "1K"],
+  };
+  const cap = capabilities.capability("resolution");
+  if (cap?.type !== "enum") return value;
+
+  const allowed = cap.values;
+  if (allowed.includes(value)) return value;
+  for (const candidate of aliases[value] ?? []) {
+    const match = allowed.find(
+      (item) => item.toLowerCase() === candidate.toLowerCase(),
+    );
+    if (match) return match;
+  }
+  for (const candidate of fallbacks[value] ?? []) {
+    const match = allowed.find(
+      (item) => item.toLowerCase() === candidate.toLowerCase(),
+    );
+    if (match) return match;
+  }
+  return undefined;
+}
+
+function decodeImageBase64(
+  value: string,
+  mediaType?: string | null,
+): {
+  buffer: Buffer;
+  mime: "image/png" | "image/jpeg" | "image/webp";
+} {
+  const dataUrl = /^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/i.exec(
+    value,
+  );
+  if (dataUrl) {
+    const mimeRaw = dataUrl[1]!.toLowerCase();
+    const mime =
+      mimeRaw === "image/jpg" || mimeRaw === "image/jpeg"
+        ? "image/jpeg"
+        : mimeRaw === "image/webp"
+          ? "image/webp"
+          : "image/png";
+    return { buffer: Buffer.from(dataUrl[2]!, "base64"), mime };
+  }
+  const fromHeader = (mediaType || "").toLowerCase();
+  const mime =
+    fromHeader.includes("jpeg") || fromHeader.includes("jpg")
+      ? "image/jpeg"
+      : fromHeader.includes("webp")
+        ? "image/webp"
+        : "image/png";
+  return { buffer: Buffer.from(value, "base64"), mime };
+}
+async function downloadImageUrl(
+  url: string,
+  signal?: AbortSignal,
+): Promise<{ buffer: Buffer; mime: "image/png" | "image/jpeg" | "image/webp" }> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) {
+    throw new BadRequestException(
+      `Failed to download generated image (${response.status})`,
+    );
+  }
+  const contentType = (response.headers.get("content-type") || "").toLowerCase();
+  const mime =
+    contentType.includes("jpeg") || contentType.includes("jpg")
+      ? "image/jpeg"
+      : contentType.includes("webp")
+        ? "image/webp"
+        : "image/png";
+  const arrayBuffer = await response.arrayBuffer();
+  return { buffer: Buffer.from(arrayBuffer), mime };
+}

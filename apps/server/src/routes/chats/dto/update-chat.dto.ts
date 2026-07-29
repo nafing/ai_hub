@@ -220,6 +220,14 @@ class UpdateChatSettingsDto {
   @IsOptional()
   @IsObject()
   character_memories?: Record<string, string[]>;
+
+  @IsOptional()
+  @IsString()
+  image_aspect_ratio?: string;
+
+  @IsOptional()
+  @IsString()
+  image_resolution?: string;
 }
 
 export class UpdateChatDto {

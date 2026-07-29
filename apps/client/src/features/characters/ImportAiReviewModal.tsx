@@ -18,7 +18,7 @@ import {
 } from "@/components/ui";
 import { getCharacter } from "@/features/characters/api";
 import { getPersona } from "@/features/personas/api";
-import { runGenerator } from "@/features/generators/api";
+import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
 import {
   extractFullCards,
   extractedToCardData,
@@ -66,6 +66,7 @@ type RebuildKind =
   | "all"
   | "concept"
   | "description"
+  | "appearance"
   | "personality"
   | "scenario"
   | "first_mes"
@@ -75,6 +76,7 @@ type RebuildKind =
 const CONCEPT_FIELDS = [
   "name",
   "description",
+  "appearance",
   "personality",
   "scenario",
 ] as const;
@@ -230,6 +232,7 @@ export function ImportAiReviewModal({
             .join(" / "),
           target_field: "all card fields",
           existing_description: "",
+          existing_appearance: "",
           existing_personality: "",
           existing_scenario: "",
           existing_first_mes: "",
@@ -238,12 +241,13 @@ export function ImportAiReviewModal({
         },
       });
 
-      const result = await runGenerator({
+      const result = await useGeneratorJobsStore.getState().runTrackedGenerator({
         category: "character_generator",
         connectionId: context.connectionId,
         presetId: context.presetId,
         variables: promptContext.variables,
         markers: promptContext.markers,
+        title: `Rebuild concepts · ${cards.length} character${cards.length === 1 ? "" : "s"}`,
       });
 
       const extracted = extractFullCards(result.content || result.reply || "");
@@ -312,6 +316,7 @@ export function ImportAiReviewModal({
           char: card.name.trim(),
           target_field: targetFieldForRebuild(kind),
           existing_description: card.description.trim(),
+          existing_appearance: card.appearance.trim(),
           existing_personality: card.personality.trim(),
           existing_scenario: card.scenario.trim(),
           existing_first_mes: card.first_mes.trim(),
@@ -322,12 +327,25 @@ export function ImportAiReviewModal({
         },
       });
 
-      const result = await runGenerator({
+      const rebuildKindLabels: Record<RebuildKind, string> = {
+        all: "all fields",
+        concept: "concept",
+        description: "description",
+        appearance: "appearance",
+        personality: "personality",
+        scenario: "scenario",
+        first_mes: "first message",
+        mes_example: "example messages",
+        alternate_greetings: "alternate greetings",
+      };
+
+      const result = await useGeneratorJobsStore.getState().runTrackedGenerator({
         category: "character_generator",
         connectionId: context.connectionId,
         presetId: context.presetId,
         variables: promptContext.variables,
         markers: promptContext.markers,
+        title: `Rebuild ${rebuildKindLabels[kind]} · ${card.name.trim() || "character"}`,
       });
 
       const raw = result.content || result.reply || "";
@@ -389,7 +407,7 @@ export function ImportAiReviewModal({
       <div className={classes.stack}>
         <p className={classes.muted}>
           Preview and edit generated cards before saving. Batch Rebuild Concept
-          refreshes name / description / personality / scenario for every card
+          refreshes name / description / appearance / personality / scenario for every card
           in one pass; per-card Rebuild concept / Rebuild all work on a single
           character.
         </p>
@@ -514,6 +532,16 @@ export function ImportAiReviewModal({
                         updateCard(index, { description: value })
                       }
                       onRebuild={() => void rebuild(index, "description")}
+                    />
+                    <FieldWithRebuild
+                      label="Appearance"
+                      value={card.appearance}
+                      disabled={busy}
+                      loading={pendingKey === `${index}:appearance`}
+                      onChange={(value) =>
+                        updateCard(index, { appearance: value })
+                      }
+                      onRebuild={() => void rebuild(index, "appearance")}
                     />
                     <FieldWithRebuild
                       label="Personality"

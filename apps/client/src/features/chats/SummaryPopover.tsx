@@ -13,7 +13,7 @@ import {
   type ChatSummaryEntry,
 } from "@ai-hub/shared";
 import { Button, Modal, Select, Switch, Textarea, notifications } from "@/components/ui";
-import { useConnections } from "@/features/connections/queries";
+import { useConnectionSelectOptions } from "@/features/connections/queries";
 import { usePresets } from "@/features/presets/queries";
 import {
   useGenerateChatSummary,
@@ -33,7 +33,7 @@ type SummaryPopoverProps = {
 };
 
 export function SummaryPopover({ chat, opened, onClose }: SummaryPopoverProps) {
-  const { data: connections } = useConnections();
+  const connectionsQuery = useConnectionSelectOptions("llm");
   const { data: presets } = usePresets();
   const generateMutation = useGenerateChatSummary();
   const patchEntryMutation = usePatchSummaryEntry();
@@ -299,10 +299,7 @@ export function SummaryPopover({ chat, opened, onClose }: SummaryPopoverProps) {
             />
           </label>
           <Select
-            data={(connections ?? []).map((connection) => ({
-              value: connection.id,
-              label: connection.name,
-            }))}
+            data={connectionsQuery.options}
             value={chat.settings.summary_connection_id ?? ""}
             onChange={(value) =>
               patchSettings({ summary_connection_id: value || null })

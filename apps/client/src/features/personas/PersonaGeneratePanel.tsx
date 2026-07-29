@@ -5,16 +5,17 @@ import {
   type PresetVariableValues,
   type Variable,
 } from "@ai-hub/shared";
-import { Button,
+import {
+  Button,
   MultiSelect,
   Select,
   Textarea,
   notifications,
 } from "@/components/ui";
-import { useConnections } from "@/features/connections/queries";
+import { useConnectionSelectOptions } from "@/features/connections/queries";
 import { getCharacter } from "@/features/characters/api";
 import { useCharacters } from "@/features/characters/queries";
-import { runGenerator } from "@/features/generators/api";
+import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
 import {
   useDefaultPreset,
   usePreset,
@@ -25,15 +26,17 @@ import classes from "./PersonaGeneratePanel.module.css";
 type PersonaGeneratePanelProps = {
   personaName: string;
   description: string;
+  appearance: string;
   personality: string;
   onDescriptionChange: (value: string) => void;
+  onAppearanceChange: (value: string) => void;
   onPersonalityChange: (value: string) => void;
 };
 
-type GenerateField = "description" | "personality" | "both";
+type GenerateField = "description" | "appearance" | "personality" | "both";
 
-/** Value injected into `{{target_field}}` when generating both card fields. */
-const TARGET_FIELD_BOTH = "description and personality";
+/** Value injected into `{{target_field}}` when generating all card fields. */
+const TARGET_FIELD_BOTH = "description, appearance, and personality";
 
 function Field({
   label,
@@ -90,7 +93,7 @@ function stripCodeFence(text: string): string {
 
 function readStringField(
   parsed: Record<string, unknown>,
-  field: "description" | "personality",
+  field: "description" | "appearance" | "personality",
 ): string | undefined {
   const value = parsed[field];
   if (typeof value === "string" && value.trim()) return value.trim();
@@ -100,7 +103,11 @@ function readStringField(
 function extractGeneratedFields(
   raw: string,
   field: GenerateField,
-): { description?: string; personality?: string } {
+): {
+  description?: string;
+  appearance?: string;
+  personality?: string;
+} {
   const text = stripCodeFence(raw);
   try {
     const parsed: unknown = JSON.parse(text);
@@ -109,6 +116,7 @@ function extractGeneratedFields(
       if (field === "both") {
         return {
           description: readStringField(record, "description"),
+          appearance: readStringField(record, "appearance"),
           personality: readStringField(record, "personality"),
         };
       }
@@ -127,6 +135,7 @@ function buildGeneratorVariables(options: {
   field: GenerateField;
   personaName: string;
   description: string;
+  appearance: string;
   personality: string;
   presetVariables: Variable[];
 }): PresetVariableValues {
@@ -135,6 +144,7 @@ function buildGeneratorVariables(options: {
     user: options.personaName.trim(),
     target_field: targetFieldValue(options.field),
     existing_description: options.description.trim(),
+    existing_appearance: options.appearance.trim(),
     existing_personality: options.personality.trim(),
   };
 }
@@ -142,19 +152,18 @@ function buildGeneratorVariables(options: {
 export function PersonaGeneratePanel({
   personaName,
   description,
+  appearance,
   personality,
   onDescriptionChange,
+  onAppearanceChange,
   onPersonalityChange,
 }: PersonaGeneratePanelProps) {
-  const connectionsQuery = useConnections();
+  const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
   const presetsQuery = usePresets();
   const defaultPresetQuery = useDefaultPreset("persona_generator");
 
-  const defaultConnectionId =
-    connectionsQuery.data?.find((connection) => connection.is_default)?.id ??
-    connectionsQuery.data?.[0]?.id ??
-    null;
+  const defaultConnectionId = connectionsQuery.defaultId || null;
 
   const [connectionId, setConnectionId] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<string | null>(null);
@@ -247,32 +256,52 @@ export function PersonaGeneratePanel({
           field,
           personaName,
           description,
+          appearance,
           personality,
           presetVariables: preset.variables,
         }),
       });
 
-      const result = await runGenerator({
+      const fieldLabels: Record<GenerateField, string> = {
+        both: "description, appearance & personality",
+        description: "description",
+        appearance: "appearance",
+        personality: "personality",
+      };
+      const displayName = personaName.trim() || "persona";
+
+      const result = await useGeneratorJobsStore.getState().runTrackedGenerator({
         category: "persona_generator",
         connectionId: resolvedConnectionId,
         presetId: preset.id,
         variables: promptContext.variables,
         markers: promptContext.markers,
+        title: `Generate ${fieldLabels[field]} · ${displayName}`,
       });
 
       const raw = result.content || result.reply || "";
       const extracted = extractGeneratedFields(raw, field);
       if (field === "both") {
-        if (!extracted.description && !extracted.personality) {
+        if (
+          !extracted.description &&
+          !extracted.appearance &&
+          !extracted.personality
+        ) {
           throw new Error("Model returned an empty result");
         }
         if (extracted.description) onDescriptionChange(extracted.description);
+        if (extracted.appearance) onAppearanceChange(extracted.appearance);
         if (extracted.personality) onPersonalityChange(extracted.personality);
       } else if (field === "description") {
         if (!extracted.description) {
           throw new Error("Model returned an empty result");
         }
         onDescriptionChange(extracted.description);
+      } else if (field === "appearance") {
+        if (!extracted.appearance) {
+          throw new Error("Model returned an empty result");
+        }
+        onAppearanceChange(extracted.appearance);
       } else {
         if (!extracted.personality) {
           throw new Error("Model returned an empty result");
@@ -280,15 +309,15 @@ export function PersonaGeneratePanel({
         onPersonalityChange(extracted.personality);
       }
 
-      const label =
-        field === "both"
-          ? "Description and personality"
-          : field === "description"
-            ? "Description"
-            : "Personality";
+      const labels: Record<GenerateField, string> = {
+        both: "Description, appearance, and personality",
+        description: "Description",
+        appearance: "Appearance",
+        personality: "Personality",
+      };
       notifications.show({
         title: "Generated",
-        message: `${label} updated — save the persona to keep it.`,
+        message: `${labels[field]} updated — save the persona to keep it.`,
         color: "green",
       });
     } catch (error) {
@@ -310,7 +339,7 @@ export function PersonaGeneratePanel({
 
   const connectionError = connectionsQuery.isError
     ? "Failed to load connections"
-    : !connectionsQuery.isLoading && !connectionsQuery.data?.length
+    : !connectionsQuery.isLoading && !connectionsQuery.options.length
       ? "Create a connection first"
       : undefined;
 
@@ -342,14 +371,11 @@ export function PersonaGeneratePanel({
                 ? "Loading connections…"
                 : "Select connection"
             }
-            data={(connectionsQuery.data ?? []).map((connection) => ({
-              value: connection.id,
-              label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
-            }))}
+            data={connectionsQuery.options}
             value={resolvedConnectionId ?? ""}
             onChange={(value) => setConnectionId(value || null)}
             searchable
-            disabled={!connectionsQuery.data?.length}
+            disabled={!connectionsQuery.options.length}
             error={Boolean(connectionError)}
           />
         </Field>
@@ -416,7 +442,7 @@ export function PersonaGeneratePanel({
           leftSection={<IconSparkles size={14} />}
           onClick={() => void handleGenerate("both")}
         >
-          Generate description & personality
+          Generate description, appearance & personality
         </Button>
       </div>
 
@@ -436,12 +462,37 @@ export function PersonaGeneratePanel({
           </Button>
         </div>
         <p className={classes.fieldHint}>
-          Appearance / background — same field as Card.
+          Background / role — same field as Card.
         </p>
         <Textarea
           className={classes.textarea}
           value={description}
           onChange={(event) => onDescriptionChange(event.currentTarget.value)}
+        />
+      </div>
+
+      <div className={classes.stackSm}>
+        <div className={classes.fieldHeader}>
+          <p className={classes.fieldTitle}>Appearance</p>
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            loading={pendingField === "appearance"}
+            disabled={generateDisabled}
+            leftSection={<IconSparkles size={14} />}
+            onClick={() => void handleGenerate("appearance")}
+          >
+            Generate
+          </Button>
+        </div>
+        <p className={classes.fieldHint}>
+          Physical look / visual presentation — same field as Card.
+        </p>
+        <Textarea
+          className={classes.textarea}
+          value={appearance}
+          onChange={(event) => onAppearanceChange(event.currentTarget.value)}
         />
       </div>
 

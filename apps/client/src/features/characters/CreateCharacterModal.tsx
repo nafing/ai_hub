@@ -16,8 +16,8 @@ import { Button, Textarea,
   Select,
   Switch,
 } from "@/components/ui";
-import { useConnections } from "@/features/connections/queries";
-import { runGenerator } from "@/features/generators/api";
+import { useConnectionSelectOptions } from "@/features/connections/queries";
+import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
 import { getPersona } from "@/features/personas/api";
 import { usePersonas } from "@/features/personas/queries";
 import {
@@ -71,7 +71,7 @@ export function CreateCharacterModal({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const createMutation = useCreateCharacter();
-  const connectionsQuery = useConnections();
+  const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
   const presetsQuery = usePresets();
@@ -95,10 +95,7 @@ export function CreateCharacterModal({
     useState<ImportAiReviewContext | null>(null);
   const [confirmingAi, setConfirmingAi] = useState(false);
 
-  const defaultConnectionId =
-    connectionsQuery.data?.find((connection) => connection.is_default)?.id ??
-    connectionsQuery.data?.[0]?.id ??
-    null;
+  const defaultConnectionId = connectionsQuery.defaultId || null;
 
   const defaultPersonaId =
     personasQuery.data?.find((persona) => persona.is_default)?.id ?? null;
@@ -257,6 +254,7 @@ export function CreateCharacterModal({
         char: seedName,
         target_field: "all card fields",
         existing_description: "",
+        existing_appearance: "",
         existing_personality: "",
         existing_scenario: "",
         existing_first_mes: "",
@@ -265,12 +263,13 @@ export function CreateCharacterModal({
       },
     });
 
-    const result = await runGenerator({
+    const result = await useGeneratorJobsStore.getState().runTrackedGenerator({
       category: "character_generator",
       connectionId: resolvedConnectionId,
       presetId: preset.id,
       variables: promptContext.variables,
       markers: promptContext.markers,
+      title: `Create character with AI · ${seedName || "new character"}`,
     });
 
     const extracted = extractFullCards(result.content || result.reply || "");
@@ -365,7 +364,7 @@ export function CreateCharacterModal({
 
   const connectionError = connectionsQuery.isError
     ? "Failed to load connections"
-    : !connectionsQuery.isLoading && !connectionsQuery.data?.length
+    : !connectionsQuery.isLoading && !connectionsQuery.options.length
       ? "Create a connection first"
       : undefined;
 
@@ -442,14 +441,11 @@ export function CreateCharacterModal({
                         ? "Loading connections…"
                         : "Select connection"
                     }
-                    data={(connectionsQuery.data ?? []).map((connection) => ({
-                      value: connection.id,
-                      label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
-                    }))}
+                    data={connectionsQuery.options}
                     value={resolvedConnectionId ?? ""}
                     onChange={(value) => setConnectionId(value || null)}
                     searchable
-                    disabled={busy || !connectionsQuery.data?.length}
+                    disabled={busy || !connectionsQuery.options.length}
                     error={Boolean(connectionError)}
                   />
                 </Field>

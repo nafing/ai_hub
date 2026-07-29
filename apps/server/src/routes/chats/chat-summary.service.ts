@@ -373,7 +373,7 @@ export class ChatSummaryService {
     if (settings.connection_id) {
       return this.connections.findOne(settings.connection_id);
     }
-    return this.connections.findDefault();
+    return this.connections.findDefault("llm");
   }
 
   private async callSummaryModel(input: {

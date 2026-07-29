@@ -25,6 +25,12 @@ export type ConversationCommand =
       type: "cross_post";
       target: string;
       raw: string;
+    }
+  | {
+      type: "send_image";
+      /** Short visual brief for the image model (selfie, outfit, mood…). */
+      prompt: string;
+      raw: string;
     };
 
 const QUOTED_PARAM_BLOCK = '(?:[^"\\]]|"(?:\\\\.|[^"\\\\])*")*';
@@ -43,6 +49,10 @@ const MEMORY_RE = new RegExp(
 );
 const CROSS_POST_RE = new RegExp(
   `\\[cross_post:\\s*(${QUOTED_PARAM_BLOCK})\\]`,
+  "gi",
+);
+const SEND_IMAGE_RE = new RegExp(
+  `\\[send_image:\\s*(${QUOTED_PARAM_BLOCK})\\]`,
   "gi",
 );
 
@@ -124,11 +134,26 @@ export function parseConversationCommands(content: string): {
     });
   }
 
+  for (const match of content.matchAll(SEND_IMAGE_RE)) {
+    const params = match[1] ?? "";
+    const prompt =
+      readParam(params, "prompt")?.trim() ||
+      readParam(params, "brief")?.trim() ||
+      readParam(params, "caption")?.trim();
+    if (!prompt) continue;
+    commands.push({
+      type: "send_image",
+      prompt,
+      raw: match[0],
+    });
+  }
+
   const cleanContent = content
     .replace(REACT_RE, "")
     .replace(SCHEDULE_RE, "")
     .replace(MEMORY_RE, "")
     .replace(CROSS_POST_RE, "")
+    .replace(SEND_IMAGE_RE, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
@@ -175,6 +200,11 @@ export function buildConversationCommandsReminder(input: {
   if (input.enabledKeys.includes("cross_post")) {
     lines.push(
       `- [cross_post: target="Chat title or character"] — also post this reply into another shared conversation.`,
+    );
+  }
+  if (input.enabledKeys.includes("send_image")) {
+    lines.push(
+      `- [send_image: prompt="short visual brief"] — attach a real photo to this text (selfie, outfit, food, screenshot vibe). The hub generates the image; do NOT invent fake image links or markdown. Use sparingly when it fits a phone chat. Keep the visible reply as normal SMS text (caption optional).`,
     );
   }
   lines.push(

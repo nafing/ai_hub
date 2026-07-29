@@ -31,6 +31,7 @@ export function defaultCharacterCardData(
   return {
     name: "",
     description: "",
+    appearance: "",
     personality: "",
     scenario: "",
     first_mes: "",
@@ -97,6 +98,12 @@ export function normalizeCharacterCardData(
       typeof input.description === "string"
         ? input.description
         : base.description,
+    appearance:
+      typeof input.appearance === "string"
+        ? input.appearance
+        : typeof legacyExtensions?.appearance === "string"
+          ? (legacyExtensions.appearance as string)
+          : base.appearance,
     personality:
       typeof input.personality === "string"
         ? input.personality

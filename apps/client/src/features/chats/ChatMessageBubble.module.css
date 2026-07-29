@@ -124,6 +124,66 @@
   white-space: pre-wrap;
 }
 
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.attachmentImageLink {
+  display: block;
+  max-width: min(100%, 22rem);
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+}
+
+.attachmentImage {
+  display: block;
+  width: 100%;
+  max-height: 18rem;
+  object-fit: contain;
+  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+}
+
+.attachmentFile {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 100%;
+  padding: 0.4rem 0.65rem;
+  color: var(--color-text);
+  text-decoration: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.attachmentFile:hover {
+  border-color: var(--color-border-strong);
+}
+
+.attachmentFileMeta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.attachmentFileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.attachmentFileSize {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+}
+
 .editStack {
   display: flex;
   flex-direction: column;

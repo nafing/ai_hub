@@ -1,6 +1,10 @@
+import type { ConnectionKind } from "./constants";
+
 export type Connection = {
   // UUID
   id: string;
+  /** LLM chat completions or OpenRouter image generation. */
+  kind: ConnectionKind;
   // Name of the connection
   // A friendly name to identify this connection. Use something descriptive like 'Claude Sonnet — RP' or 'GPT-4o Main'.
   name: string;

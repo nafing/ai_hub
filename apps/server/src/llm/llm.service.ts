@@ -42,13 +42,20 @@ export class LlmService {
   async resolveConnection(
     input: ResolveConnectionInput = {},
   ): Promise<Connection> {
+    let connection: Connection;
     if (input.connectionId) {
-      return this.connections.findOne(input.connectionId);
-    }
-    if (input.useDefault === false) {
+      connection = await this.connections.findOne(input.connectionId);
+    } else if (input.useDefault === false) {
       throw new BadRequestException("connectionId is required");
+    } else {
+      connection = await this.connections.findDefault("llm");
     }
-    return this.connections.findDefault();
+    if ((connection.kind ?? "llm") !== "llm") {
+      throw new BadRequestException(
+        `Connection "${connection.name || connection.id}" is not an LLM connection`,
+      );
+    }
+    return connection;
   }
 
   async resolvePreset(input: ResolvePresetInput): Promise<Preset> {

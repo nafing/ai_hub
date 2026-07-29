@@ -8,6 +8,7 @@ export function defaultPersona(
   return {
     name: "",
     description: "",
+    appearance: "",
     personality: "",
     about_me: "",
     notes: "",
@@ -23,6 +24,8 @@ export function normalizePersona(
     name: typeof input.name === "string" ? input.name : "",
     description:
       typeof input.description === "string" ? input.description : "",
+    appearance:
+      typeof input.appearance === "string" ? input.appearance : "",
     personality:
       typeof input.personality === "string" ? input.personality : "",
     about_me: typeof input.about_me === "string" ? input.about_me : "",
@@ -38,6 +41,7 @@ export function toPersonaExport(
   return {
     name: persona.name,
     description: persona.description,
+    appearance: persona.appearance,
     personality: persona.personality,
     about_me: persona.about_me,
     notes: persona.notes,

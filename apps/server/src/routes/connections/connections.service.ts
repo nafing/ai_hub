@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { Not, Repository } from "typeorm";
 import type {
   Connection,
+  ConnectionKind,
   ConnectionListItem,
   CreateConnectionInput,
   UpdateConnectionInput,
@@ -30,25 +31,33 @@ export class ConnectionsService {
     return this.toConnection(row);
   }
 
-  async findDefault(): Promise<Connection> {
-    const row = await this.connections.findOneBy({ is_default: true });
+  async findDefault(kind: ConnectionKind = "llm"): Promise<Connection> {
+    const row = await this.connections.findOneBy({
+      is_default: true,
+      kind,
+    });
     if (!row) {
-      throw new NotFoundException("No default connection configured");
+      throw new NotFoundException(`No default ${kind} connection configured`);
     }
     return this.toConnection(row);
   }
 
   async create(input: CreateConnectionInput): Promise<Connection> {
-    const shouldBeDefault =
-      input.is_default || (await this.connections.count()) === 0;
+    const kind = input.kind ?? "llm";
+    const hasDefaultForKind = await this.connections.findOneBy({
+      is_default: true,
+      kind,
+    });
+    const shouldBeDefault = input.is_default || !hasDefaultForKind;
 
     if (shouldBeDefault) {
-      await this.clearDefaults();
+      await this.clearDefaults(kind);
     }
 
     const entity = this.connections.create({
       id: randomUUID(),
       ...input,
+      kind,
       custom_parameters: input.custom_parameters ?? {},
       is_default: shouldBeDefault,
     });
@@ -65,11 +74,16 @@ export class ConnectionsService {
       throw new NotFoundException(`Connection ${id} not found`);
     }
 
+    const nextKind = (input.kind ?? row.kind ?? "llm") as ConnectionKind;
+
     if (input.is_default === true) {
-      await this.clearDefaults(id);
+      await this.clearDefaults(nextKind, id);
     }
 
     Object.assign(row, input);
+    if (input.kind !== undefined) {
+      row.kind = input.kind;
+    }
     if (input.custom_parameters !== undefined) {
       row.custom_parameters = input.custom_parameters;
     }
@@ -83,11 +97,13 @@ export class ConnectionsService {
       throw new NotFoundException(`Connection ${id} not found`);
     }
 
+    const kind = (row.kind ?? "llm") as ConnectionKind;
     const wasDefault = row.is_default;
     await this.connections.delete({ id });
 
     if (wasDefault) {
       const next = await this.connections.find({
+        where: { kind },
         order: { name: "ASC" },
         take: 1,
       });
@@ -116,9 +132,14 @@ export class ConnectionsService {
     return row.api_key;
   }
 
-  private async clearDefaults(exceptId?: string): Promise<void> {
+  private async clearDefaults(
+    kind: ConnectionKind,
+    exceptId?: string,
+  ): Promise<void> {
     await this.connections.update(
-      exceptId ? { id: Not(exceptId), is_default: true } : { is_default: true },
+      exceptId
+        ? { id: Not(exceptId), is_default: true, kind }
+        : { is_default: true, kind },
       { is_default: false },
     );
   }
@@ -126,6 +147,7 @@ export class ConnectionsService {
   private toConnection(row: ConnectionEntity): Connection {
     return {
       id: row.id,
+      kind: (row.kind ?? "llm") as ConnectionKind,
       name: row.name,
       preferred_provider: row.preferred_provider,
       api_key: row.api_key,

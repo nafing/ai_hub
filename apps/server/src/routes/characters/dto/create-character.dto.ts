@@ -22,6 +22,10 @@ export class CharacterCardDataDto implements CharacterCardData {
   @IsString()
   description!: string;
 
+  @IsOptional()
+  @IsString()
+  appearance!: string;
+
   @IsString()
   personality!: string;
 

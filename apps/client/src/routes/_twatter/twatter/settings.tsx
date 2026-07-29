@@ -4,7 +4,7 @@ import { TwatterRefreshTimeline } from "@/features/twatter/TwatterRefreshTimelin
 import { TwatterSettingsPanel } from "@/features/twatter/TwatterSettingsPanel";
 import { PersonaPicker } from "@/features/twatter/ComposePost";
 import { useTwatterPersona } from "@/features/twatter/TwatterPersonaContext";
-import { useConnections } from "@/features/connections/queries";
+import { useLlmConnections } from "@/features/connections/queries";
 import { useCharacters } from "@/features/characters/queries";
 import { usePersonas } from "@/features/personas/queries";
 import { useTwatterBootstrap } from "@/features/twatter/queries";
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_twatter/twatter/settings")({
 function RouteComponent() {
   const { data: bootstrap } = useTwatterBootstrap();
   const { data: characters } = useCharacters();
-  const { data: connections } = useConnections();
+  const { data: connections } = useLlmConnections();
   const { data: personas } = usePersonas();
   const { personaId, setPersonaId } = useTwatterPersona();
 

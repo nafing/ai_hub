@@ -3,7 +3,14 @@ import { motion } from "motion/react";
 import { IconCopy, IconPlus, IconTrash } from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ToolListItem } from "@ai-hub/shared";
-import { ActionIcon, Button, Modal, notifications } from "@/components/ui";
+import {
+  ActionIcon,
+  Button,
+  Modal,
+  MultiSelect,
+  notifications,
+  TextInput,
+} from "@/components/ui";
 import { CreateToolModal } from "@/features/tools/CreateToolModal";
 import {
   useDeleteTool,
@@ -21,23 +28,63 @@ type DeleteTarget = {
   name: string;
 };
 
+type ToolSource = "custom" | "builtin";
+
+const SOURCE_OPTIONS: { value: ToolSource; label: string }[] = [
+  { value: "custom", label: "Custom" },
+  { value: "builtin", label: "Built-in" },
+];
+
 function RouteComponent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [query, setQuery] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<ToolSource[]>([]);
 
   const { data, isLoading, isError } = useTools();
   const deleteMutation = useDeleteTool();
   const duplicateMutation = useDuplicateTool();
 
+  const hasActiveFilters = query.trim().length > 0 || sourceFilter.length > 0;
+
+  const filteredTools = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return (data ?? []).filter((tool) => {
+      if (sourceFilter.length > 0) {
+        const source: ToolSource = tool.is_built_in ? "builtin" : "custom";
+        if (!sourceFilter.includes(source)) return false;
+      }
+      if (!normalizedQuery) return true;
+      return (
+        tool.name.toLowerCase().includes(normalizedQuery) ||
+        tool.description.toLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [data, query, sourceFilter]);
+
   const { custom, builtin } = useMemo(() => {
     const customTools: ToolListItem[] = [];
     const builtinTools: ToolListItem[] = [];
-    for (const tool of data ?? []) {
+    for (const tool of filteredTools) {
       if (tool.is_built_in) builtinTools.push(tool);
       else customTools.push(tool);
     }
     return { custom: customTools, builtin: builtinTools };
-  }, [data]);
+  }, [filteredTools]);
+
+  const grouped = useMemo(
+    () =>
+      [
+        { key: "custom" as const, title: "Custom", tools: custom },
+        { key: "builtin" as const, title: "Built-in", tools: builtin },
+      ].filter((group) => group.tools.length > 0),
+    [builtin, custom],
+  );
+
+  function clearFilters() {
+    setQuery("");
+    setSourceFilter([]);
+  }
 
   function handleConfirmDelete() {
     if (!deleteTarget) return;
@@ -85,7 +132,11 @@ function RouteComponent() {
       <header className={classes.header}>
         <div className={classes.headerRow}>
           <h2 className={classes.title}>Tools</h2>
-          <ActionIcon type="button" variant="default" aria-label="New tool" onClick={() => setCreateOpen(true)}
+          <ActionIcon
+            type="button"
+            variant="default"
+            aria-label="New tool"
+            onClick={() => setCreateOpen(true)}
           >
             <IconPlus size={16} />
           </ActionIcon>
@@ -93,8 +144,43 @@ function RouteComponent() {
         <p className={classes.subtitle}>
           LLM function tools for agents. Built-in tools are seeded automatically
           and cannot be deleted.
+          {!isLoading && !isError && hasActiveFilters
+            ? ` Showing ${filteredTools.length} of ${data?.length ?? 0}.`
+            : null}
         </p>
       </header>
+
+      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
+        <div className={classes.filters}>
+          <TextInput
+            className={classes.searchInput}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Search name, description…"
+            aria-label="Search tools"
+          />
+          <MultiSelect
+            className={classes.categoryFilter}
+            searchable
+            clearable
+            data={SOURCE_OPTIONS}
+            value={sourceFilter}
+            onChange={(value) => setSourceFilter(value as ToolSource[])}
+            placeholder="All sources"
+            searchPlaceholder="Filter sources…"
+          />
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="default"
+              className={classes.clearFilters}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className={classes.loading}>
@@ -106,61 +192,56 @@ function RouteComponent() {
         <p className={classes.statusError}>Failed to load tools.</p>
       ) : null}
 
-      {!isLoading && !isError ? (
-        <>
-          <section className={classes.group}>
-            <div>
-              <h3 className={classes.groupTitle}>Custom</h3>
-              <p className={classes.groupHint}>
-                Your own tools — create, edit, and delete freely.
-              </p>
-            </div>
-            {custom.length === 0 ? (
-              <p className={classes.status}>
-                No custom tools yet. Create one with +.
-              </p>
-            ) : (
-              <div className={classes.grid}>
-                {custom.map((tool) => (
-                  <ToolCard
-                    key={tool.id}
-                    tool={tool}
-                    onDuplicate={handleDuplicate}
-                    onDelete={(id, name) => setDeleteTarget({ id, name })}
-                    duplicatePending={duplicateMutation.isPending}
-                    deletePending={deleteMutation.isPending}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className={classes.group}>
-            <div>
-              <h3 className={classes.groupTitle}>Built-in</h3>
-              <p className={classes.groupHint}>
-                Default tools shipped with the hub — editable, not deletable.
-              </p>
-            </div>
-            {builtin.length === 0 ? (
-              <p className={classes.status}>No built-in tools loaded.</p>
-            ) : (
-              <div className={classes.grid}>
-                {builtin.map((tool) => (
-                  <ToolCard
-                    key={tool.id}
-                    tool={tool}
-                    onDuplicate={handleDuplicate}
-                    onDelete={(id, name) => setDeleteTarget({ id, name })}
-                    duplicatePending={duplicateMutation.isPending}
-                    deletePending={deleteMutation.isPending}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        </>
+      {!isLoading && !isError && (data?.length ?? 0) === 0 ? (
+        <p className={classes.status}>
+          No tools yet. Create one to get started.
+        </p>
       ) : null}
+
+      {!isLoading &&
+      !isError &&
+      (data?.length ?? 0) > 0 &&
+      grouped.length === 0 ? (
+        <p className={classes.status}>
+          No tools match your filters.{" "}
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className={classes.clearFiltersLink}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+
+      {!isLoading && !isError
+        ? grouped.map(({ key, title, tools }) => (
+            <section key={key} className={classes.group}>
+              <div>
+                <h3 className={classes.groupTitle}>{title}</h3>
+                <p className={classes.groupHint}>
+                  {key === "custom"
+                    ? "Your own tools — create, edit, and delete freely."
+                    : "Default tools shipped with the hub — editable, not deletable."}
+                </p>
+              </div>
+              <div className={classes.grid}>
+                {tools.map((tool) => (
+                  <ToolCard
+                    key={tool.id}
+                    tool={tool}
+                    onDuplicate={handleDuplicate}
+                    onDelete={(id, name) => setDeleteTarget({ id, name })}
+                    duplicatePending={duplicateMutation.isPending}
+                    deletePending={deleteMutation.isPending}
+                  />
+                ))}
+              </div>
+            </section>
+          ))
+        : null}
 
       <CreateToolModal
         opened={createOpen}
@@ -178,13 +259,14 @@ function RouteComponent() {
           cannot be undone.
         </p>
         <div className={classes.modalActions}>
-          <Button variant="default" type="button"
+          <Button
+            variant="default"
+            type="button"
             onClick={() => setDeleteTarget(null)}
           >
             Cancel
           </Button>
-          <Button variant="dangerSolid" type="button"
-            onClick={handleConfirmDelete}>
+          <Button variant="dangerSolid" type="button" onClick={handleConfirmDelete}>
             Delete
           </Button>
         </div>
@@ -208,6 +290,7 @@ function ToolCard({
 }) {
   return (
     <motion.div
+      className={classes.cardWrap}
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.16 }}
@@ -225,7 +308,12 @@ function ToolCard({
             </p>
           </div>
           <div className={classes.cardActions}>
-            <ActionIcon type="button" variant="ghost" aria-label="Duplicate" disabled={duplicatePending} onClick={(event) => {
+            <ActionIcon
+              type="button"
+              variant="ghost"
+              aria-label="Duplicate"
+              disabled={duplicatePending}
+              onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 onDuplicate(tool.id);
@@ -234,7 +322,12 @@ function ToolCard({
               <IconCopy size={15} />
             </ActionIcon>
             {!tool.is_built_in ? (
-              <ActionIcon type="button" variant="ghostDanger" aria-label="Delete" disabled={deletePending} onClick={(event) => {
+              <ActionIcon
+                type="button"
+                variant="ghostDanger"
+                aria-label="Delete"
+                disabled={deletePending}
+                onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
                   onDelete(tool.id, tool.name);

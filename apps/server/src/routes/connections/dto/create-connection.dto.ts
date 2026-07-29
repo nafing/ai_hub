@@ -1,12 +1,19 @@
 import {
   IsBoolean,
+  IsIn,
   IsNumber,
   IsObject,
+  IsOptional,
   IsString,
   Min,
 } from "class-validator";
+import { CONNECTION_KINDS, type ConnectionKind } from "@ai-hub/shared";
 
 export class CreateConnectionDto {
+  @IsOptional()
+  @IsIn(CONNECTION_KINDS)
+  kind?: ConnectionKind;
+
   @IsString()
   name!: string;
 

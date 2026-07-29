@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { defaultConnection } from "@ai-hub/shared";
+import {
+  CONNECTION_KIND_LABELS,
+  defaultConnectionForKind,
+  type ConnectionKind,
+} from "@ai-hub/shared";
 import { Button, Modal, TextInput, notifications } from "@/components/ui";
 import { useCreateConnection } from "./queries";
 import classes from "./CreateConnectionModal.module.css";
@@ -17,9 +21,11 @@ export function CreateConnectionModal({
   const navigate = useNavigate();
   const createMutation = useCreateConnection();
   const [name, setName] = useState("");
+  const [kind, setKind] = useState<ConnectionKind>("llm");
 
   function handleClose() {
     setName("");
+    setKind("llm");
     onClose();
   }
 
@@ -29,8 +35,9 @@ export function CreateConnectionModal({
 
     try {
       const created = await createMutation.mutateAsync({
-        ...defaultConnection(),
+        ...defaultConnectionForKind(kind),
         name: trimmed,
+        kind,
       });
       notifications.show({
         title: "Created",
@@ -64,14 +71,32 @@ export function CreateConnectionModal({
           void handleCreate();
         }}
       >
+        <div className={classes.kindRow}>
+          {(["llm", "image"] as const).map((option) => (
+            <Button
+              key={option}
+              type="button"
+              variant={kind === option ? "light" : "ghost"}
+              size="sm"
+              className={`${classes.kindSegment}${kind === option ? ` ${classes.kindSegmentActive}` : ""}`}
+              onClick={() => setKind(option)}
+            >
+              {CONNECTION_KIND_LABELS[option]}
+            </Button>
+          ))}
+        </div>
+
         <label className={classes.field}>
           <span className={classes.fieldLabel}>Name</span>
           <p className={classes.fieldHint}>
-            A friendly name like &apos;Claude Sonnet — RP&apos; or &apos;GPT-4o
-            Main&apos;.
+            {kind === "image"
+              ? "A friendly name like 'Seedream — avatars'."
+              : "A friendly name like 'Claude Sonnet — RP' or 'GPT-4o Main'."}
           </p>
           <TextInput
-            placeholder="My connection"
+            placeholder={
+              kind === "image" ? "My image connection" : "My connection"
+            }
             required
             autoFocus
             value={name}
@@ -79,12 +104,14 @@ export function CreateConnectionModal({
           />
         </label>
         <div className={classes.actions}>
-          <Button variant="default" type="button"
-            onClick={handleClose}>
+          <Button variant="default" type="button" onClick={handleClose}>
             Cancel
           </Button>
-          <Button variant="primary" type="submit"
-            disabled={!name.trim() || createMutation.isPending}>
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={!name.trim() || createMutation.isPending}
+          >
             {createMutation.isPending ? "Creating…" : "Create"}
           </Button>
         </div>

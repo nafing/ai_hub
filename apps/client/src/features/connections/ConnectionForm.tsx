@@ -105,6 +105,7 @@ export function ConnectionForm({
 }: ConnectionFormProps) {
   const [values, setValues] = useState<ConnectionFormValues>(() => ({
     ...initialValues,
+    kind: "llm",
     model: resolveCanonicalModelId(initialValues.model, undefined),
   }));
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -228,7 +229,7 @@ export function ConnectionForm({
       values.model,
       modelsQuery.data,
     );
-    const payload = { ...values, model: modelIdResolved };
+    const payload = { ...values, model: modelIdResolved, kind: "llm" as const };
     const nextErrors = validate(payload);
     if (errors.custom_parameters) {
       nextErrors.custom_parameters = errors.custom_parameters;

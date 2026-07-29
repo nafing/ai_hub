@@ -253,13 +253,25 @@ export function CharacterForm({
           <div className={classes.stack}>
             <Field
               label="Description"
-              hint="Main character definition / appearance / lore."
+              hint="Background, role, and durable facts the model should know."
             >
               <Textarea
                 className={classes.textarea}
                 value={values.data.description}
                 onChange={(event) =>
                   setDataField("description", event.target.value)
+                }
+              />
+            </Field>
+            <Field
+              label="Appearance"
+              hint="Physical look and visual presentation (used for image prompts)."
+            >
+              <Textarea
+                className={classes.textarea}
+                value={values.data.appearance}
+                onChange={(event) =>
+                  setDataField("appearance", event.target.value)
                 }
               />
             </Field>
@@ -424,6 +436,7 @@ export function CharacterForm({
           <CharacterGeneratePanel
             characterName={values.data.name}
             description={values.data.description}
+            appearance={values.data.appearance}
             personality={values.data.personality}
             scenario={values.data.scenario}
             first_mes={values.data.first_mes}
@@ -431,6 +444,7 @@ export function CharacterForm({
             alternateGreetings={values.data.alternate_greetings}
             onNameChange={(value) => setDataField("name", value)}
             onDescriptionChange={(value) => setDataField("description", value)}
+            onAppearanceChange={(value) => setDataField("appearance", value)}
             onPersonalityChange={(value) => setDataField("personality", value)}
             onScenarioChange={(value) => setDataField("scenario", value)}
             onFirstMesChange={(value) => setDataField("first_mes", value)}

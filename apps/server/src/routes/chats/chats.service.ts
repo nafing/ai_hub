@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  StreamableFile,
   forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -11,7 +12,9 @@ import { randomUUID } from "node:crypto";
 import { Repository } from "typeorm";
 import {
   activeMessageText,
+  activeMessageAttachments,
   ancestorChatMessages,
+  assignSwipeAttachments,
   activeCharacterIds,
   applyRegexScriptsToPromptMessages,
   branchParentOf,
@@ -62,6 +65,8 @@ import {
   promptVisibleChatMessages,
   isMessageHiddenFromPrompt,
   CONVERSATION_COMMAND_KEYS,
+  normalizeImageAspectRatio,
+  normalizeImageResolution,
   type Character,
   type CharacterListItem,
   type Chat,
@@ -74,6 +79,7 @@ import {
   type ConversationPresenceStatus,
   type CreateChatInput,
   type CreateChatMessageInput,
+  type ChatMessageAttachment,
   type GenerateChatInput,
   type LlmChatMessage,
   type PeekPromptLoreHit,
@@ -83,7 +89,11 @@ import {
   type UpdateChatMessageInput,
 } from "@ai-hub/shared";
 import { LoreRetrievalService } from "../../lore/lore-retrieval.service";
-import { completeWithConnection } from "../../utils/openrouter";
+import {
+  completeWithConnection,
+  completeWithConnectionAndPreset,
+  openRouterGenerateImage,
+} from "../../utils/openrouter";
 import { AgentRunnerService } from "../agents/agent-runner.service";
 import { CharactersService } from "../characters/characters.service";
 import { ConnectionsService } from "../connections/connections.service";
@@ -94,6 +104,12 @@ import { PresetsService } from "../presets/presets.service";
 import { RegexesService } from "../regexes/regexes.service";
 import { TwatterService } from "../twatter/twatter.service";
 import { ChatEntity } from "./chat.entity";
+import {
+  chatAttachmentExists,
+  openChatAttachmentStream,
+  readChatAttachmentMeta,
+  writeChatAttachment,
+} from "./chat-attachment-storage";
 import { ChatSummaryService } from "./chat-summary.service";
 import { ConversationSummaryService } from "./conversation-summary.service";
 
@@ -535,16 +551,22 @@ export class ChatsService {
     characterId: string | null;
     historyMessages: ChatMessage[];
     emit: StreamEmit;
-  }): Promise<string> {
+  }): Promise<{ content: string; attachments: ChatMessageAttachment[] }> {
     const parsed = parseConversationCommands(input.content);
     const commands = filterEnabledConversationCommands(
       parsed.commands,
       input.settings.conversation_command_toggles,
     );
-    if (!commands.length) return parsed.cleanContent || input.content;
+    if (!commands.length) {
+      return {
+        content: parsed.cleanContent || input.content,
+        attachments: [],
+      };
+    }
 
     let settings = defaultChatSettings(input.settings);
     const messages = [...normalizeChatMessages(input.row.messages)];
+    const attachments: ChatMessageAttachment[] = [];
 
     for (const command of commands) {
       if (command.type === "react") {
@@ -580,14 +602,14 @@ export class ChatsService {
               ],
             };
           }
+          input.emit({
+            type: "conversation_command",
+            command: "react",
+            character_id: input.characterId,
+            detail: command.emoji,
+            message_id: target.id,
+          });
         }
-        input.emit({
-          type: "conversation_command",
-          command: "react",
-          character_id: input.characterId,
-          detail: command.emoji,
-          message_id: target.id,
-        });
       }
 
       if (command.type === "schedule_update") {
@@ -689,13 +711,191 @@ export class ChatsService {
           });
         }
       }
+
+      if (command.type === "send_image") {
+        try {
+          const speaker =
+            input.characterList.find((c) => c.id === input.characterId) ??
+            input.characterList[0] ??
+            null;
+          const attachment = await this.generateConversationImageAttachment({
+            chatId: input.row.id,
+            brief: command.prompt,
+            character: speaker,
+            aspectRatio: settings.image_aspect_ratio,
+            resolution: settings.image_resolution,
+          });
+          attachments.push(attachment);
+          input.emit({
+            type: "conversation_command",
+            command: "send_image",
+            character_id: input.characterId,
+            detail: command.prompt.slice(0, 120),
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Image generation failed";
+          this.logger.warn(`send_image failed for chat ${input.row.id}: ${message}`);
+          input.emit({
+            type: "conversation_command",
+            command: "send_image",
+            character_id: input.characterId,
+            detail: `Failed: ${message}`,
+          });
+        }
+      }
     }
 
     input.row.settings = settings;
     input.row.messages = messages;
     input.row.updated_at = new Date().toISOString();
     await this.chats.save(input.row);
-    return parsed.cleanContent;
+    return { content: parsed.cleanContent, attachments };
+  }
+
+  /** Expand a texting brief + character look into an OpenRouter image attachment. */
+  private async generateConversationImageAttachment(input: {
+    chatId: string;
+    brief: string;
+    character: Character | null;
+    aspectRatio?: string;
+    resolution?: string;
+  }): Promise<ChatMessageAttachment> {
+    let imageConnection;
+    try {
+      imageConnection = await this.connections.findDefault("image");
+    } catch {
+      throw new Error(
+        "No default image connection — create one under Connections (kind: Image).",
+      );
+    }
+    if (!imageConnection.api_key.trim() || !imageConnection.model.trim()) {
+      throw new Error("Default image connection needs an API key and model.");
+    }
+
+    const appearance =
+      input.character?.data.appearance?.trim() ||
+      input.character?.data.description?.trim() ||
+      "";
+    const name = input.character?.data.name?.trim() || "Character";
+
+    let imagePresetVariables: ReturnType<typeof selectedVariableValues> = {};
+    let styleLine = "";
+    let framingLine = "";
+    try {
+      const imagePresetEarly = await this.presets.findDefault("image");
+      imagePresetVariables = selectedVariableValues(imagePresetEarly.variables);
+      styleLine =
+        typeof imagePresetVariables.image_style === "string"
+          ? imagePresetVariables.image_style.trim()
+          : "";
+      framingLine =
+        typeof imagePresetVariables.image_framing === "string"
+          ? imagePresetVariables.image_framing.trim()
+          : "";
+    } catch {
+      // Preset lookup may fail; fall back without style hints.
+    }
+
+    const styleIsIllustrated = /anime|illustration|painterly|comic|cel-?shaded|digital painting/i.test(
+      styleLine,
+    );
+    const styleIsPhoto = /photoreal|realistic|photograph|cinematic composition/i.test(
+      styleLine,
+    );
+
+    let imagePrompt = [
+      styleLine || null,
+      framingLine || null,
+      styleIsIllustrated
+        ? `Casual selfie-pose portrait illustration of ${name}.`
+        : `Phone photo / casual selfie of ${name}.`,
+      appearance ? `Appearance: ${appearance}` : null,
+      `Situation: ${input.brief.trim()}`,
+      styleIsIllustrated
+        ? "Keep the Style medium (anime/illustration) — not photorealistic, not a real camera photo."
+        : styleIsPhoto
+          ? "Photorealistic casual phone camera, natural lighting, authentic messaging photo."
+          : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    try {
+      const llmConnection = await this.connections.findDefault("llm");
+      const imagePreset = await this.presets.findDefault("image");
+      const promptContext = buildPresetPromptContext({
+        characters: input.character ? [input.character] : undefined,
+        generatorBrief: input.brief.trim(),
+        characterInfoMode: "image",
+        variables: {
+          ...selectedVariableValues(imagePreset.variables),
+          ...imagePresetVariables,
+        },
+      });
+      const expanded = await completeWithConnectionAndPreset(
+        llmConnection,
+        imagePreset,
+        {
+          prompt: {
+            variables: promptContext.variables,
+            markers: promptContext.markers,
+          },
+        },
+      );
+      const raw = (expanded.content || expanded.reply || "").trim();
+      const fenced = raw.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+      const text = (fenced?.[1] ?? raw).trim();
+      try {
+        const parsed = JSON.parse(text) as { prompt?: unknown };
+        if (typeof parsed.prompt === "string" && parsed.prompt.trim()) {
+          imagePrompt = parsed.prompt.trim();
+        }
+      } catch {
+        if (text && !text.startsWith("{")) imagePrompt = text;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Image prompt expand skipped: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    // Always pin Style/Framing onto the final model prompt so LLM drift or
+    // "selfie/photo" briefs cannot override the preset medium (e.g. anime).
+    imagePrompt = [styleLine, framingLine, imagePrompt]
+      .filter(Boolean)
+      .join("\n");
+    if (styleIsIllustrated) {
+      imagePrompt = `${imagePrompt}\nMedium lock: anime/illustration only — not photorealistic, not a real photograph.`;
+    }
+
+    const custom = imageConnection.custom_parameters ?? {};
+    const aspectFromCustom =
+      typeof custom.aspect_ratio === "string" ? custom.aspect_ratio : undefined;
+    const resolutionFromCustom =
+      typeof custom.resolution === "string" ? custom.resolution : undefined;
+
+    const generated = await openRouterGenerateImage(imageConnection.api_key, {
+      model: imageConnection.model,
+      prompt: imagePrompt,
+      preferredProvider: imageConnection.preferred_provider,
+      aspectRatio: normalizeImageAspectRatio(
+        input.aspectRatio || aspectFromCustom,
+      ),
+      resolution: normalizeImageResolution(
+        input.resolution || resolutionFromCustom,
+      ),
+      // Only sent when the model lists output_format in supported_parameters.
+      outputFormat: "png",
+    });
+
+    return writeChatAttachment({
+      chatId: input.chatId,
+      attachmentId: randomUUID(),
+      buffer: generated.buffer,
+      mime: generated.mime,
+      name: `${name.replace(/[^\w.-]+/g, "_").slice(0, 40) || "photo"}.png`,
+    });
   }
 
   async applyAgentProposal(
@@ -788,8 +988,11 @@ export class ChatsService {
 
   async addMessage(id: string, input: CreateChatMessageInput): Promise<Chat> {
     const row = await this.requireRow(id);
-    const content = input.content?.trim();
-    if (!content) throw new BadRequestException("content is required");
+    const content = input.content?.trim() ?? "";
+    const attachments = await this.resolveAttachments(id, input.attachments);
+    if (!content && attachments.length === 0) {
+      throw new BadRequestException("content or attachments are required");
+    }
     const role = input.role ?? "user";
     const characterId =
       role === "assistant" ? (input.character_id ?? null) : null;
@@ -807,6 +1010,7 @@ export class ChatsService {
       id: randomUUID(),
       character_id: characterId,
       roleplay_dm_source: input.roleplay_dm_source ?? null,
+      attachments,
       ...branchParentOf(row.messages),
     });
     row.messages = [...normalizeChatMessages(row.messages), message];
@@ -910,7 +1114,8 @@ export class ChatsService {
     }
 
     const rawUserText = input.userMessage?.trim() ?? "";
-    if (rawUserText) {
+    const attachments = await this.resolveAttachments(id, input.attachments);
+    if (rawUserText || attachments.length > 0) {
       const { command, rest } = parseSlashCommand(rawUserText);
       const storedContent = command
         ? rest.trim() || `/${command}`
@@ -920,6 +1125,7 @@ export class ChatsService {
         role: "user",
         content: storedContent,
         id: randomUUID(),
+        attachments,
         ...branchParentOf(row.messages),
       });
       row.messages = [...row.messages, userMessage];
@@ -1139,7 +1345,7 @@ export class ChatsService {
 
     const connection = promptSettings.connection_id
       ? await this.connections.findOne(promptSettings.connection_id)
-      : await this.connections.findDefault();
+      : await this.connections.findDefault("llm");
 
     if (!connection.api_key.trim()) {
       throw new BadRequestException(
@@ -1397,6 +1603,7 @@ export class ChatsService {
       agentState: { ...(row.agent_state ?? {}) },
       messages: [...row.messages],
     };
+    let commandAttachments: ChatMessageAttachment[] = [];
 
     const agentCtxBase = {
       chat: this.toChat(row),
@@ -1550,12 +1757,13 @@ export class ChatsService {
         }
       }
 
+      let turnCommandAttachments: ChatMessageAttachment[] = [];
       if (
         row.mode === "conversation" &&
         settings.character_commands !== false &&
         turn.kind !== "impersonate"
       ) {
-        content = await this.applyConversationCommands({
+        const commandResult = await this.applyConversationCommands({
           row,
           content,
           settings: defaultChatSettings(row.settings),
@@ -1564,6 +1772,8 @@ export class ChatsService {
           historyMessages,
           emit,
         });
+        content = commandResult.content;
+        turnCommandAttachments = commandResult.attachments;
         const refreshed = await this.chats.findOneBy({ id: row.id });
         if (refreshed) {
           row.settings = refreshed.settings;
@@ -1575,25 +1785,32 @@ export class ChatsService {
       row.agent_state = mutable.agentState;
       row.summary = mutable.summary;
       row.messages = mutable.messages;
+      commandAttachments = turnCommandAttachments;
     }
 
     const commandOnlyTurn =
       role === "assistant" &&
       row.mode === "conversation" &&
       !content.trim() &&
-      !thinking?.trim();
+      !thinking?.trim() &&
+      commandAttachments.length === 0;
 
     let savedMessage: ChatMessage;
     if (regenerateIndex !== undefined) {
       const existing = row.messages[regenerateIndex];
       const swipes = [...existing.swipes, content];
-      savedMessage = {
-        ...existing,
-        swipes,
-        swipe_id: swipes.length - 1,
-        thinking: thinking || null,
-        character_id: existing.character_id ?? characterId,
-      };
+      const nextSwipeId = swipes.length - 1;
+      savedMessage = assignSwipeAttachments(
+        {
+          ...existing,
+          swipes,
+          swipe_id: nextSwipeId,
+          thinking: thinking || null,
+          character_id: existing.character_id ?? characterId,
+        },
+        nextSwipeId,
+        commandAttachments,
+      );
       row.messages = row.messages.map((message, index) =>
         index === regenerateIndex ? savedMessage : message,
       );
@@ -1613,6 +1830,7 @@ export class ChatsService {
         id: randomUUID(),
         thinking: role === "assistant" ? thinking || null : null,
         character_id: role === "assistant" ? characterId : null,
+        attachments: commandAttachments.length ? commandAttachments : undefined,
         ...branchParentOf(row.messages),
       });
       row.messages = [...row.messages, savedMessage];
@@ -1881,12 +2099,17 @@ export class ChatsService {
     }
 
     if (mode === "conversation" && settings.enable_memory_recall) {
-      const latestUser = [...historyMessages]
-        .reverse()
-        .find((message) => message.role === "user");
+      // Query from recent turns (not only the latest user line) so short
+      // messages like "to wysyłaj" still retrieve earlier related context.
+      const recallQuery = historyMessages
+        .slice(-8)
+        .map((message) => activeMessageText(message).trim())
+        .filter(Boolean)
+        .join("\n");
       const memories = recallLexicalMemories({
-        query: latestUser ? activeMessageText(latestUser) : "",
+        query: recallQuery,
         messages: historyMessages,
+        excludeRecent: 2,
       });
       if (memories) extraSystemParts.push(memories);
     }
@@ -1922,6 +2145,11 @@ export class ChatsService {
         userName: persona?.name,
         nameByCharacterId,
         prefixSpeakerNames: prefixHistorySpeakers,
+        messengerTimestamps: mode === "conversation",
+        timezone:
+          settings.conversation_timezone?.trim() ||
+          settings.prompt_timezone?.trim() ||
+          null,
       });
 
     const promptContext = buildPresetPromptContext({
@@ -1939,6 +2167,7 @@ export class ChatsService {
       chatHistory: chatHistoryText,
       chatSummary,
       scenarioOverride: settings.scenario_override,
+      characterInfoMode: mode === "conversation" ? "conversation" : "default",
     });
 
     let promptMessages: LlmChatMessage[] = buildPromptMessages(preset, {
@@ -1960,10 +2189,12 @@ export class ChatsService {
     ) {
       const turnCharacterName =
         turn.kind === "character" ? characterName : null;
+      // Keep group format as system — the final turn cue below is the only
+      // user-role message so models don't treat command XML as "the user".
       promptMessages = [
         ...promptMessages,
         {
-          role: "user",
+          role: "system",
           content: buildConversationGroupOutputFormat({
             wrapFormat: preset.wrap_format,
             characterNames: promptCharacterIds.map(
@@ -2006,23 +2237,10 @@ export class ChatsService {
         ),
         userName: persona?.name?.trim() || "the user",
       });
-      let lastUserIndex = -1;
-      for (let index = promptMessages.length - 1; index >= 0; index -= 1) {
-        if (promptMessages[index]?.role === "user") {
-          lastUserIndex = index;
-          break;
-        }
-      }
-      if (lastUserIndex >= 0) {
-        const target = promptMessages[lastUserIndex]!;
-        promptMessages = promptMessages.map((message, index) =>
-          index === lastUserIndex
-            ? { ...message, content: `${target.content}\n\n${reminder}` }
-            : message,
-        );
-      } else {
-        promptMessages = [...promptMessages, { role: "user", content: reminder }];
-      }
+      promptMessages = [
+        ...promptMessages,
+        { role: "system", content: reminder },
+      ];
     }
 
     if (
@@ -2040,26 +2258,34 @@ export class ChatsService {
           ),
           enabledKeys,
         });
-        let lastUserIndex = -1;
-        for (let index = promptMessages.length - 1; index >= 0; index -= 1) {
-          if (promptMessages[index]?.role === "user") {
-            lastUserIndex = index;
-            break;
-          }
-        }
-        if (lastUserIndex >= 0) {
-          const target = promptMessages[lastUserIndex]!;
-          promptMessages = promptMessages.map((message, index) =>
-            index === lastUserIndex
-              ? { ...message, content: `${target.content}\n\n${reminder}` }
-              : message,
-          );
-        } else {
-          promptMessages = [
-            ...promptMessages,
-            { role: "user", content: reminder },
-          ];
-        }
+        promptMessages = [
+          ...promptMessages,
+          { role: "system", content: reminder },
+        ];
+      }
+    }
+
+    // Conversation history lives in system sections. Without an explicit
+    // user turn cue, models often continue the transcript as the user
+    // (especially on regenerate, when the last history line is User: …).
+    if (mode === "conversation") {
+      const userName = persona?.name?.trim() || "User";
+      if (turn.kind === "impersonate") {
+        promptMessages = [
+          ...promptMessages,
+          {
+            role: "user",
+            content: `Write ONLY the next short SMS as ${characterName} (the user persona). Do not write as anyone else.`,
+          },
+        ];
+      } else {
+        promptMessages = [
+          ...promptMessages,
+          {
+            role: "user",
+            content: `Continue the DM. Write ONLY the next short SMS as ${characterName}. Never write ${userName}'s messages or continue as ${userName}.`,
+          },
+        ];
       }
     }
 
@@ -2108,6 +2334,86 @@ export class ChatsService {
       result.push(await this.lorebooks.findOne(id));
     }
     return result;
+  }
+
+  async uploadAttachment(
+    chatId: string,
+    input: { buffer: Buffer; mime: string; name: string },
+  ): Promise<ChatMessageAttachment> {
+    await this.requireRow(chatId);
+    if (!input.buffer.length) {
+      throw new BadRequestException("Empty file");
+    }
+    if (input.buffer.length > 25 * 1024 * 1024) {
+      throw new BadRequestException("File exceeds 25MB limit");
+    }
+    try {
+      return await writeChatAttachment({
+        chatId,
+        attachmentId: randomUUID(),
+        buffer: input.buffer,
+        mime: input.mime,
+        name: input.name,
+      });
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : "Failed to store attachment",
+      );
+    }
+  }
+
+  async getAttachmentStream(
+    chatId: string,
+    attachmentId: string,
+  ): Promise<StreamableFile> {
+    await this.requireRow(chatId);
+    const meta = await readChatAttachmentMeta(chatId, attachmentId);
+    if (!meta || !(await chatAttachmentExists(chatId, attachmentId))) {
+      throw new NotFoundException(`Attachment ${attachmentId} not found`);
+    }
+    const safeName = meta.name.replace(/[\r\n"]/g, "_");
+    return new StreamableFile(
+      openChatAttachmentStream(chatId, attachmentId, meta.ext),
+      {
+        type: meta.mime,
+        disposition: `inline; filename="${safeName}"`,
+      },
+    );
+  }
+
+  private async resolveAttachments(
+    chatId: string,
+    attachments: ChatMessageAttachment[] | undefined,
+  ): Promise<ChatMessageAttachment[]> {
+    if (!attachments?.length) return [];
+    const resolved: ChatMessageAttachment[] = [];
+    for (const item of attachments) {
+      if (!item?.id || typeof item.id !== "string") {
+        throw new BadRequestException("Invalid attachment id");
+      }
+      const expectedUrl = `/chats/${chatId}/attachments/${item.id}`;
+      if (item.url !== expectedUrl) {
+        throw new BadRequestException(
+          `Attachment ${item.id} does not belong to this chat`,
+        );
+      }
+      if (!(await chatAttachmentExists(chatId, item.id))) {
+        throw new BadRequestException(`Attachment ${item.id} was not uploaded`);
+      }
+      const meta = await readChatAttachmentMeta(chatId, item.id);
+      if (!meta) {
+        throw new BadRequestException(`Attachment ${item.id} metadata missing`);
+      }
+      resolved.push({
+        id: item.id,
+        kind: item.kind === "image" || item.kind === "file" ? item.kind : "file",
+        mime: meta.mime,
+        url: expectedUrl,
+        name: meta.name,
+        size: meta.size,
+      });
+    }
+    return resolved;
   }
 
   private async requireRow(id: string): Promise<ChatEntity> {

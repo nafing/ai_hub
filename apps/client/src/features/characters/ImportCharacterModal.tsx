@@ -28,7 +28,7 @@ import {
   Switch,
   RuntimeText,
 } from "@/components/ui";
-import { useConnections } from "@/features/connections/queries";
+import { useConnectionSelectOptions } from "@/features/connections/queries";
 import { usePersonas } from "@/features/personas/queries";
 import { createCharacter, uploadCharacterAvatar } from "./api";
 import { useCharacterImportSessionStore } from "./characterImportSessionStore";
@@ -103,7 +103,7 @@ export function ImportCharacterModal({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
-  const connectionsQuery = useConnections();
+  const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
   const presetsQuery = usePresets();
@@ -130,10 +130,7 @@ export function ImportCharacterModal({
     (state) => state.startAiImport,
   );
 
-  const defaultConnectionId =
-    connectionsQuery.data?.find((connection) => connection.is_default)?.id ??
-    connectionsQuery.data?.[0]?.id ??
-    null;
+  const defaultConnectionId = connectionsQuery.defaultId || null;
 
   const defaultPersonaId =
     personasQuery.data?.find((persona) => persona.is_default)?.id ?? null;
@@ -374,7 +371,7 @@ export function ImportCharacterModal({
 
   const connectionError = connectionsQuery.isError
     ? "Failed to load connections"
-    : !connectionsQuery.isLoading && !connectionsQuery.data?.length
+    : !connectionsQuery.isLoading && !connectionsQuery.options.length
       ? "Create a connection first"
       : undefined;
 
@@ -520,10 +517,7 @@ export function ImportCharacterModal({
                   error={connectionError}
                 >
                   <Select
-                    data={(connectionsQuery.data ?? []).map((connection) => ({
-                      value: connection.id,
-                      label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
-                    }))}
+                    data={connectionsQuery.options}
                     value={resolvedConnectionId ?? ""}
                     onChange={(value) => setConnectionId(value || null)}
                     placeholder={
@@ -532,7 +526,7 @@ export function ImportCharacterModal({
                         : "Select connection"
                     }
                     searchable
-                    disabled={importing || !connectionsQuery.data?.length}
+                    disabled={importing || !connectionsQuery.options.length}
                     error={Boolean(connectionError)}
                   />
                 </Field>

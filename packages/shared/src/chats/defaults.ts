@@ -1,4 +1,9 @@
-import type { ChatMessage, ChatSettings, RoleplayDmSource } from "./types";
+import type {
+  ChatMessage,
+  ChatMessageAttachment,
+  ChatSettings,
+  RoleplayDmSource,
+} from "./types";
 import {
   DEFAULT_SUMMARY_CONTEXT_SIZE,
   DEFAULT_SUMMARY_RUN_INTERVAL,
@@ -17,6 +22,10 @@ import {
   type ConversationCommandKey,
 } from "./conversation-presence";
 import { CONVERSATION_COMMAND_KEYS } from "./conversation-presence";
+import {
+  normalizeImageAspectRatio,
+  normalizeImageResolution,
+} from "./image-settings";
 
 type LegacyChatSettings = Partial<ChatSettings> & {
   /** Migrated to character_ids; still accepted when normalizing old chat JSON. */
@@ -197,6 +206,8 @@ export function defaultChatSettings(
         ? overrides.enable_memory_recall
         : true,
     character_memories: normalizeStringListMap(overrides.character_memories),
+    image_aspect_ratio: normalizeImageAspectRatio(overrides.image_aspect_ratio),
+    image_resolution: normalizeImageResolution(overrides.image_resolution),
   };
 }
 
@@ -289,6 +300,7 @@ export function createChatMessage(input: {
   parent_id?: string | null;
   parent_swipe_id?: number | null;
   roleplay_dm_source?: RoleplayDmSource | null;
+  attachments?: ChatMessageAttachment[];
 }): ChatMessage {
   const swipes = input.swipes?.length ? input.swipes : [input.content];
   const swipeId = Math.min(
@@ -296,6 +308,10 @@ export function createChatMessage(input: {
     Math.max(swipes.length - 1, 0),
   );
   const parentId = input.parent_id ?? null;
+  const attachments =
+    input.attachments && input.attachments.length > 0
+      ? input.attachments
+      : undefined;
   return {
     id: input.id ?? cryptoRandomId(),
     role: input.role,
@@ -307,6 +323,13 @@ export function createChatMessage(input: {
     parent_swipe_id: parentId == null ? null : (input.parent_swipe_id ?? 0),
     roleplay_dm_source: input.roleplay_dm_source ?? null,
     created_at: input.created_at ?? new Date().toISOString(),
+    ...(attachments
+      ? {
+          attachments_by_swipe: Array.from({ length: swipes.length }, (_, index) =>
+            index === swipeId ? attachments : [],
+          ),
+        }
+      : {}),
   };
 }
 

@@ -7,6 +7,7 @@ import type {
 export type ExtractedCharacterCard = {
   name?: string;
   description?: string;
+  appearance?: string;
   personality?: string;
   scenario?: string;
   first_mes?: string;
@@ -90,6 +91,7 @@ export function normalizeFullCard(
   return {
     name: asString(record.name),
     description: asString(record.description),
+    appearance: asString(record.appearance),
     personality: asString(record.personality),
     scenario: asString(record.scenario),
     first_mes: asString(record.first_mes),
@@ -144,6 +146,7 @@ export function mergeExtractedIntoCardData(
     ...base,
     ...(ai.name != null ? { name: ai.name } : {}),
     ...(ai.description != null ? { description: ai.description } : {}),
+    ...(ai.appearance != null ? { appearance: ai.appearance } : {}),
     ...(ai.personality != null ? { personality: ai.personality } : {}),
     ...(ai.scenario != null ? { scenario: ai.scenario } : {}),
     ...(ai.first_mes != null ? { first_mes: ai.first_mes } : {}),
@@ -166,6 +169,7 @@ export function extractedToCardData(
   return {
     name: ai.name ?? "Generated character",
     description: ai.description ?? "",
+    appearance: ai.appearance ?? "",
     personality: ai.personality ?? "",
     scenario: ai.scenario ?? "",
     first_mes: ai.first_mes ?? "",

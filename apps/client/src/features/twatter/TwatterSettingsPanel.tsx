@@ -1,4 +1,6 @@
+import { buildConnectionSelectOptions } from "@ai-hub/shared";
 import type { CharacterListItem, ConnectionListItem, TwatterBootstrap } from "@ai-hub/shared";
+import { useMemo } from "react";
 import { Button, Select, Switch } from "@/components/ui";
 import { usePresets } from "@/features/presets/queries";
 import {
@@ -39,6 +41,10 @@ export function TwatterSettingsPanel({
   const twatterPresets = (presets ?? []).filter(
     (preset) => preset.category === "twatter_refresh",
   );
+  const connectionOptions = useMemo(
+    () => buildConnectionSelectOptions(connections, "llm"),
+    [connections],
+  );
 
   if (!settings) {
     return <p className={classes.status}>Loading settings…</p>;
@@ -49,10 +55,7 @@ export function TwatterSettingsPanel({
       <section className={classes.settingsSection}>
         <h3 className={classes.settingsHeading}>Generation</h3>
         <Select
-          data={connections.map((connection) => ({
-            value: connection.id,
-            label: connection.name,
-          }))}
+          data={connectionOptions}
           value={settings.generation_connection_id ?? ""}
           onChange={(value) =>
             updateSettings.mutate({

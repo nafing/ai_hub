@@ -37,5 +37,4 @@ export {
   formatAgentInjectSections,
   agentAllowedForMode,
   isTextRewriteAgent,
-  phaseLabel,
 } from "./runtime";

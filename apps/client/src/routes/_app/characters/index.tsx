@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
   IconCopy,
@@ -10,7 +10,15 @@ import {
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { CharacterListItem } from "@ai-hub/shared";
 import { api } from "@/lib/api";
-import { ActionIcon, Button, Modal, notifications, RuntimeText } from "@/components/ui";
+import {
+  ActionIcon,
+  Button,
+  Modal,
+  MultiSelect,
+  notifications,
+  RuntimeText,
+  TextInput,
+} from "@/components/ui";
 import { CreateCharacterModal } from "@/features/characters/CreateCharacterModal";
 import { ImportCharacterModal } from "@/features/characters/ImportCharacterModal";
 import { RegenerateCharactersModal } from "@/features/characters/RegenerateCharactersModal";
@@ -36,10 +44,50 @@ function RouteComponent() {
   const [importOpen, setImportOpen] = useState(false);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [query, setQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
 
   const { data, isLoading, isError } = useCharacters();
   const deleteMutation = useDeleteCharacter();
   const duplicateMutation = useDuplicateCharacter();
+
+  const tagOptions = useMemo(() => {
+    const tags = new Set<string>();
+    for (const character of data ?? []) {
+      for (const tag of character.tags) {
+        if (tag.trim()) tags.add(tag);
+      }
+    }
+    return [...tags]
+      .sort((a, b) => a.localeCompare(b))
+      .map((tag) => ({ value: tag, label: tag }));
+  }, [data]);
+
+  const hasActiveFilters = query.trim().length > 0 || tagFilter.length > 0;
+
+  const filteredCharacters = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return (data ?? []).filter((character) => {
+      if (
+        tagFilter.length > 0 &&
+        !tagFilter.some((tag) => character.tags.includes(tag))
+      ) {
+        return false;
+      }
+      if (!normalizedQuery) return true;
+      return (
+        character.name.toLowerCase().includes(normalizedQuery) ||
+        character.description.toLowerCase().includes(normalizedQuery) ||
+        character.creator.toLowerCase().includes(normalizedQuery) ||
+        character.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery))
+      );
+    });
+  }, [data, query, tagFilter]);
+
+  function clearFilters() {
+    setQuery("");
+    setTagFilter([]);
+  }
 
   function handleConfirmDelete() {
     if (!deleteTarget) return;
@@ -88,15 +136,27 @@ function RouteComponent() {
         <div className={classes.headerRow}>
           <h2 className={classes.title}>Characters</h2>
           <div className={classes.headerActions}>
-            <ActionIcon type="button" variant="default" aria-label="Regenerate characters" onClick={() => setRegenerateOpen(true)}
+            <ActionIcon
+              type="button"
+              variant="default"
+              aria-label="Regenerate characters"
+              onClick={() => setRegenerateOpen(true)}
             >
               <IconRefresh size={16} />
             </ActionIcon>
-            <ActionIcon type="button" variant="default" aria-label="Import character card" onClick={() => setImportOpen(true)}
+            <ActionIcon
+              type="button"
+              variant="default"
+              aria-label="Import character card"
+              onClick={() => setImportOpen(true)}
             >
               <IconUpload size={16} />
             </ActionIcon>
-            <ActionIcon type="button" variant="default" aria-label="New character" onClick={() => setCreateOpen(true)}
+            <ActionIcon
+              type="button"
+              variant="default"
+              aria-label="New character"
+              onClick={() => setCreateOpen(true)}
             >
               <IconPlus size={16} />
             </ActionIcon>
@@ -104,8 +164,45 @@ function RouteComponent() {
         </div>
         <p className={classes.subtitle}>
           Characters. Create, edit, duplicate, regenerate, or import JSON/PNG.
+          {!isLoading && !isError && hasActiveFilters
+            ? ` Showing ${filteredCharacters.length} of ${data?.length ?? 0}.`
+            : null}
         </p>
       </header>
+
+      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
+        <div className={classes.filters}>
+          <TextInput
+            className={classes.searchInput}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Search name, description, creator, tags…"
+            aria-label="Search characters"
+          />
+          {tagOptions.length > 0 ? (
+            <MultiSelect
+              className={classes.categoryFilter}
+              searchable
+              clearable
+              data={tagOptions}
+              value={tagFilter}
+              onChange={setTagFilter}
+              placeholder="All tags"
+              searchPlaceholder="Filter tags…"
+            />
+          ) : null}
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="default"
+              className={classes.clearFilters}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className={classes.loading}>
@@ -121,9 +218,27 @@ function RouteComponent() {
         <p className={classes.status}>No characters yet. Create one with +.</p>
       ) : null}
 
-      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
+      {!isLoading &&
+      !isError &&
+      (data?.length ?? 0) > 0 &&
+      filteredCharacters.length === 0 ? (
+        <p className={classes.status}>
+          No characters match your filters.{" "}
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className={classes.clearFiltersLink}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+
+      {!isLoading && !isError && filteredCharacters.length > 0 ? (
         <div className={classes.grid}>
-          {(data ?? []).map((character, index) => (
+          {filteredCharacters.map((character, index) => (
             <CharacterCard
               key={character.id}
               character={character}
@@ -161,13 +276,14 @@ function RouteComponent() {
           cannot be undone.
         </p>
         <div className={classes.modalActions}>
-          <Button variant="default" type="button"
+          <Button
+            variant="default"
+            type="button"
             onClick={() => setDeleteTarget(null)}
           >
             Cancel
           </Button>
-          <Button variant="dangerSolid" type="button"
-            onClick={handleConfirmDelete}>
+          <Button variant="dangerSolid" type="button" onClick={handleConfirmDelete}>
             Delete
           </Button>
         </div>
@@ -198,6 +314,7 @@ function CharacterCard({
 
   return (
     <motion.div
+      className={classes.cardWrap}
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.16, delay: Math.min(index, 12) * 0.02 }}
@@ -240,7 +357,12 @@ function CharacterCard({
             </div>
           </div>
           <div className={classes.cardActions}>
-            <ActionIcon type="button" variant="ghost" aria-label="Duplicate" disabled={duplicatePending} onClick={(event) => {
+            <ActionIcon
+              type="button"
+              variant="ghost"
+              aria-label="Duplicate"
+              disabled={duplicatePending}
+              onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 onDuplicate(character.id);
@@ -248,7 +370,12 @@ function CharacterCard({
             >
               <IconCopy size={15} />
             </ActionIcon>
-            <ActionIcon type="button" variant="ghostDanger" aria-label="Delete" disabled={deletePending} onClick={(event) => {
+            <ActionIcon
+              type="button"
+              variant="ghostDanger"
+              aria-label="Delete"
+              disabled={deletePending}
+              onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 onDelete(character.id, character.name);

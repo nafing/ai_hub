@@ -42,7 +42,8 @@ export type PresetCategory =
   | "persona_generator"
   | "lorebook_generator"
   | "twatter_refresh"
-  | "chat_summary";
+  | "chat_summary"
+  | "image";
 
 export type SectionRole = "system" | "user" | "assistant";
 

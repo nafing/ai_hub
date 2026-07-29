@@ -68,7 +68,9 @@ export class PresetsService implements OnModuleInit {
    * Insert missing built-in presets (`default:*`) and refresh their prompt
    * sections from code so built-in instruction updates (e.g. import mode)
    * apply on restart. Variables / is_default are left alone when the row exists
-   * so Setup Variables selections survive.
+   * so Setup Variables selections survive — except option labels/values are
+   * synced from code when option ids match (keeps anime "NOT photorealistic"
+   * wording without wiping selected).
    */
   async seedDefaultPresets(): Promise<void> {
     let created = 0;
@@ -83,6 +85,10 @@ export class PresetsService implements OnModuleInit {
         existing.author = def.author;
         existing.groups = def.groups ?? [];
         existing.sections = def.sections ?? [];
+        existing.variables = this.mergeDefaultVariableOptions(
+          existing.variables ?? [],
+          def.variables ?? [],
+        );
         await this.presets.save(existing);
         refreshed += 1;
         continue;
@@ -278,7 +284,7 @@ export class PresetsService implements OnModuleInit {
 
     const connection = input.connectionId
       ? await this.connections.findOne(input.connectionId)
-      : await this.connections.findDefault();
+      : await this.connections.findDefault("llm");
 
     if (!connection.api_key.trim()) {
       throw new BadRequestException(
@@ -349,6 +355,34 @@ export class PresetsService implements OnModuleInit {
       next[0].is_default = true;
       await this.presets.save(next[0]);
     }
+  }
+
+  private mergeDefaultVariableOptions(
+    existing: Variable[],
+    defaults: Variable[],
+  ): Variable[] {
+    if (!defaults.length) return existing;
+    const byId = new Map(defaults.map((variable) => [variable.id, variable]));
+    return existing.map((variable) => {
+      const def = byId.get(variable.id);
+      if (!def) return variable;
+      const optionById = new Map(def.options.map((option) => [option.id, option]));
+      const options = variable.options.map((option) => {
+        const next = optionById.get(option.id);
+        if (!next) return option;
+        return {
+          ...option,
+          label: next.label,
+          value: next.value,
+        };
+      });
+      // If nothing was ever selected, adopt code defaults (e.g. anime).
+      const selected =
+        Array.isArray(variable.selected) && variable.selected.length > 0
+          ? variable.selected
+          : def.selected ?? [];
+      return { ...variable, options, selected };
+    });
   }
 
   private toPreset(row: PresetEntity): Preset {

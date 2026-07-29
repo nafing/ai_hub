@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  IconChevronDown,
   IconMessage,
+  IconPaperclip,
   IconPlayerStop,
   IconSend,
   IconUsers,
+  IconX,
 } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -23,6 +24,7 @@ import {
   visibleChatMessagesThrough,
   type Chat,
   type ChatMessage,
+  type ChatMessageAttachment,
   type GenerateChatInput,
   type SlashCommandAction,
 } from "@ai-hub/shared";
@@ -33,7 +35,7 @@ import { useCharacters } from "@/features/characters/queries";
 import { personaAvatarSrc } from "@/features/personas/avatar-url";
 import { usePersonas } from "@/features/personas/queries";
 import { api } from "@/lib/api";
-import { addChatMessage } from "./api";
+import { addChatMessage, uploadChatAttachment } from "./api";
 import {
   useChatGeneration,
   useChatGenerationStore,
@@ -230,6 +232,15 @@ export function ChatSession({
   }
 
   const [draft, setDraft] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<
+    Array<{
+      localId: string;
+      file: File;
+      previewUrl: string | null;
+    }>
+  >([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(
     primaryCharacterId(chat.settings),
   );
@@ -247,6 +258,18 @@ export function ChatSession({
   useEffect(() => {
     setLocalMessages(chat.messages);
   }, [chat.messages]);
+
+  useEffect(() => {
+    return () => {
+      for (const item of pendingAttachments) {
+        if (item.previewUrl?.startsWith("blob:")) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+      }
+    };
+    // Only revoke on unmount; chip removal handles live cleanup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const primary = primaryCharacterId(chat.settings);
@@ -349,18 +372,6 @@ export function ChatSession({
     [activeChatCharacters],
   );
 
-  const selectedCharacterLabel = useMemo(() => {
-    if (!selectedCharacterId) return "Select character";
-    return (
-      characterSelectOptions.find((option) => option.value === selectedCharacterId)
-        ?.label ?? "Select character"
-    );
-  }, [characterSelectOptions, selectedCharacterId]);
-
-  const selectedCharacterAvatar = selectedCharacterId
-    ? characterAvatarById.get(selectedCharacterId) ?? null
-    : null;
-
   const showResponseAsPicker = characterSelectOptions.length > 0;
 
   const mentionSuggestions = useMemo(() => {
@@ -426,12 +437,52 @@ export function ChatSession({
     return parseMentions(text, mentionCharacters).length > 0;
   }
 
+  function revokePendingPreview(previewUrl: string | null) {
+    if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+  }
+
+  function clearPendingAttachments() {
+    setPendingAttachments((prev) => {
+      for (const item of prev) revokePendingPreview(item.previewUrl);
+      return [];
+    });
+  }
+
+  function removePendingAttachment(localId: string) {
+    setPendingAttachments((prev) => {
+      const next = [];
+      for (const item of prev) {
+        if (item.localId === localId) {
+          revokePendingPreview(item.previewUrl);
+          continue;
+        }
+        next.push(item);
+      }
+      return next;
+    });
+  }
+
+  function handlePickAttachments(fileList: FileList | null) {
+    if (!fileList?.length) return;
+    const next = Array.from(fileList).slice(0, 8).map((file) => ({
+      localId: crypto.randomUUID(),
+      file,
+      previewUrl: file.type.startsWith("image/")
+        ? URL.createObjectURL(file)
+        : null,
+    }));
+    setPendingAttachments((prev) => [...prev, ...next].slice(0, 8));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   function canSend(text: string): boolean {
-    if (streaming) return false;
+    if (streaming || uploadingAttachments) return false;
     const trimmed = text.trim();
-    // Empty composer → impersonate (write as user persona).
-    if (!trimmed) return true;
+    const hasAttachments = pendingAttachments.length > 0;
+    // Empty composer without attachments → impersonate (write as user persona).
+    if (!trimmed && !hasAttachments) return true;
     if (
+      trimmed &&
       matchSlashCommand(
         trimmed,
         chat.mode === "conversation" ? "conversation" : "roleplay",
@@ -440,7 +491,7 @@ export function ChatSession({
       return true;
     }
     if (!manualOrder) return true;
-    if (draftHasMention(trimmed)) return true;
+    if (trimmed && draftHasMention(trimmed)) return true;
     if (selectedCharacterId) return true;
     return false;
   }
@@ -501,10 +552,11 @@ export function ChatSession({
 
   async function handleSend() {
     const text = draft.trim();
+    const pending = pendingAttachments;
     if (!canSend(draft)) return;
 
-    // Empty send = impersonate (same as /impersonate without direction).
-    if (!text) {
+    // Empty send without attachments = impersonate (same as /impersonate).
+    if (!text && pending.length === 0) {
       setDraft("");
       closeSuggestions();
       await runGenerate({ impersonate: true });
@@ -512,12 +564,21 @@ export function ChatSession({
     }
 
     const mode = chat.mode === "conversation" ? "conversation" : "roleplay";
-    const slashMatched = matchSlashCommand(text, mode);
+    const slashMatched = text ? matchSlashCommand(text, mode) : null;
+
+    if (slashMatched && pending.length > 0) {
+      notifications.show({
+        title: "Attachments ignored",
+        message: "Slash commands cannot include file attachments.",
+        color: "yellow",
+      });
+    }
 
     setDraft("");
     closeSuggestions();
 
     if (slashMatched) {
+      clearPendingAttachments();
       const lastMessage = localMessages[localMessages.length - 1];
       const latestAssistant = [...localMessages]
         .reverse()
@@ -546,13 +607,36 @@ export function ChatSession({
       }
     }
 
+    let attachments: ChatMessageAttachment[] = [];
+    if (pending.length > 0) {
+      setUploadingAttachments(true);
+      try {
+        attachments = [];
+        for (const item of pending) {
+          attachments.push(await uploadChatAttachment(chat.id, item.file));
+        }
+        clearPendingAttachments();
+      } catch (error) {
+        setDraft(text);
+        notifications.show({
+          title: "Upload failed",
+          message: error instanceof Error ? error.message : "Unknown error",
+          color: "red",
+        });
+        return;
+      } finally {
+        setUploadingAttachments(false);
+      }
+    }
+
     let forCharacterId: string | undefined;
     if (manualOrder && selectedCharacterId && !draftHasMention(text)) {
       forCharacterId = selectedCharacterId;
     }
 
     await runGenerate({
-      userMessage: text,
+      ...(text ? { userMessage: text } : {}),
+      ...(attachments.length > 0 ? { attachments } : {}),
       ...(forCharacterId ? { forCharacterId } : {}),
     });
   }
@@ -964,69 +1048,41 @@ export function ChatSession({
       </Modal>
 
       <div className={classes.composerWrap}>
-        {showResponseAsPicker ? (
-          <div className={classes.composerToolbar}>
-            <Menu>
-              <Menu.Target>
-                <Button
-                  type="button"
-                  variant="subtle"
-                  size="sm"
-                  className={classes.responseAsButton}
-                  disabled={streaming}
-                  leftSection={
-                    <span className={classes.responseAsAvatar}>
-                      {selectedCharacterAvatar ? (
-                        <img src={selectedCharacterAvatar} alt="" />
-                      ) : (
-                        selectedCharacterLabel.slice(0, 1).toUpperCase()
-                      )}
-                    </span>
-                  }
-                  rightSection={<IconChevronDown size={14} aria-hidden />}
-                >
-                  <span className={classes.responseAsText}>
-                    <span className={classes.responseAsLabel}>Response as</span>
-                    <span className={classes.responseAsName}>
-                      {selectedCharacterLabel}
-                    </span>
-                  </span>
-                </Button>
-              </Menu.Target>
-              <Menu.Dropdown className={classes.menuDropdownAbove}>
-                <Menu.Label>Response as</Menu.Label>
-                {characterSelectOptions.map((option) => {
-                  const avatarUrl = characterAvatarById.get(option.value) || null;
-                  const isSelected = option.value === selectedCharacterId;
-                  return (
-                    <Menu.Item
-                      key={option.value}
-                      className={streaming ? classes.menuItemDisabled : undefined}
-                      aria-selected={isSelected}
-                      leftSection={
-                        <span className={classes.menuAvatar}>
-                          {avatarUrl ? (
-                            <img src={avatarUrl} alt="" />
-                          ) : (
-                            option.label.slice(0, 1).toUpperCase()
-                          )}
-                        </span>
-                      }
-                      onClick={() => {
-                        if (streaming) return;
-                        setSelectedCharacterId(option.value);
-                      }}
-                    >
-                      {option.label}
-                    </Menu.Item>
-                  );
-                })}
-              </Menu.Dropdown>
-            </Menu>
-          </div>
-        ) : null}
         <div className={classes.composerBar} data-glass-surface>
           <div className={classes.composerInputWrap}>
+            {pendingAttachments.length > 0 ? (
+              <div className={classes.composerAttachments} aria-label="Pending attachments">
+                {pendingAttachments.map((item) => (
+                  <div key={item.localId} className={classes.composerAttachmentChip}>
+                    {item.previewUrl ? (
+                      <img
+                        className={classes.composerAttachmentThumb}
+                        src={item.previewUrl}
+                        alt=""
+                      />
+                    ) : (
+                      <span className={classes.composerAttachmentFileIcon}>
+                        {item.file.name.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    <span className={classes.composerAttachmentName}>
+                      {item.file.name}
+                    </span>
+                    <ActionIcon
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Remove ${item.file.name}`}
+                      disabled={streaming || uploadingAttachments}
+                      onClick={() => removePendingAttachment(item.localId)}
+                    >
+                      <IconX size={14} />
+                    </ActionIcon>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             {showSuggestions ? (
               <ul
                 className={classes.suggestDropdown}
@@ -1132,6 +1188,25 @@ export function ChatSession({
             />
           </div>
 
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,.md,.txt,.pdf,.json"
+            className={classes.hiddenFileInput}
+            onChange={(event) => handlePickAttachments(event.target.files)}
+          />
+          <ActionIcon
+            type="button"
+            variant="ghost"
+            aria-label="Attach files"
+            title="Attach images or files"
+            disabled={streaming || uploadingAttachments}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <IconPaperclip size={16} />
+          </ActionIcon>
+
           {chat.settings.allow_character_dms &&
           characterSelectOptions.length > 0 ? (
             <Menu>
@@ -1181,15 +1256,21 @@ export function ChatSession({
             </Menu>
           ) : null}
 
-          {group ? (
+          {showResponseAsPicker ? (
             <Menu>
               <Menu.Target>
-                <ActionIcon type="button" variant="ghost" aria-label="Trigger character" title="Trigger character" disabled={streaming}>
+                <ActionIcon
+                  type="button"
+                  variant="ghost"
+                  aria-label="Response as"
+                  title="Response as"
+                  disabled={streaming}
+                >
                   <IconUsers size={16} />
                 </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown className={classes.menuDropdownAbove}>
-                <Menu.Label>Trigger character</Menu.Label>
+                <Menu.Label>Response as</Menu.Label>
                 {characterSelectOptions.map((option) => {
                   const avatarUrl =
                     characterAvatarById.get(option.value) || null;
@@ -1227,11 +1308,17 @@ export function ChatSession({
             <ActionIcon
               type="button"
               variant="ghost"
-              aria-label={draft.trim() ? "Send" : "Impersonate"}
-              title={
-                draft.trim()
+              aria-label={
+                draft.trim() || pendingAttachments.length > 0
                   ? "Send"
-                  : "Impersonate (empty send writes as your persona)"
+                  : "Impersonate"
+              }
+              title={
+                uploadingAttachments
+                  ? "Uploading…"
+                  : draft.trim() || pendingAttachments.length > 0
+                    ? "Send"
+                    : "Impersonate (empty send writes as your persona)"
               }
               disabled={!canSend(draft)}
               onClick={() => void handleSend()}

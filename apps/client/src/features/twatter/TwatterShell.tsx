@@ -9,7 +9,7 @@ import {
 } from "@tabler/icons-react";
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button, Modal } from "@/components/ui";
-import { useConnections } from "@/features/connections/queries";
+import { useLlmConnections } from "@/features/connections/queries";
 import { useCharacters } from "@/features/characters/queries";
 import { usePersonas } from "@/features/personas/queries";
 import { personaAvatarSrc } from "@/features/personas/avatar-url";
@@ -38,7 +38,7 @@ function TwatterShellInner() {
   const { data: bootstrap } = useTwatterBootstrap();
   const { data: personas } = usePersonas();
   const { data: characters } = useCharacters();
-  const { data: connections } = useConnections();
+  const { data: connections } = useLlmConnections();
 
   const { personaId, setPersonaId, personaAccount, unreadCount } =
     useTwatterPersona();

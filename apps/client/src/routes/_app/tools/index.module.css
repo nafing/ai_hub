@@ -34,6 +34,40 @@
   line-height: 1.4;
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.searchInput {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.categoryFilter {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.clearFilters {
+  flex: 0 0 auto;
+}
+
+.clearFiltersLink {
+  padding: 0;
+  color: var(--color-primary);
+  font: inherit;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.clearFiltersLink:hover {
+  color: var(--color-text);
+}
+
 .status {
   margin: 0;
   color: var(--color-text-dimmed);
@@ -89,30 +123,40 @@
 }
 
 .grid {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--space-sm);
   min-width: 0;
 }
 
+.cardWrap {
+  display: flex;
+  min-width: 0;
+  min-height: 100%;
+}
 
 .card {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 100%;
   min-width: 0;
-  padding: 0.6rem 0.7rem;
+  padding: 0.85rem 0.9rem;
   color: inherit;
   text-decoration: none;
-  border: 1px solid transparent;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: transparent;
+  background: var(--color-surface, var(--color-bg));
   transition:
     background 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .card:hover {
   background: var(--color-surface-hover);
-  border-color: var(--color-border);
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-text) 6%, transparent);
 }
 
 .cardTop {
@@ -120,10 +164,12 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-sm);
+  flex: 1;
 }
 
 .cardText {
   min-width: 0;
+  flex: 1;
 }
 
 .cardName {
@@ -138,12 +184,14 @@
 }
 
 .cardDescription {
-  margin: 0.35rem 0 0;
+  flex: 1;
+  margin: var(--space-xs) 0 0;
   color: var(--color-text-dimmed);
   font-size: 0.75rem;
+  line-height: 1.45;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   overflow: hidden;
 }
 
@@ -164,7 +212,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  margin-top: var(--space-sm);
+  margin-top: auto;
+  padding-top: 0.65rem;
 }
 
 .badge {

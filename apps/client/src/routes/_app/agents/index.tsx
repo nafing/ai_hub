@@ -2,8 +2,22 @@ import { useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { IconCopy, IconPlus, IconTrash } from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { type AgentListItem } from "@ai-hub/shared";
-import { ActionIcon, Button, Modal, notifications } from "@/components/ui";
+import {
+  AGENT_CATEGORIES,
+  AGENT_PHASES,
+  type AgentCategory,
+  type AgentListItem,
+  type AgentPhase,
+} from "@ai-hub/shared";
+import {
+  ActionIcon,
+  Button,
+  Modal,
+  MultiSelect,
+  notifications,
+  Switch,
+  TextInput,
+} from "@/components/ui";
 import { CreateAgentModal } from "@/features/agents/CreateAgentModal";
 import {
   useAgents,
@@ -21,23 +35,108 @@ type DeleteTarget = {
   name: string;
 };
 
+type AgentSource = "custom" | "builtin";
+
+const SOURCE_OPTIONS: { value: AgentSource; label: string }[] = [
+  { value: "custom", label: "Custom" },
+  { value: "builtin", label: "Built-in" },
+];
+
 function RouteComponent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [query, setQuery] = useState("");
+  const [phaseFilter, setPhaseFilter] = useState<AgentPhase[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<AgentCategory[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<AgentSource[]>([]);
+  const [builtinOnly, setBuiltinOnly] = useState(false);
 
   const { data, isLoading, isError } = useAgents();
   const deleteMutation = useDeleteAgent();
   const duplicateMutation = useDuplicateAgent();
 
-  const { custom, builtin } = useMemo(() => {
-    const customAgents: AgentListItem[] = [];
-    const builtinAgents: AgentListItem[] = [];
-    for (const agent of data ?? []) {
-      if (agent.is_built_in) builtinAgents.push(agent);
-      else customAgents.push(agent);
+  const phaseOptions = useMemo(
+    () =>
+      AGENT_PHASES.map((phase) => ({
+        value: phase,
+        label: phase,
+      })),
+    [],
+  );
+
+  const categoryOptions = useMemo(
+    () =>
+      AGENT_CATEGORIES.map((category) => ({
+        value: category,
+        label: category,
+      })),
+    [],
+  );
+
+  const hasActiveFilters =
+    query.trim().length > 0 ||
+    phaseFilter.length > 0 ||
+    categoryFilter.length > 0 ||
+    sourceFilter.length > 0 ||
+    builtinOnly;
+
+  const filteredAgents = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return (data ?? []).filter((agent) => {
+      if (builtinOnly && !agent.is_built_in) return false;
+      if (sourceFilter.length > 0) {
+        const source: AgentSource = agent.is_built_in ? "builtin" : "custom";
+        if (!sourceFilter.includes(source)) return false;
+      }
+      if (phaseFilter.length > 0 && !phaseFilter.includes(agent.phase)) {
+        return false;
+      }
+      if (
+        categoryFilter.length > 0 &&
+        !categoryFilter.includes(agent.category)
+      ) {
+        return false;
+      }
+      if (!normalizedQuery) return true;
+      return (
+        agent.name.toLowerCase().includes(normalizedQuery) ||
+        agent.slug.toLowerCase().includes(normalizedQuery) ||
+        agent.description.toLowerCase().includes(normalizedQuery) ||
+        agent.author.toLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [
+    builtinOnly,
+    categoryFilter,
+    data,
+    phaseFilter,
+    query,
+    sourceFilter,
+  ]);
+
+  const grouped = useMemo(() => {
+    const byPhase = new Map<AgentPhase, AgentListItem[]>();
+    for (const phase of AGENT_PHASES) {
+      byPhase.set(phase, []);
     }
-    return { custom: customAgents, builtin: builtinAgents };
-  }, [data]);
+    for (const agent of filteredAgents) {
+      const list = byPhase.get(agent.phase) ?? [];
+      list.push(agent);
+      byPhase.set(agent.phase, list);
+    }
+    return AGENT_PHASES.map((phase) => ({
+      phase,
+      agents: byPhase.get(phase) ?? [],
+    })).filter((group) => group.agents.length > 0);
+  }, [filteredAgents]);
+
+  function clearFilters() {
+    setQuery("");
+    setPhaseFilter([]);
+    setCategoryFilter([]);
+    setSourceFilter([]);
+    setBuiltinOnly(false);
+  }
 
   function handleConfirmDelete() {
     if (!deleteTarget) return;
@@ -85,7 +184,11 @@ function RouteComponent() {
       <header className={classes.header}>
         <div className={classes.headerRow}>
           <h2 className={classes.title}>Agents</h2>
-          <ActionIcon type="button" variant="default" aria-label="New agent" onClick={() => setCreateOpen(true)}
+          <ActionIcon
+            type="button"
+            variant="default"
+            aria-label="New agent"
+            onClick={() => setCreateOpen(true)}
           >
             <IconPlus size={16} />
           </ActionIcon>
@@ -93,8 +196,69 @@ function RouteComponent() {
         <p className={classes.subtitle}>
           Pipeline agents (pre/post/parallel). Built-ins are seeded from
           examples and cannot be deleted.
+          {!isLoading && !isError && hasActiveFilters
+            ? ` Showing ${filteredAgents.length} of ${data?.length ?? 0}.`
+            : null}
         </p>
       </header>
+
+      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
+        <div className={classes.filters}>
+          <TextInput
+            className={classes.searchInput}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Search name, slug, description…"
+            aria-label="Search agents"
+          />
+          <MultiSelect
+            className={classes.categoryFilter}
+            searchable
+            clearable
+            data={phaseOptions}
+            value={phaseFilter}
+            onChange={(value) => setPhaseFilter(value as AgentPhase[])}
+            placeholder="All phases"
+            searchPlaceholder="Filter phases…"
+          />
+          <MultiSelect
+            className={classes.categoryFilter}
+            searchable
+            clearable
+            data={categoryOptions}
+            value={categoryFilter}
+            onChange={(value) => setCategoryFilter(value as AgentCategory[])}
+            placeholder="All categories"
+            searchPlaceholder="Filter categories…"
+          />
+          <MultiSelect
+            className={classes.categoryFilter}
+            searchable
+            clearable
+            data={SOURCE_OPTIONS}
+            value={sourceFilter}
+            onChange={(value) => setSourceFilter(value as AgentSource[])}
+            placeholder="All sources"
+            searchPlaceholder="Filter sources…"
+          />
+          <Switch
+            className={classes.defaultsSwitch}
+            checked={builtinOnly}
+            onChange={setBuiltinOnly}
+            label="Built-in only"
+          />
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="default"
+              className={classes.clearFilters}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className={classes.loading}>
@@ -106,61 +270,47 @@ function RouteComponent() {
         <p className={classes.statusError}>Failed to load agents.</p>
       ) : null}
 
-      {!isLoading && !isError ? (
-        <>
-          <section className={classes.group}>
-            <div>
-              <h3 className={classes.groupTitle}>Custom</h3>
-              <p className={classes.groupHint}>
-                Your own agents — create, edit, and delete freely.
-              </p>
-            </div>
-            {custom.length === 0 ? (
-              <p className={classes.status}>
-                No custom agents yet. Create one with +.
-              </p>
-            ) : (
-              <div className={classes.grid}>
-                {custom.map((agent) => (
-                  <AgentCard
-                    key={agent.id}
-                    agent={agent}
-                    onDuplicate={handleDuplicate}
-                    onDelete={(id, name) => setDeleteTarget({ id, name })}
-                    duplicatePending={duplicateMutation.isPending}
-                    deletePending={deleteMutation.isPending}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className={classes.group}>
-            <div>
-              <h3 className={classes.groupTitle}>Built-in</h3>
-              <p className={classes.groupHint}>
-                Default agents shipped with the hub — editable, not deletable.
-              </p>
-            </div>
-            {builtin.length === 0 ? (
-              <p className={classes.status}>No built-in agents loaded.</p>
-            ) : (
-              <div className={classes.grid}>
-                {builtin.map((agent) => (
-                  <AgentCard
-                    key={agent.id}
-                    agent={agent}
-                    onDuplicate={handleDuplicate}
-                    onDelete={(id, name) => setDeleteTarget({ id, name })}
-                    duplicatePending={duplicateMutation.isPending}
-                    deletePending={deleteMutation.isPending}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        </>
+      {!isLoading && !isError && (data?.length ?? 0) === 0 ? (
+        <p className={classes.status}>
+          No agents yet. Create one to get started.
+        </p>
       ) : null}
+
+      {!isLoading &&
+      !isError &&
+      (data?.length ?? 0) > 0 &&
+      grouped.length === 0 ? (
+        <p className={classes.status}>
+          No agents match your filters.{" "}
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className={classes.clearFiltersLink}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+
+      {grouped.map(({ phase, agents }) => (
+        <section key={phase} className={classes.group}>
+          <h3 className={classes.groupTitle}>{phase}</h3>
+          <div className={classes.grid}>
+            {agents.map((agent) => (
+              <AgentCard
+                key={agent.id}
+                agent={agent}
+                onDuplicate={handleDuplicate}
+                onDelete={(id, name) => setDeleteTarget({ id, name })}
+                duplicatePending={duplicateMutation.isPending}
+                deletePending={deleteMutation.isPending}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
 
       <CreateAgentModal
         opened={createOpen}
@@ -178,13 +328,14 @@ function RouteComponent() {
           cannot be undone.
         </p>
         <div className={classes.modalActions}>
-          <Button variant="default" type="button"
+          <Button
+            variant="default"
+            type="button"
             onClick={() => setDeleteTarget(null)}
           >
             Cancel
           </Button>
-          <Button variant="dangerSolid" type="button"
-            onClick={handleConfirmDelete}>
+          <Button variant="dangerSolid" type="button" onClick={handleConfirmDelete}>
             Delete
           </Button>
         </div>
@@ -208,6 +359,7 @@ function AgentCard({
 }) {
   return (
     <motion.div
+      className={classes.cardWrap}
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.16 }}
@@ -226,7 +378,12 @@ function AgentCard({
             </p>
           </div>
           <div className={classes.cardActions}>
-            <ActionIcon type="button" variant="ghost" aria-label="Duplicate" disabled={duplicatePending} onClick={(event) => {
+            <ActionIcon
+              type="button"
+              variant="ghost"
+              aria-label="Duplicate"
+              disabled={duplicatePending}
+              onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 onDuplicate(agent.id);
@@ -235,7 +392,12 @@ function AgentCard({
               <IconCopy size={15} />
             </ActionIcon>
             {!agent.is_built_in ? (
-              <ActionIcon type="button" variant="ghostDanger" aria-label="Delete" disabled={deletePending} onClick={(event) => {
+              <ActionIcon
+                type="button"
+                variant="ghostDanger"
+                aria-label="Delete"
+                disabled={deletePending}
+                onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
                   onDelete(agent.id, agent.name);

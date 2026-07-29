@@ -135,13 +135,25 @@ export function PersonaForm({
           <div className={classes.stack}>
             <Field
               label="Description"
-              hint="Main persona definition / appearance / background."
+              hint="Background, role, and durable facts."
             >
               <Textarea
                 className={classes.textarea}
                 value={values.description}
                 onChange={(event) =>
                   setField("description", event.target.value)
+                }
+              />
+            </Field>
+            <Field
+              label="Appearance"
+              hint="Physical look and visual presentation (used for image prompts)."
+            >
+              <Textarea
+                className={classes.textarea}
+                value={values.appearance}
+                onChange={(event) =>
+                  setField("appearance", event.target.value)
                 }
               />
             </Field>
@@ -180,8 +192,10 @@ export function PersonaForm({
           <PersonaGeneratePanel
             personaName={values.name}
             description={values.description}
+            appearance={values.appearance}
             personality={values.personality}
             onDescriptionChange={(value) => setField("description", value)}
+            onAppearanceChange={(value) => setField("appearance", value)}
             onPersonalityChange={(value) => setField("personality", value)}
           />
         </Tabs.Panel>

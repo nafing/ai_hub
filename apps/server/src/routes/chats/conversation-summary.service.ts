@@ -173,7 +173,7 @@ export class ConversationSummaryService {
       ? await this.connections.findOne(settings.summary_connection_id)
       : settings.connection_id
         ? await this.connections.findOne(settings.connection_id)
-        : await this.connections.findDefault();
+        : await this.connections.findDefault("llm");
     const persona = settings.persona_id
       ? await this.personas.findOne(settings.persona_id).catch(() => null)
       : null;

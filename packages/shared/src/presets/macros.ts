@@ -49,8 +49,26 @@ export const PRESET_RUNTIME_VARIABLES: readonly PresetMacroEntry[] = [
     description: "Active persona display name.",
   },
   {
+    syntax: "{{userName}}",
+    description: "Alias for {{user}} (conversation presets).",
+  },
+  {
     syntax: "{{char}}",
     description: "Primary character display name.",
+  },
+  {
+    syntax: "{{charName}}",
+    description: "Alias for {{char}} (conversation presets).",
+  },
+  {
+    syntax: "{{char_appearance}}",
+    description:
+      "Primary character Appearance field (image presets / visual prompts).",
+  },
+  {
+    syntax: "{{user_appearance}}",
+    description:
+      "Active persona Appearance field (image presets / visual prompts).",
   },
   {
     syntax: "{{characters}}",
@@ -69,6 +87,10 @@ export const PRESET_RUNTIME_VARIABLES: readonly PresetMacroEntry[] = [
   {
     syntax: "{{existing_description}}",
     description: "Current description field (generators / rebuild).",
+  },
+  {
+    syntax: "{{existing_appearance}}",
+    description: "Current appearance field (character generator).",
   },
   {
     syntax: "{{existing_personality}}",

@@ -23,7 +23,7 @@ import {
   notifications,
   RuntimeText,
 } from "@/components/ui";
-import { useConnections } from "@/features/connections/queries";
+import { useConnectionSelectOptions } from "@/features/connections/queries";
 import { getCharacter } from "@/features/characters/api";
 import { useCharacter, useCharacters } from "@/features/characters/queries";
 import { getLorebook } from "@/features/lorebooks/api";
@@ -60,7 +60,8 @@ function isGeneratorCategory(category: PresetCategory): boolean {
   return (
     category === "character_generator" ||
     category === "persona_generator" ||
-    category === "lorebook_generator"
+    category === "lorebook_generator" ||
+    category === "image"
   );
 }
 
@@ -68,18 +69,28 @@ function usesReferenceCharacters(category: PresetCategory): boolean {
   return category === "persona_generator" || category === "character_generator";
 }
 
+function usesCharacterCard(category: PresetCategory): boolean {
+  return (
+    category === "lorebook_generator" ||
+    category === "image" ||
+    isChatCategory(category)
+  );
+}
+
 const PERSONA_TARGET_FIELDS = [
   {
-    value: "description and personality",
-    label: "description and personality",
+    value: "description, appearance, and personality",
+    label: "description, appearance, and personality",
   },
   { value: "description", label: "description" },
+  { value: "appearance", label: "appearance" },
   { value: "personality", label: "personality" },
 ];
 
 const CHARACTER_TARGET_FIELDS = [
   { value: "all card fields", label: "all card fields" },
   { value: "description", label: "description" },
+  { value: "appearance", label: "appearance" },
   { value: "personality", label: "personality" },
   { value: "scenario", label: "scenario" },
   { value: "first_mes", label: "first_mes" },
@@ -89,7 +100,8 @@ const CHARACTER_TARGET_FIELDS = [
 
 function defaultTargetField(category: PresetCategory): string {
   if (category === "character_generator") return "all card fields";
-  if (category === "persona_generator") return "description and personality";
+  if (category === "persona_generator")
+    return "description, appearance, and personality";
   return "description";
 }
 
@@ -120,16 +132,13 @@ export function PresetTestPanel({
   variableValues,
 }: PresetTestPanelProps) {
   const category = values.category;
-  const connectionsQuery = useConnections();
+  const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
   const lorebooksQuery = useLorebooks();
   const testMutation = useTestPreset(presetId);
 
-  const defaultConnectionId =
-    connectionsQuery.data?.find((connection) => connection.is_default)?.id ??
-    connectionsQuery.data?.[0]?.id ??
-    null;
+  const defaultConnectionId = connectionsQuery.defaultId || null;
 
   const defaultPersonaId =
     personasQuery.data?.find((persona) => persona.is_default)?.id ?? null;
@@ -151,6 +160,7 @@ export function PresetTestPanel({
     defaultTargetField(category),
   );
   const [existingDescription, setExistingDescription] = useState("");
+  const [existingAppearance, setExistingAppearance] = useState("");
   const [existingPersonality, setExistingPersonality] = useState("");
   const [existingScenario, setExistingScenario] = useState("");
   const [existingFirstMes, setExistingFirstMes] = useState("");
@@ -217,6 +227,7 @@ export function PresetTestPanel({
       }
       if (targetField) next.target_field = targetField;
       next.existing_description = existingDescription.trim();
+      next.existing_appearance = existingAppearance.trim();
       next.existing_personality = existingPersonality.trim();
     }
 
@@ -226,6 +237,7 @@ export function PresetTestPanel({
       }
       if (targetField) next.target_field = targetField;
       next.existing_description = existingDescription.trim();
+      next.existing_appearance = existingAppearance.trim();
       next.existing_personality = existingPersonality.trim();
       next.existing_scenario = existingScenario.trim();
       next.existing_first_mes = existingFirstMes.trim();
@@ -241,6 +253,7 @@ export function PresetTestPanel({
     charNameOverride,
     targetField,
     existingDescription,
+    existingAppearance,
     existingPersonality,
     existingScenario,
     existingFirstMes,
@@ -271,6 +284,7 @@ export function PresetTestPanel({
         chatSummary: usesChatHistoryMarkers(category)
           ? chatSummary || null
           : null,
+        characterInfoMode: category === "image" ? "image" : "default",
       }),
     [
       category,
@@ -351,7 +365,7 @@ export function PresetTestPanel({
 
   const connectionError = connectionsQuery.isError
     ? "Failed to load connections"
-    : !connectionsQuery.isLoading && !connectionsQuery.data?.length
+    : !connectionsQuery.isLoading && !connectionsQuery.options.length
       ? "Create a connection first"
       : undefined;
 
@@ -375,14 +389,11 @@ export function PresetTestPanel({
                 ? "Loading connections…"
                 : "Default connection"
             }
-            data={(connectionsQuery.data ?? []).map((connection) => ({
-              value: connection.id,
-              label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
-            }))}
+            data={connectionsQuery.options}
             value={resolvedConnectionId ?? ""}
             onChange={setConnectionId}
             searchable
-            disabled={!connectionsQuery.data?.length}
+            disabled={!connectionsQuery.options.length}
             error={Boolean(connectionError)}
           />
         </Field>
@@ -400,7 +411,13 @@ export function PresetTestPanel({
         ) : (
           <Field
             label="Persona"
-            hint={<RuntimeText text="Fills {{user}} and the Persona marker." />}
+            hint={
+              category === "image" ? (
+                <RuntimeText text="Fills {{user}}, {{user_appearance}}, and the Persona marker (Appearance-first)." />
+              ) : (
+                <RuntimeText text="Fills {{user}} and the Persona marker." />
+              )
+            }
             error={
               personasQuery.isError ? "Failed to load personas" : undefined
             }
@@ -456,11 +473,13 @@ export function PresetTestPanel({
           </Field>
         ) : null}
 
-        {category === "lorebook_generator" || isChatCategory(category) ? (
+        {usesCharacterCard(category) ? (
           <Field
             label="Character"
             hint={
-              category === "lorebook_generator" ? (
+              category === "image" ? (
+                <RuntimeText text="Fills {{char}}, {{char_appearance}}, and Character Info (Appearance-first)." />
+              ) : category === "lorebook_generator" ? (
                 "Fills Character Info (optional related card)."
               ) : (
                 <RuntimeText text="Fills {{char}}, Character Info, and Dialogue Examples." />
@@ -541,12 +560,23 @@ export function PresetTestPanel({
       </div>
 
       {isGeneratorCategory(category) ? (
-        <Field label="Generator brief" hint="Fills the Generator Brief marker.">
+        <Field
+          label={category === "image" ? "Image brief" : "Generator brief"}
+          hint={
+            category === "image"
+              ? "Fills the Image Brief marker (pose / scene / lighting). Character Appearance is the look source."
+              : "Fills the Generator Brief marker."
+          }
+        >
           <Textarea
             className={classes.textarea}
             value={generatorBrief}
             onChange={(event) => setGeneratorBrief(event.currentTarget.value)}
-            placeholder="Concept / setting dump for the generator…"
+            placeholder={
+              category === "image"
+                ? "e.g. Standing in rain at night, soft neon rim light, three-quarter view…"
+                : "Concept / setting dump for the generator…"
+            }
           />
         </Field>
       ) : null}
@@ -562,6 +592,19 @@ export function PresetTestPanel({
               value={existingDescription}
               onChange={(event) =>
                 setExistingDescription(event.currentTarget.value)
+              }
+              placeholder="(none yet)"
+            />
+          </Field>
+          <Field
+            label="Existing appearance"
+            hint={<RuntimeText text="Fills {{existing_appearance}}." />}
+          >
+            <Textarea
+              className={classes.textarea}
+              value={existingAppearance}
+              onChange={(event) =>
+                setExistingAppearance(event.currentTarget.value)
               }
               placeholder="(none yet)"
             />
@@ -600,6 +643,19 @@ export function PresetTestPanel({
                       value={existingDescription}
                       onChange={(event) =>
                         setExistingDescription(event.currentTarget.value)
+                      }
+                      placeholder="(none yet)"
+                    />
+                  </Field>
+                  <Field
+                    label="Existing appearance"
+                    hint={<RuntimeText text="Fills {{existing_appearance}}." />}
+                  >
+                    <Textarea
+                      className={classes.textarea}
+                      value={existingAppearance}
+                      onChange={(event) =>
+                        setExistingAppearance(event.currentTarget.value)
                       }
                       placeholder="(none yet)"
                     />

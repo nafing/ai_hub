@@ -76,6 +76,7 @@ export class PersonasService {
     const merged = normalizePersona({
       name: input.name ?? row.name,
       description: input.description ?? row.description,
+      appearance: input.appearance ?? row.appearance,
       personality: input.personality ?? row.personality,
       about_me: input.about_me ?? row.about_me,
       notes: input.notes ?? row.notes,
@@ -186,6 +187,7 @@ export class PersonasService {
       ...normalizePersona({
         name: row.name,
         description: row.description,
+        appearance: row.appearance ?? "",
         personality: row.personality,
         about_me: row.about_me ?? "",
         notes: row.notes,
@@ -201,6 +203,7 @@ export class PersonasService {
       avatar: persona.avatar,
       name: persona.name,
       description: persona.description,
+      appearance: persona.appearance,
       personality: persona.personality,
       about_me: persona.about_me,
       notes: persona.notes,

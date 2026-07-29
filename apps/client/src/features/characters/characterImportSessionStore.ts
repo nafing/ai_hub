@@ -95,6 +95,7 @@ async function runAiImport(input: StartAiImportInput): Promise<{
       char: baseData.name.trim(),
       target_field: "all card fields",
       existing_description: "",
+      existing_appearance: "",
       existing_personality: "",
       existing_scenario: "",
       existing_first_mes: "",

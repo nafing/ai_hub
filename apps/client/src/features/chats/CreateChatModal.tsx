@@ -13,7 +13,7 @@ import { Button,
   RuntimeText,
 } from "@/components/ui";
 import { useCharacters } from "@/features/characters/queries";
-import { useConnections } from "@/features/connections/queries";
+import { useConnectionSelectOptions } from "@/features/connections/queries";
 import { usePersonas } from "@/features/personas/queries";
 import { useDefaultPreset, usePresets } from "@/features/presets/queries";
 import { useCreateChat } from "./queries";
@@ -29,7 +29,7 @@ export function CreateChatModal({ opened, onClose }: CreateChatModalProps) {
   const createMutation = useCreateChat();
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
-  const connectionsQuery = useConnections();
+  const connectionsQuery = useConnectionSelectOptions("llm");
   const presetsQuery = usePresets();
 
   const [mode, setMode] = useState<ChatMode>("roleplay");
@@ -42,10 +42,7 @@ export function CreateChatModal({ opened, onClose }: CreateChatModalProps) {
   const presetCategory = mode;
   const defaultPresetQuery = useDefaultPreset(presetCategory);
 
-  const defaultConnectionId =
-    connectionsQuery.data?.find((c) => c.is_default)?.id ??
-    connectionsQuery.data?.[0]?.id ??
-    null;
+  const defaultConnectionId = connectionsQuery.defaultId || null;
   const defaultPersonaId =
     personasQuery.data?.find((p) => p.is_default)?.id ?? null;
 
@@ -95,14 +92,7 @@ export function CreateChatModal({ opened, onClose }: CreateChatModalProps) {
     [personasQuery.data],
   );
 
-  const connectionOptions = useMemo(
-    () =>
-      (connectionsQuery.data ?? []).map((connection) => ({
-        value: connection.id,
-        label: connection.name || "Unnamed",
-      })),
-    [connectionsQuery.data],
-  );
+  const connectionOptions = connectionsQuery.options;
 
   const presetOptions = useMemo(
     () =>

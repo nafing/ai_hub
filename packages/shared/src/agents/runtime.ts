@@ -199,7 +199,3 @@ export function isTextRewriteAgent(
     agent.phase === "post_processing" && agent.result_type === "text_rewrite"
   );
 }
-
-export function phaseLabel(phase: AgentPhase): string {
-  return phase;
-}

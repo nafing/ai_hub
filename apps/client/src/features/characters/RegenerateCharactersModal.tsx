@@ -12,8 +12,8 @@ import { Button, Textarea,
   RuntimeText,
   Select,
 } from "@/components/ui";
-import { useConnections } from "@/features/connections/queries";
-import { runGenerator } from "@/features/generators/api";
+import { useConnectionSelectOptions } from "@/features/connections/queries";
+import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
 import { getPersona } from "@/features/personas/api";
 import { usePersonas } from "@/features/personas/queries";
 import {
@@ -40,6 +40,7 @@ type RegenerateScope = "concept" | "all";
 const CONCEPT_FIELDS = [
   "name",
   "description",
+  "appearance",
   "personality",
   "scenario",
 ] as const;
@@ -97,7 +98,7 @@ export function RegenerateCharactersModal({
   onClose,
 }: RegenerateCharactersModalProps) {
   const queryClient = useQueryClient();
-  const connectionsQuery = useConnections();
+  const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
   const presetsQuery = usePresets();
@@ -119,10 +120,7 @@ export function RegenerateCharactersModal({
   const [reviewTargetIds, setReviewTargetIds] = useState<string[]>([]);
   const [confirmingAi, setConfirmingAi] = useState(false);
 
-  const defaultConnectionId =
-    connectionsQuery.data?.find((connection) => connection.is_default)?.id ??
-    connectionsQuery.data?.[0]?.id ??
-    null;
+  const defaultConnectionId = connectionsQuery.defaultId || null;
 
   const defaultPersonaId =
     personasQuery.data?.find((persona) => persona.is_default)?.id ?? null;
@@ -164,15 +162,6 @@ export function RegenerateCharactersModal({
   const resolvedConnectionId = connectionId ?? defaultConnectionId;
   const presetDetailQuery = usePreset(presetId ?? undefined);
 
-  const connectionOptions = useMemo(
-    () =>
-      (connectionsQuery.data ?? []).map((connection) => ({
-        value: connection.id,
-        label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
-      })),
-    [connectionsQuery.data],
-  );
-
   const presetOptions = useMemo(() => {
     const characterPresets = (presetsQuery.data ?? []).filter(
       (preset) => preset.category === "character_generator",
@@ -213,7 +202,7 @@ export function RegenerateCharactersModal({
   const connectionFieldError =
     connectionsQuery.isError
       ? "Failed to load connections"
-      : !connectionsQuery.isLoading && !connectionOptions.length
+      : !connectionsQuery.isLoading && !connectionsQuery.options.length
         ? "Create a connection first"
         : undefined;
 
@@ -307,6 +296,7 @@ export function RegenerateCharactersModal({
           .join(" / "),
         target_field: "all card fields",
         existing_description: "",
+        existing_appearance: "",
         existing_personality: "",
         existing_scenario: "",
         existing_first_mes: "",
@@ -315,12 +305,20 @@ export function RegenerateCharactersModal({
       },
     });
 
-    const result = await runGenerator({
+    const castLabel =
+      targetCards
+        .map((card) => card.name.trim())
+        .filter(Boolean)
+        .join(", ") ||
+      `${targetCards.length} character${targetCards.length === 1 ? "" : "s"}`;
+
+    const result = await useGeneratorJobsStore.getState().runTrackedGenerator({
       category: "character_generator",
       connectionId: resolvedConnectionId,
       presetId: preset.id,
       variables: promptContext.variables,
       markers: promptContext.markers,
+      title: `Regenerate ${scope} · ${castLabel}`,
     });
 
     const extracted = extractFullCards(result.content || result.reply || "");
@@ -509,7 +507,7 @@ export function RegenerateCharactersModal({
             </div>
             <p className={classes.fieldHint}>
               {scope === "concept"
-                ? "Updates name, description, personality, and scenario."
+                ? "Updates name, description, appearance, personality, and scenario."
                 : "Rebuilds all main card fields from the brief."}
             </p>
           </Field>
@@ -522,10 +520,10 @@ export function RegenerateCharactersModal({
             >
               <Select
                 searchable
-                data={connectionOptions}
+                data={connectionsQuery.options}
                 value={resolvedConnectionId ?? ""}
                 onChange={(value) => setConnectionId(value)}
-                disabled={busy || !connectionOptions.length}
+                disabled={busy || !connectionsQuery.options.length}
                 error={Boolean(connectionFieldError)}
                 placeholder={
                   connectionsQuery.isLoading

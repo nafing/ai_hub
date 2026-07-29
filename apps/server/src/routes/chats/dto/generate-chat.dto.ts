@@ -1,9 +1,45 @@
-import { IsBoolean, IsOptional, IsString } from "class-validator";
+import { Type } from "class-transformer";
+import {
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from "class-validator";
+
+export class ChatMessageAttachmentDto {
+  @IsString()
+  id!: string;
+
+  @IsIn(["image", "file"])
+  kind!: "image" | "file";
+
+  @IsString()
+  mime!: string;
+
+  @IsString()
+  url!: string;
+
+  @IsString()
+  name!: string;
+
+  @IsOptional()
+  @IsNumber()
+  size?: number;
+}
 
 export class GenerateChatDto {
   @IsOptional()
   @IsString()
   userMessage?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChatMessageAttachmentDto)
+  attachments?: ChatMessageAttachmentDto[];
 
   @IsOptional()
   @IsString()

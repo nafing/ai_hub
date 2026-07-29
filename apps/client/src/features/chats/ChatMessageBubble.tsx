@@ -5,14 +5,20 @@ import {
   IconChevronRight,
   IconChevronUp,
   IconEye,
+  IconFile,
   IconMoodSmile,
   IconPencil,
   IconRefresh,
   IconTrash,
 } from "@tabler/icons-react";
 import dayjs from "dayjs";
-import { activeMessageText, type ChatMessage } from "@ai-hub/shared";
+import { activeMessageAttachments, activeMessageText, type ChatMessage } from "@ai-hub/shared";
 import { ActionIcon, Button, Textarea, RuntimeText } from "@/components/ui";
+import { api } from "@/lib/api";
+import {
+  chatAttachmentSrc,
+  formatAttachmentSize,
+} from "./attachment-url";
 import { formatChatText } from "./formatChatText";
 import classes from "./ChatMessageBubble.module.css";
 import type { PresetVariableValues } from "@ai-hub/shared";
@@ -168,6 +174,8 @@ export function ChatMessageBubble({
   const timeLabel = formatMessageTime(message.created_at);
   const bodyText =
     displayText || (isStreaming ? "…" : activeMessageText(message));
+  const apiBase = String(api.defaults.baseURL ?? "/v1/api");
+  const attachments = activeMessageAttachments(message);
 
   function startEdit() {
     setDraft(activeMessageText(message));
@@ -240,6 +248,52 @@ export function ChatMessageBubble({
           </div>
         ) : null}
 
+        {attachments.length > 0 ? (
+          <div className={classes.attachments} aria-label="Attachments">
+            {attachments.map((attachment) => {
+              const src = chatAttachmentSrc(attachment.url, apiBase);
+              if (attachment.kind === "image" && src) {
+                return (
+                  <a
+                    key={attachment.id}
+                    className={classes.attachmentImageLink}
+                    href={src}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <img
+                      className={classes.attachmentImage}
+                      src={src}
+                      alt={attachment.name || "Attached image"}
+                    />
+                  </a>
+                );
+              }
+              return (
+                <a
+                  key={attachment.id}
+                  className={classes.attachmentFile}
+                  href={src ?? undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <IconFile size={16} aria-hidden />
+                  <span className={classes.attachmentFileMeta}>
+                    <span className={classes.attachmentFileName}>
+                      {attachment.name || "File"}
+                    </span>
+                    {formatAttachmentSize(attachment.size) ? (
+                      <span className={classes.attachmentFileSize}>
+                        {formatAttachmentSize(attachment.size)}
+                      </span>
+                    ) : null}
+                  </span>
+                </a>
+              );
+            })}
+          </div>
+        ) : null}
+
         {editing ? (
           <div className={classes.editStack}>
             <Textarea
@@ -261,7 +315,7 @@ export function ChatMessageBubble({
               </Button>
             </div>
           </div>
-        ) : (
+        ) : bodyText.trim() || isStreaming ? (
           <p
             className={classes.body}
             style={dialogueColor ? { color: dialogueColor } : undefined}
@@ -275,7 +329,7 @@ export function ChatMessageBubble({
             </RuntimeText>
             {isStreaming ? "▍" : ""}
           </p>
-        )}
+        ) : null}
 
         {message.reactions && message.reactions.length > 0 ? (
           <div className={classes.reactions} aria-label="Reactions">

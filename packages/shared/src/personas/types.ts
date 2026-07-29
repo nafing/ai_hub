@@ -8,8 +8,10 @@ export type Persona = {
   avatar: string | null;
   /** Display name used for `{{user}}`. */
   name: string;
-  /** Main persona definition / appearance / background. */
+  /** Background, role, and durable facts. */
   description: string;
+  /** Physical look / visual presentation (useful for image prompts). */
+  appearance: string;
   /** Trait / personality block. */
   personality: string;
   /** Conversation About Me bio. */

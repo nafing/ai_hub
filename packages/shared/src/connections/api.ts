@@ -23,3 +23,10 @@ export type OpenRouterEndpoint = {
   provider: string;
   name: string;
 };
+
+export type OpenRouterImageModel = {
+  /** Model slug used in POST /images (e.g. bytedance-seed/seedream-4.5). */
+  id: string;
+  name: string;
+  supported_parameters: string[];
+};

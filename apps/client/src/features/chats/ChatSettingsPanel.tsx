@@ -5,6 +5,10 @@ import {
   GROUP_CHAT_MODES,
   GROUP_RESPONSE_ORDER_LABELS,
   GROUP_RESPONSE_ORDERS,
+  IMAGE_ASPECT_RATIO_LABELS,
+  IMAGE_ASPECT_RATIOS,
+  IMAGE_RESOLUTION_LABELS,
+  IMAGE_RESOLUTIONS,
   isCharacterInactiveInChat,
   normalizeInactiveCharacterIds,
   selectedVariableValues,
@@ -19,7 +23,7 @@ import { ActionIcon, Button, MultiSelect, NumberInput, Select, Textarea, TextInp
 import { characterAvatarSrc } from "@/features/characters/avatar-url";
 import { useAgents } from "@/features/agents/queries";
 import { useCharacters } from "@/features/characters/queries";
-import { useConnections } from "@/features/connections/queries";
+import { useConnectionSelectOptions } from "@/features/connections/queries";
 import { useLorebooks } from "@/features/lorebooks/queries";
 import { usePersonas } from "@/features/personas/queries";
 import { SetupVariablesModal } from "@/features/presets/SetupVariablesModal";
@@ -85,7 +89,7 @@ function Field({
 
 export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
   const updateMutation = useUpdateChat();
-  const connectionsQuery = useConnections();
+  const connectionsQuery = useConnectionSelectOptions("llm");
   const presetsQuery = usePresets();
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
@@ -108,14 +112,7 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
     ? selectedPresetQuery.isLoading
     : defaultPresetQuery.isLoading;
 
-  const connectionOptions = useMemo(
-    () =>
-      (connectionsQuery.data ?? []).map((item) => ({
-        value: item.id,
-        label: item.name || "Unnamed",
-      })),
-    [connectionsQuery.data],
-  );
+  const connectionOptions = connectionsQuery.options;
 
   const presetOptions = useMemo(
     () =>
@@ -641,8 +638,40 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
               patchSettings({ character_commands })
             }
             label="Conversation commands"
-            description="Allow hidden [react], [schedule_update], [memory], and [cross_post] tags."
+            description="Allow hidden [react], [schedule_update], [memory], [cross_post], and [send_image] tags."
           />
+          <Field
+            label="Photo aspect ratio"
+            hint="Used when a character sends [send_image]."
+          >
+            <Select
+              data={IMAGE_ASPECT_RATIOS.map((value) => ({
+                value,
+                label: IMAGE_ASPECT_RATIO_LABELS[value],
+              }))}
+              value={chat.settings.image_aspect_ratio || "3:4"}
+              onChange={(value) => {
+                if (!value) return;
+                patchSettings({ image_aspect_ratio: value });
+              }}
+            />
+          </Field>
+          <Field
+            label="Photo resolution"
+            hint="Higher tiers cost more and take longer."
+          >
+            <Select
+              data={IMAGE_RESOLUTIONS.map((value) => ({
+                value,
+                label: IMAGE_RESOLUTION_LABELS[value],
+              }))}
+              value={chat.settings.image_resolution || "1K"}
+              onChange={(value) => {
+                if (!value) return;
+                patchSettings({ image_resolution: value });
+              }}
+            />
+          </Field>
           <Switch
             variant="card"
             checked={chat.settings.enable_memory_recall !== false}

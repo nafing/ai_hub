@@ -1,8 +1,10 @@
 import type { Connection } from "./types";
+import type { ConnectionKind } from "./constants";
 
-/** Baseline values for a new connection form / create payload. */
+/** Baseline values for a new LLM connection form / create payload. */
 export function defaultConnection(): Omit<Connection, "id"> {
   return {
+    kind: "llm",
     name: "",
     preferred_provider: "",
     api_key: "",
@@ -24,4 +26,20 @@ export function defaultConnection(): Omit<Connection, "id"> {
     prompt_caching: false,
     is_default: false,
   };
+}
+
+/** Baseline values for a new image generation connection. */
+export function defaultImageConnection(): Omit<Connection, "id"> {
+  return {
+    ...defaultConnection(),
+    kind: "image",
+    max_completion_tokens: 1,
+    context_length: 1,
+  };
+}
+
+export function defaultConnectionForKind(
+  kind: ConnectionKind,
+): Omit<Connection, "id"> {
+  return kind === "image" ? defaultImageConnection() : defaultConnection();
 }

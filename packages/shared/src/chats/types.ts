@@ -29,6 +29,18 @@ export type RoleplayDmSource = {
   target_character_id?: string;
 };
 
+/** File/image attached to a chat message (stored under the chat). */
+export type ChatMessageAttachment = {
+  id: string;
+  /** `image` when mime is an image/* the UI can preview; otherwise `file`. */
+  kind: "image" | "file";
+  mime: string;
+  /** Public API path, e.g. `/chats/:chatId/attachments/:id`. */
+  url: string;
+  name: string;
+  size?: number;
+};
+
 /**
  * Persisted chat turn. Active text is `swipes[swipe_id]`.
  * Distinct from LLM `ChatMessage` (`{ role, content }`).
@@ -63,6 +75,16 @@ export type ChatMessage = {
     character_id?: string | null;
     created_at: string;
   }>;
+  /**
+   * Attachments per swipe (parallel to `swipes`). Prefer this over legacy
+   * flat `attachments` so regenerate branches do not share images.
+   */
+  attachments_by_swipe?: ChatMessageAttachment[][];
+  /**
+   * Legacy flat attachments for the whole message. Treated as swipe 0 only
+   * when `attachments_by_swipe` is absent.
+   */
+  attachments?: ChatMessageAttachment[];
 };
 
 export const GROUP_CHAT_MODES = ["merged", "individual"] as const;
@@ -211,6 +233,10 @@ export type ChatSettings = {
   enable_memory_recall: boolean;
   /** Durable facts recorded via [memory] commands, keyed by character id. */
   character_memories: Record<string, string[]>;
+  /** Aspect ratio for character [send_image] generations. */
+  image_aspect_ratio: string;
+  /** Resolution tier for character [send_image] generations. */
+  image_resolution: string;
 };
 
 export type Chat = {

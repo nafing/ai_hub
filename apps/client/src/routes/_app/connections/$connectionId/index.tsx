@@ -2,6 +2,8 @@ import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Button, Modal, notifications } from "@/components/ui";
 import { ConnectionForm } from "@/features/connections/ConnectionForm";
+import { ImageConnectionForm } from "@/features/connections/ImageConnectionForm";
+import { connectionKind } from "@ai-hub/shared";
 import {
   useConnection,
   useDeleteConnection,
@@ -57,6 +59,7 @@ function RouteComponent() {
   }
 
   const { id, ...formValues } = data;
+  const kind = connectionKind(data);
 
   return (
     <div className={classes.page}>
@@ -64,7 +67,9 @@ function RouteComponent() {
         <div>
           <h2 className={classes.title}>{data.name || "Edit connection"}</h2>
           <p className={classes.subtitle}>
-            Update OpenRouter connection settings.
+            {kind === "image"
+              ? "Update OpenRouter image generation settings."
+              : "Update OpenRouter LLM connection settings."}
           </p>
         </div>
         <div className={classes.actions}>
@@ -82,29 +87,58 @@ function RouteComponent() {
         </div>
       </header>
 
-      <ConnectionForm
-        key={id}
-        formId={FORM_ID}
-        connectionId={id}
-        initialValues={formValues}
-        onSubmit={async (values) => {
-          try {
-            await updateMutation.mutateAsync({ id, input: values });
-            notifications.show({
-              title: "Saved",
-              message: "Connection updated.",
-              color: "green",
-            });
-          } catch (error) {
-            notifications.show({
-              title: "Save failed",
-              message:
-                error instanceof Error ? error.message : "Unknown error",
-              color: "red",
-            });
-          }
-        }}
-      />
+      {kind === "image" ? (
+        <ImageConnectionForm
+          key={id}
+          formId={FORM_ID}
+          connectionId={id}
+          initialValues={formValues}
+          onSubmit={async (values) => {
+            try {
+              await updateMutation.mutateAsync({ id, input: values });
+              notifications.show({
+                title: "Saved",
+                message: "Connection updated.",
+                color: "green",
+              });
+            } catch (error) {
+              notifications.show({
+                title: "Save failed",
+                message:
+                  error instanceof Error ? error.message : "Unknown error",
+                color: "red",
+              });
+            }
+          }}
+        />
+      ) : (
+        <ConnectionForm
+          key={id}
+          formId={FORM_ID}
+          connectionId={id}
+          initialValues={formValues}
+          onSubmit={async (values) => {
+            try {
+              await updateMutation.mutateAsync({
+                id,
+                input: { ...values, kind: "llm" },
+              });
+              notifications.show({
+                title: "Saved",
+                message: "Connection updated.",
+                color: "green",
+              });
+            } catch (error) {
+              notifications.show({
+                title: "Save failed",
+                message:
+                  error instanceof Error ? error.message : "Unknown error",
+                color: "red",
+              });
+            }
+          }}
+        />
+      )}
 
       <Modal
         opened={deleteOpen}

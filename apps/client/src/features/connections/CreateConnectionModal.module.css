@@ -17,6 +17,20 @@
   color: var(--color-text-dimmed);
 }
 
+.kindRow {
+  display: flex;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.kindSegment {
+  flex: 1;
+}
+
+.kindSegmentActive {
+  font-weight: 600;
+}
+
 .input {
   width: 100%;
   min-height: 2.25rem;

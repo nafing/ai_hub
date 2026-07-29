@@ -71,7 +71,7 @@ export class GeneratorsService {
 
     const connection = input.connectionId
       ? await this.connections.findOne(input.connectionId)
-      : await this.connections.findDefault();
+      : await this.connections.findDefault("llm");
 
     if (!connection.api_key.trim()) {
       throw new BadRequestException(

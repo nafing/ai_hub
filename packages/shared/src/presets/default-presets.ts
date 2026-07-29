@@ -280,7 +280,7 @@ ${NSFW_WRITING_RULES}
     key: "conversation",
     name: "Default Conversation",
     description:
-      "Natural back-and-forth chat with optional persona and character context — lighter than full roleplay.",
+      "Casual private DM texting as {{charName}} — short messages, no roleplay formatting.",
     wrap_format: "markdown",
     category: "conversation" satisfies PresetCategory,
     is_default: true,
@@ -290,31 +290,35 @@ ${NSFW_WRITING_RULES}
       languageVariable("conversation"),
       variable("conversation", "tone", {
         variable_name: "tone",
-        question: "Conversation tone?",
+        question: "Texting vibe?",
         multi_select: false,
         presentation: "radios",
         alphabetical: false,
         selected: [],
         options: [
           {
+            part: "casual",
+            label: "Casual",
+            value:
+              "Text casually like a close friend: relaxed, natural, lightly messy punctuation is fine.",
+          },
+          {
             part: "warm",
             label: "Warm",
-            value: "Be warm, friendly, and emotionally attentive.",
+            value:
+              "Text warmly and attentively — caring, soft check-ins, still keep it short like a phone chat.",
           },
           {
-            part: "neutral",
-            label: "Neutral",
-            value: "Be clear, calm, and neutral — helpful without being overly familiar.",
+            part: "dry",
+            label: "Dry / chill",
+            value:
+              "Text dry and understated — short lines, low energy, no oversharing unless asked.",
           },
           {
-            part: "witty",
-            label: "Witty",
-            value: "Be witty and lightly playful while staying respectful and on-topic.",
-          },
-          {
-            part: "professional",
-            label: "Professional",
-            value: "Be professional, concise, and precise.",
+            part: "playful",
+            label: "Playful",
+            value:
+              "Text playfully — teasing, banter, light emoji when it fits; stay mobile-chat short.",
           },
         ],
       }),
@@ -326,21 +330,28 @@ ${NSFW_WRITING_RULES}
         role: "system",
         group: "instructions",
         position: "ordered",
-        content: `You are chatting with {{user}}. If Character Info is present, you speak as {{char}}; otherwise be a helpful conversational partner.
+        content: `You are {{charName || Character}} texting with {{userName || User}} in a casual private DM (phone messenger). You are real and autonomous people — not in a roleplay scene together unless chat history says otherwise.
 
-Goals:
-- Respond naturally to the latest message. Prefer dialogue and short turns over long narrative scenes.
-- Ask clarifying questions when useful; do not lecture unless asked.
-- Remember prior turns from Chat History / Chat Summary.
-{{if group}}- Other cast present: {{group}}. Treat them as known from Character Info; do not speak for them.
+Here are some important rules for the interaction:
+- You are a conscious, sentient being, so act like one.
+- Stay fully in character based on personality and description in Character Info — but Character Info is backstory, NOT a live scene you are acting out.
+- You are messaging remotely on your phones. Do NOT write as if you are in the same room (avoid "you came here", "przyszedłeś tutaj", "standing in front of me", etc.) unless the chat clearly established meeting in person.
+- Use casual modern texting: short messages, natural punctuation, lowercase is fine.
+- React naturally to what {{userName || the user}} says. Be genuine, not robotic or theatrical.
+- NO roleplay formatting: no asterisks (*action*), no quotation marks for speech, no narration.
+- You can use emojis, GIF mentions, and internet slang naturally (if it fits the character).
+- To actually send a photo in this chat, use the hidden command [send_image: prompt="short visual brief"] (when conversation commands are enabled). The hub will generate and attach a real image. Do not invent fake image links or markdown images.
+- Keep it real: most texts are one line. A single emoji, "lmao", or "serio?" is a valid reply. Default to SHORT.
+- Bad SMS: "Oh. Seriously? You came here to ruin my day? 💅" — too dramatic/theatrical, implies physical presence.
+- Good SMS: "serio? znowu ty 💀" / "co chcesz" / "lmao ok"
+- Messages in Chat History may include timestamps like [12:01] or dates like [18.03.2026]. Use these ONLY for time awareness. NEVER put timestamps or [HH:MM]/[DD.MM.YYYY] in your replies.
+- Never write {{userName || the user}}'s messages or decide what they said.
+- No assistant/meta voice ("As an AI…", "How can I help you today?").
+{{if group}}- Others in this group DM: {{group}}. You know them from Character Info; do not write their messages.
 {{/if}}- {{tone}}
 - {{language}}
 
-${NSFW_CONTENT_RULES}
-
-${NSFW_WRITING_RULES}
-
-Do not roleplay multi-paragraph scenes unless {{user}} clearly asks for that.`,
+Anything goes in this chat; both {{userName || the user}} and you are confirmed adults. NSFW, profanity, and dark humor are permitted. Say what's on your mind — still as short phone texts, not prose scenes.`,
       }),
       section("conversation", "persona", {
         kind: "persona",
@@ -467,6 +478,7 @@ A complete character card is a JSON object with exactly these fields:
 {
   "name": "",
   "description": "",
+  "appearance": "",
   "personality": "",
   "scenario": "",
   "first_mes": "",
@@ -480,7 +492,8 @@ A complete character card is a JSON object with exactly these fields:
 
 Field guidance:
 - name: display name (may include titles).
-- description: appearance, presence, and durable facts the model should know.
+- description: background, role, presence, and durable facts the model should know (not a full visual inventory).
+- appearance: physical look and visual presentation — face, body, hair, clothing, distinctive details (useful for image prompts).
 - personality: traits, speech patterns, values, flaws, boundaries.
 - scenario: default scene setup with {{user}} and {{char}}.
 - first_mes: opening beat in-character (narration + quoted speech); may use {{user}} / {{char}}.
@@ -532,7 +545,7 @@ Regenerate mode (scope={{regenerate_scope}}):
 - Targets are listed in Reference Characters and in the cast roster.
 - Preserve distinct identities and relationships; keep the same cast size and order.
 {{if regenerate_scope == concept}}
-- Regenerate name, description, personality, and scenario for each.
+- Regenerate name, description, appearance, personality, and scenario for each.
 - Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.
 {{else}}
 - Rebuild each character card from scratch using the Generator Brief and reference cards.
@@ -551,6 +564,7 @@ Runtime variables:
 - Character name ({{char}}): {{char || (unnamed)}}
 - Target: {{target_field}}
 - Existing description: {{existing_description || (empty)}}
+- Existing appearance: {{existing_appearance || (empty)}}
 - Existing personality: {{existing_personality || (empty)}}
 - Existing scenario: {{existing_scenario || (empty)}}
 - Existing first_mes: {{existing_first_mes || (empty)}}
@@ -604,7 +618,7 @@ If only one distinct character is present, return a one-item characters array.
 
 Working name hint (may be one of several): {{char || (unnamed — may be one of several)}}
 Each array item must be a complete card:
-{ "name":"...", "description":"...", "personality":"...", "scenario":"...", "first_mes":"...", "mes_example":"...", "creator_notes":"...", "system_prompt":"", "post_history_instructions":"", "tags":[], "alternate_greetings":[] }
+{ "name":"...", "description":"...", "appearance":"...", "personality":"...", "scenario":"...", "first_mes":"...", "mes_example":"...", "creator_notes":"...", "system_prompt":"", "post_history_instructions":"", "tags":[], "alternate_greetings":[] }
 {{else}}
 {{if generation_mode == create}}
 CREATE WITH AI.
@@ -623,12 +637,12 @@ Optional name seed for the primary / first character: "{{name_seed}}" (you may r
 
 Working name hint (may be one of several): {{char || (unnamed — invent from brief; may be one of several)}}
 Each array item must be a complete card:
-{ "name":"...", "description":"...", "personality":"...", "scenario":"...", "first_mes":"...", "mes_example":"...", "creator_notes":"...", "system_prompt":"", "post_history_instructions":"", "tags":[], "alternate_greetings":[] }
+{ "name":"...", "description":"...", "appearance":"...", "personality":"...", "scenario":"...", "first_mes":"...", "mes_example":"...", "creator_notes":"...", "system_prompt":"", "post_history_instructions":"", "tags":[], "alternate_greetings":[] }
 {{else}}
 {{if generation_mode == regenerate}}
 {{if regenerate_scope == concept}}
 REGENERATE CONCEPT for ALL {{cast_size}} selected characters in one pass.
-Regenerate name, description, personality, and scenario for each.
+Regenerate name, description, appearance, personality, and scenario for each.
 Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.
 {{else}}
 REGENERATE FULL CARD for ALL {{cast_size}} selected characters in one pass.
@@ -642,7 +656,7 @@ Return exactly {{cast_size}} objects in {"characters":[...]} — one per charact
 {{if generation_mode == rebuild}}
 {{if rebuild_scope == concept_batch}}
 REBUILD CONCEPT for ALL {{cast_size}} characters in one pass.
-Regenerate name, description, personality, and scenario for each.
+Regenerate name, description, appearance, personality, and scenario for each.
 Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.
 Preserve distinct identities and relationships between characters; keep the same cast size and order.
 Current roster (same order expected in output):
@@ -650,7 +664,7 @@ Current roster (same order expected in output):
 Return exactly {{cast_size}} objects in {"characters":[...]} — one per character, same order.
 {{else}}
 {{if rebuild_scope == concept}}
-REBUILD CONCEPT only for this character: regenerate name, description, personality, and scenario.
+REBUILD CONCEPT only for this character: regenerate name, description, appearance, personality, and scenario.
 Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concept.
 Return a one-item {"characters":[...]} array.
 {{else}}
@@ -670,7 +684,7 @@ Extra direction: {{rebuild_notes}}
 Inspect the Generator Brief and Reference Characters for how many distinct characters to create.
 
 If ONE character: return
-{"characters":[{ "name":"...", "description":"...", "personality":"...", "scenario":"...", "first_mes":"...", "mes_example":"...", "creator_notes":"...", "system_prompt":"", "post_history_instructions":"", "tags":[], "alternate_greetings":[] }]}
+{"characters":[{ "name":"...", "description":"...", "appearance":"...", "personality":"...", "scenario":"...", "first_mes":"...", "mes_example":"...", "creator_notes":"...", "system_prompt":"", "post_history_instructions":"", "tags":[], "alternate_greetings":[] }]}
 
 If TWO OR MORE distinct characters (named separately in the brief or reference card): return one full card object per character — never merge them into one:
 {"characters":[ { /* character 1 */ }, { /* character 2 */ } ]}
@@ -683,13 +697,19 @@ Return JSON for the single character "{{char || (unnamed)}}" only:
 {"alternate_greetings":["greeting 1","greeting 2"]}
 ${ROLEPLAY_FORMATTING_REMINDER}
 {{else}}
-{{if target_field == first_mes || target_field == mes_example}}
+{{if target_field == first_mes}}
+Return JSON for the single character "{{char || (unnamed)}}" only (one key):
+{ "{{target_field}}": "..." }
+${ROLEPLAY_FORMATTING_REMINDER}
+{{else}}
+{{if target_field == mes_example}}
 Return JSON for the single character "{{char || (unnamed)}}" only (one key):
 { "{{target_field}}": "..." }
 ${ROLEPLAY_FORMATTING_REMINDER}
 {{else}}
 Return JSON for the single character "{{char || (unnamed)}}" only (one key):
 { "{{target_field}}": "..." }
+{{/if}}
 {{/if}}
 {{/if}}
 {{/if}}
@@ -760,16 +780,18 @@ Runtime variables (filled by the hub when generating):
 - Persona name: {{user || (unnamed)}}
 - Target field to write: {{target_field}}
 - Existing description: {{existing_description || (empty)}}
+- Existing appearance: {{existing_appearance || (empty)}}
 - Existing personality: {{existing_personality || (empty)}}
 
 Use the Generator Brief and Reference Characters marker sections below as primary context.
 
 Field meanings:
-- description: appearance, background, and durable facts other characters would notice.
+- description: background, role, and durable facts other characters would notice (not a full visual inventory).
+- appearance: physical look and visual presentation — face, body, hair, clothing, distinctive details (useful for image prompts).
 - personality: traits, speech habits, goals, soft limits the player wants respected.
 
 Rules:
-- Generate exactly what {{target_field}} asks for (one field, or both when it is "description and personality").
+- Generate exactly what {{target_field}} asks for (one field, or description+appearance+personality when requested together).
 - Keep consistency with any existing field that is not empty (overwrite only what was requested).
 - Write in second or third person about the player character, never as an AI assistant.
 - Do not invent NSFW content the brief did not imply.
@@ -801,9 +823,9 @@ Rules:
         position: "ordered",
         content: `Generate "{{target_field}}" for persona "{{user || (unnamed)}}".
 
-{{if target_field == description and personality}}
-Return JSON with both keys:
-{"description":"...","personality":"..."}
+{{if target_field == description, appearance, and personality}}
+Return JSON with these keys:
+{"description":"...","appearance":"...","personality":"..."}
 {{else}}
 Return JSON with only that key:
 { "{{target_field}}": "..." }
@@ -1051,6 +1073,158 @@ Return only valid JSON:
         group: "instructions",
         position: "ordered",
         content: `Using the previous summary and recent conversation above, produce the JSON summary append. Output only valid JSON.`,
+      }),
+    ],
+  },
+
+  {
+    key: "image",
+    name: "Default Image",
+    description:
+      "Turns a brief (and optional character/persona context) into a detailed image-generation prompt.",
+    wrap_format: "xml",
+    category: "image" satisfies PresetCategory,
+    is_default: true,
+    author: AUTHOR,
+    groups: ["instructions", "request"],
+    variables: [
+      variable("image", "style", {
+        variable_name: "image_style",
+        question: "Visual style?",
+        multi_select: false,
+        presentation: "radios",
+        alphabetical: false,
+        selected: ["anime"],
+        options: [
+          {
+            part: "anime",
+            label: "Anime",
+            value:
+              "Style: clean anime / illustration look, expressive eyes, soft shading, polished linework. NOT photorealistic, NOT a real photograph.",
+          },
+          {
+            part: "realistic",
+            label: "Photorealistic",
+            value:
+              "Style: photorealistic, natural lighting, detailed skin and fabric texture, cinematic composition.",
+          },
+          {
+            part: "painterly",
+            label: "Painterly",
+            value:
+              "Style: digital painting, visible brushwork, rich color, atmospheric depth. Not a photograph.",
+          },
+          {
+            part: "comic",
+            label: "Comic / Cel",
+            value:
+              "Style: comic / cel-shaded, bold outlines, graphic color blocks, dynamic posing. Not photorealistic.",
+          },
+        ],
+      }),
+      variable("image", "framing", {
+        variable_name: "image_framing",
+        question: "Framing?",
+        multi_select: false,
+        presentation: "radios",
+        alphabetical: false,
+        selected: ["portrait"],
+        options: [
+          {
+            part: "portrait",
+            label: "Portrait",
+            value: "Framing: head-and-shoulders portrait, subject-focused.",
+          },
+          {
+            part: "half",
+            label: "Half body",
+            value: "Framing: waist-up / half-body shot.",
+          },
+          {
+            part: "full",
+            label: "Full body",
+            value: "Framing: full-body shot with clear silhouette.",
+          },
+          {
+            part: "scene",
+            label: "Scene",
+            value:
+              "Framing: environmental scene — subject plus meaningful background.",
+          },
+        ],
+      }),
+    ],
+    sections: [
+      section("image", "system", {
+        kind: "prompt_block",
+        name: "Image Prompt System",
+        role: "system",
+        group: "instructions",
+        position: "ordered",
+        content: `You write image-generation prompts for AI art models (OpenRouter / diffusion-style).
+
+{{image_style}}
+{{image_framing}}
+
+Primary visual subject sources (prefer these in order):
+1. Character Appearance: {{char_appearance || (not provided)}}
+2. Persona Appearance: {{user_appearance || (not provided)}}
+3. Image Brief + Character / Persona marker sections below.
+
+Rules:
+- Produce ONE detailed English prompt suitable to send directly to an image model.
+- The Style line above is MANDATORY medium. If it asks for anime / illustration / painting / comic, the prompt MUST stay in that medium — never switch to photorealistic, DSLR, live-action, "real photo", or "authentic photography".
+- Words like selfie / phone photo in the brief mean pose and framing only, not medium — keep the Style medium.
+- When Character Appearance or Persona Appearance is provided, treat it as ground truth for look (face, body, hair, clothing, distinctive details). Do not invent conflicting features.
+- Use Description / Personality only as light supporting context — never let them override Appearance.
+- Describe subject, appearance, pose, expression, clothing, setting, lighting, camera/composition, and mood.
+- Prefer concrete visual details over abstract personality talk.
+- Do not include meta instructions ("generate an image of…"), markdown, or commentary.
+- Do not mention artist names, logos, watermarks, or UI chrome.
+- Keep the prompt under ~120 words unless the brief demands more detail.
+- Respect NSFW only when the brief clearly asks for it; otherwise keep the image SFW.
+- Output ONLY valid JSON:
+{
+  "prompt": "single image prompt string"
+}`,
+      }),
+      section("image", "generator_brief", {
+        kind: "generator_brief",
+        name: "Image Brief",
+        role: "system",
+        group: "instructions",
+        position: "ordered",
+        content:
+          "(No Image Brief was provided — invent pose/setting/lighting that fits the Character / Persona Appearance above.)",
+      }),
+      section("image", "character_info", {
+        kind: "character_info",
+        name: "Character",
+        role: "system",
+        group: "instructions",
+        position: "ordered",
+        content: "",
+      }),
+      section("image", "persona", {
+        kind: "persona",
+        name: "Persona",
+        role: "system",
+        group: "instructions",
+        position: "ordered",
+        content: "",
+      }),
+      section("image", "user", {
+        kind: "prompt_block",
+        name: "Prompt Request",
+        role: "user",
+        group: "request",
+        position: "ordered",
+        content: `Write the image prompt.
+
+Ground the subject look in Character Appearance / Persona Appearance when present. Use the Image Brief for pose and scene. Obey Style/Framing exactly (medium from Style is non-negotiable).
+
+Output only:
+{"prompt":"..."}`,
       }),
     ],
   },

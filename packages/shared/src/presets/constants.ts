@@ -10,6 +10,7 @@ export const PRESET_CATEGORIES = [
   "lorebook_generator",
   "twatter_refresh",
   "chat_summary",
+  "image",
 ] as const;
 
 /** Chat preset categories (1:1 and group share the same templates). */
@@ -24,6 +25,7 @@ export const GENERATOR_CATEGORIES = [
   "persona_generator",
   "lorebook_generator",
   "twatter_refresh",
+  "image",
 ] as const satisfies readonly PresetCategory[];
 
 export type GeneratorCategory = (typeof GENERATOR_CATEGORIES)[number];
@@ -41,6 +43,7 @@ export const PRESET_CATEGORY_LABELS: Record<PresetCategory, string> = {
   lorebook_generator: "Lorebook Generator",
   twatter_refresh: "Twatter Refresh",
   chat_summary: "Chat Summary",
+  image: "Image",
 };
 
 export const SECTION_ROLES = ["system", "user", "assistant"] as const;

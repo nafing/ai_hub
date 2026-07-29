@@ -35,10 +35,11 @@ export function parsePersonaJson(input: unknown): CreatePersonaInput {
   if (
     typeof unwrapped.name !== "string" &&
     typeof unwrapped.description !== "string" &&
+    typeof unwrapped.appearance !== "string" &&
     typeof unwrapped.personality !== "string"
   ) {
     throw new PersonaImportError(
-      "JSON must include name, description, or personality",
+      "JSON must include name, description, appearance, or personality",
     );
   }
 

@@ -66,68 +66,6 @@
   );
 }
 
-.composerToolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  max-width: 52rem;
-  margin-inline: auto;
-  margin-bottom: 0.35rem;
-}
-
-.responseAsButton {
-  max-width: min(100%, 16rem);
-  padding-inline: 0.45rem;
-}
-
-.responseAsText {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.05rem;
-  min-width: 0;
-  text-align: left;
-}
-
-.responseAsLabel {
-  color: var(--color-text-dimmed);
-  font-size: 0.625rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.responseAsName {
-  overflow: hidden;
-  color: var(--color-text);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.responseAsAvatar {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 1.35rem;
-  height: 1.35rem;
-  overflow: hidden;
-  color: var(--color-text);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-hover);
-}
-
-.responseAsAvatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
 .composerBar {
   display: flex;
   align-items: flex-end;
@@ -149,6 +87,60 @@
   position: relative;
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.composerAttachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.15rem 0.1rem 0;
+}
+
+.composerAttachmentChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.2rem 0.25rem 0.2rem 0.35rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.composerAttachmentThumb {
+  width: 1.75rem;
+  height: 1.75rem;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.composerAttachmentFileIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+}
+
+.composerAttachmentName {
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+  font-size: 0.75rem;
+}
+
+.hiddenFileInput {
+  display: none;
 }
 
 .composerInput {

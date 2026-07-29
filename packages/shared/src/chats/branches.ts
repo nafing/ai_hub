@@ -1,4 +1,5 @@
 import type { ChatMessage } from "./types";
+import { removeSwipeAttachments } from "./attachments";
 
 type RawChatMessage = ChatMessage & {
   parent_id?: string | null;
@@ -92,7 +93,17 @@ export function ancestorChatMessages(
     seen.add(current.id);
     const parent = byId.get(current.parent_id);
     if (!parent) break;
-    chain.push(parent);
+    // Pin each parent to the swipe this child was created under — not the
+    // parent's currently selected swipe (which may be a later regenerate).
+    const parentSwipeId = current.parent_swipe_id ?? 0;
+    const clampedSwipeId = Math.min(
+      Math.max(0, parentSwipeId),
+      Math.max(parent.swipes.length - 1, 0),
+    );
+    chain.push({
+      ...parent,
+      swipe_id: clampedSwipeId,
+    });
     current = parent;
   }
   return chain.reverse();
@@ -190,11 +201,14 @@ export function removeChatMessageSwipe(
             : message.swipe_id,
           Math.max(swipes.length - 1, 0),
         );
-        return {
-          ...message,
-          swipes,
-          swipe_id: Math.max(0, nextSwipeId),
-        };
+        return removeSwipeAttachments(
+          {
+            ...message,
+            swipes,
+            swipe_id: Math.max(0, nextSwipeId),
+          },
+          swipeId,
+        );
       }
       if (
         message.parent_id === messageId &&

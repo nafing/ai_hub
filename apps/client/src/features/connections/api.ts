@@ -1,8 +1,10 @@
 import type {
   Connection,
+  ConnectionKind,
   ConnectionListItem,
   CreateConnectionInput,
   OpenRouterEndpoint,
+  OpenRouterImageModel,
   OpenRouterModel,
   UpdateConnectionInput,
 } from "@ai-hub/shared";
@@ -15,6 +17,13 @@ export async function listConnections(): Promise<ConnectionListItem[]> {
 
 export async function getConnection(id: string): Promise<Connection> {
   const { data } = await api.get<Connection>(`/connections/${id}`);
+  return data;
+}
+
+export async function getDefaultConnection(
+  kind: ConnectionKind,
+): Promise<Connection> {
+  const { data } = await api.get<Connection>(`/connections/default/${kind}`);
   return data;
 }
 
@@ -70,6 +79,27 @@ export async function listOpenRouterEndpoints(
 ): Promise<OpenRouterEndpoint[]> {
   const { data } = await api.get<OpenRouterEndpoint[]>(
     "/connections/openrouter/endpoints",
+    { params: { modelId, ...openRouterParams(auth) } },
+  );
+  return data;
+}
+
+export async function listOpenRouterImageModels(
+  auth: OpenRouterAuth,
+): Promise<OpenRouterImageModel[]> {
+  const { data } = await api.get<OpenRouterImageModel[]>(
+    "/connections/openrouter/image-models",
+    { params: openRouterParams(auth) },
+  );
+  return data;
+}
+
+export async function listOpenRouterImageEndpoints(
+  modelId: string,
+  auth: OpenRouterAuth,
+): Promise<OpenRouterEndpoint[]> {
+  const { data } = await api.get<OpenRouterEndpoint[]>(
+    "/connections/openrouter/image-endpoints",
     { params: { modelId, ...openRouterParams(auth) } },
   );
   return data;

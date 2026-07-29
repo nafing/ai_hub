@@ -8,6 +8,9 @@ export class ConnectionEntity {
   @Column("text")
   name!: string;
 
+  @Column("text", { default: "llm" })
+  kind!: string;
+
   @Column("text", { default: "" })
   preferred_provider!: string;
 

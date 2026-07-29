@@ -15,7 +15,7 @@ import {
   notifications,
   RuntimeText,
 } from "@/components/ui";
-import { useConnections } from "@/features/connections/queries";
+import { useConnectionSelectOptions } from "@/features/connections/queries";
 import { createCharacter, getCharacter } from "@/features/characters/api";
 import { characterKeys, useCharacters } from "@/features/characters/queries";
 import { AlternateGreetingsEditor } from "@/features/characters/AlternateGreetingsEditor";
@@ -28,7 +28,7 @@ import {
 } from "@/features/characters/characterGenerateShared";
 import { getPersona } from "@/features/personas/api";
 import { usePersonas } from "@/features/personas/queries";
-import { runGenerator } from "@/features/generators/api";
+import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
 import {
   useDefaultPreset,
   usePreset,
@@ -38,6 +38,7 @@ import classes from "./CharacterGeneratePanel.module.css";
 
 export type CharacterCardGenerateField =
   | "description"
+  | "appearance"
   | "personality"
   | "scenario"
   | "first_mes"
@@ -49,6 +50,7 @@ const TARGET_FIELD_ALL = "all card fields";
 
 const STRING_CARD_FIELDS = [
   "description",
+  "appearance",
   "personality",
   "scenario",
   "first_mes",
@@ -60,6 +62,7 @@ type StringCardField = (typeof STRING_CARD_FIELDS)[number];
 type CharacterGeneratePanelProps = {
   characterName: string;
   description: string;
+  appearance: string;
   personality: string;
   scenario: string;
   first_mes: string;
@@ -67,6 +70,7 @@ type CharacterGeneratePanelProps = {
   alternateGreetings: string[];
   onNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
+  onAppearanceChange: (value: string) => void;
   onPersonalityChange: (value: string) => void;
   onScenarioChange: (value: string) => void;
   onFirstMesChange: (value: string) => void;
@@ -149,6 +153,7 @@ function buildGeneratorVariables(options: {
   field: CharacterCardGenerateField;
   characterName: string;
   description: string;
+  appearance: string;
   personality: string;
   scenario: string;
   first_mes: string;
@@ -161,6 +166,7 @@ function buildGeneratorVariables(options: {
     char: options.characterName.trim(),
     target_field: targetFieldValue(options.field),
     existing_description: options.description.trim(),
+    existing_appearance: options.appearance.trim(),
     existing_personality: options.personality.trim(),
     existing_scenario: options.scenario.trim(),
     existing_first_mes: options.first_mes.trim(),
@@ -174,6 +180,7 @@ function buildGeneratorVariables(options: {
 export function CharacterGeneratePanel({
   characterName,
   description,
+  appearance,
   personality,
   scenario,
   first_mes,
@@ -181,6 +188,7 @@ export function CharacterGeneratePanel({
   alternateGreetings,
   onNameChange,
   onDescriptionChange,
+  onAppearanceChange,
   onPersonalityChange,
   onScenarioChange,
   onFirstMesChange,
@@ -188,16 +196,13 @@ export function CharacterGeneratePanel({
   onAlternateGreetingsChange,
 }: CharacterGeneratePanelProps) {
   const queryClient = useQueryClient();
-  const connectionsQuery = useConnections();
+  const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
   const presetsQuery = usePresets();
   const defaultPresetQuery = useDefaultPreset("character_generator");
 
-  const defaultConnectionId =
-    connectionsQuery.data?.find((connection) => connection.is_default)?.id ??
-    connectionsQuery.data?.[0]?.id ??
-    null;
+  const defaultConnectionId = connectionsQuery.defaultId || null;
 
   const defaultPersonaId =
     personasQuery.data?.find((persona) => persona.is_default)?.id ?? null;
@@ -277,6 +282,7 @@ export function CharacterGeneratePanel({
   function applyExtracted(extracted: ExtractedCharacterCard) {
     if (extracted.name) onNameChange(extracted.name);
     if (extracted.description) onDescriptionChange(extracted.description);
+    if (extracted.appearance) onAppearanceChange(extracted.appearance);
     if (extracted.personality) onPersonalityChange(extracted.personality);
     if (extracted.scenario) onScenarioChange(extracted.scenario);
     if (extracted.first_mes) onFirstMesChange(extracted.first_mes);
@@ -296,6 +302,7 @@ export function CharacterGeneratePanel({
           data: {
             name,
             description: card.description ?? "",
+            appearance: card.appearance ?? "",
             personality: card.personality ?? "",
             scenario: card.scenario ?? "",
             first_mes: card.first_mes ?? "",
@@ -348,6 +355,7 @@ export function CharacterGeneratePanel({
           field,
           characterName,
           description,
+          appearance,
           personality,
           scenario,
           first_mes,
@@ -357,12 +365,25 @@ export function CharacterGeneratePanel({
         }),
       });
 
-      const result = await runGenerator({
+      const fieldLabels: Record<CharacterCardGenerateField, string> = {
+        all: "all card fields",
+        description: "description",
+        appearance: "appearance",
+        personality: "personality",
+        scenario: "scenario",
+        first_mes: "first message",
+        mes_example: "example messages",
+        alternate_greetings: "alternate greetings",
+      };
+      const displayName = characterName.trim() || "character";
+
+      const result = await useGeneratorJobsStore.getState().runTrackedGenerator({
         category: "character_generator",
         connectionId: resolvedConnectionId,
         presetId: preset.id,
         variables: promptContext.variables,
         markers: promptContext.markers,
+        title: `Generate ${fieldLabels[field]} · ${displayName}`,
       });
 
       const raw = result.content || result.reply || "";
@@ -410,6 +431,7 @@ export function CharacterGeneratePanel({
           string
         > = {
           description: "Description",
+          appearance: "Appearance",
           personality: "Personality",
           scenario: "Scenario",
           first_mes: "First message",
@@ -441,7 +463,7 @@ export function CharacterGeneratePanel({
 
   const connectionError = connectionsQuery.isError
     ? "Failed to load connections"
-    : !connectionsQuery.isLoading && !connectionsQuery.data?.length
+    : !connectionsQuery.isLoading && !connectionsQuery.options.length
       ? "Create a connection first"
       : undefined;
 
@@ -463,9 +485,16 @@ export function CharacterGeneratePanel({
     {
       field: "description",
       label: "Description",
-      description: "Main character definition / appearance / lore.",
+      description: "Background, role, and durable facts.",
       value: description,
       onChange: onDescriptionChange,
+    },
+    {
+      field: "appearance",
+      label: "Appearance",
+      description: "Physical look / visual presentation — same field as Card.",
+      value: appearance,
+      onChange: onAppearanceChange,
     },
     {
       field: "personality",
@@ -518,14 +547,11 @@ export function CharacterGeneratePanel({
                 ? "Loading connections…"
                 : "Select connection"
             }
-            data={(connectionsQuery.data ?? []).map((connection) => ({
-              value: connection.id,
-              label: `${connection.name || "Untitled"}${connection.is_default ? " (default)" : ""}${connection.model ? ` · ${connection.model}` : ""}`,
-            }))}
+            data={connectionsQuery.options}
             value={resolvedConnectionId ?? ""}
             onChange={(value) => setConnectionId(value || null)}
             searchable
-            disabled={!connectionsQuery.data?.length}
+            disabled={!connectionsQuery.options.length}
             error={Boolean(connectionError)}
           />
         </Field>

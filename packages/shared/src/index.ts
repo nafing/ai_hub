@@ -1,6 +1,13 @@
 export type { Connection } from "./connections/types";
-export { defaultConnection } from "./connections/defaults";
+export type { ConnectionKind } from "./connections/constants";
 export {
+  defaultConnection,
+  defaultImageConnection,
+  defaultConnectionForKind,
+} from "./connections/defaults";
+export {
+  CONNECTION_KINDS,
+  CONNECTION_KIND_LABELS,
   SERVICE_TIERS,
   REASONING_EFFORTS,
   VERBOSITIES,
@@ -8,12 +15,14 @@ export {
   type ReasoningEffort,
   type Verbosity,
 } from "./connections/constants";
+export { connectionKind, filterConnectionsByKind, connectionOptionLabel, buildConnectionSelectOptions, resolveDefaultConnectionId } from "./connections/helpers";
 export type {
   CreateConnectionInput,
   UpdateConnectionInput,
   ConnectionListItem,
   OpenRouterModel,
   OpenRouterEndpoint,
+  OpenRouterImageModel,
 } from "./connections/api";
 export {
   buildOpenRouterBody,
@@ -326,6 +335,7 @@ export type {
   ChatMode,
   ChatMessage,
   ChatMessageRole,
+  ChatMessageAttachment,
   ChatSettings,
   ChatAgentSetting,
   ChatAgentSettingsMap,
@@ -454,6 +464,18 @@ export {
   type ConversationCommand,
 } from "./chats/conversation-commands";
 export {
+  IMAGE_ASPECT_RATIOS,
+  IMAGE_RESOLUTIONS,
+  DEFAULT_IMAGE_ASPECT_RATIO,
+  DEFAULT_IMAGE_RESOLUTION,
+  IMAGE_ASPECT_RATIO_LABELS,
+  IMAGE_RESOLUTION_LABELS,
+  normalizeImageAspectRatio,
+  normalizeImageResolution,
+  type ImageAspectRatio,
+  type ImageResolution,
+} from "./chats/image-settings";
+export {
   buildAwarenessBlock,
   buildConnectedParentChatBlock,
   recallLexicalMemories,
@@ -481,6 +503,11 @@ export {
   type SpeakerSegment,
 } from "./chats/speaker-segments";
 export { activeMessageText, formatChatHistoryMarker } from "./chats/history";
+export {
+  activeMessageAttachments,
+  assignSwipeAttachments,
+  removeSwipeAttachments,
+} from "./chats/attachments";
 export {
   normalizeChatMessages,
   visibleChatMessages,

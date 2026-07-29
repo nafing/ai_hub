@@ -49,6 +49,36 @@ export class ConnectionsController {
     return this.openRouterService.fetchEndpoints(key, modelId.trim());
   }
 
+  @Get("openrouter/image-models")
+  async listImageModels(
+    @Query("apiKey") apiKey?: string,
+    @Query("connectionId") connectionId?: string,
+  ) {
+    const key = await this.resolveApiKey(apiKey, connectionId);
+    return this.openRouterService.fetchImageModels(key);
+  }
+
+  @Get("openrouter/image-endpoints")
+  async listImageEndpoints(
+    @Query("modelId") modelId?: string,
+    @Query("apiKey") apiKey?: string,
+    @Query("connectionId") connectionId?: string,
+  ) {
+    if (!modelId?.trim()) {
+      throw new BadRequestException("modelId is required");
+    }
+    const key = await this.resolveApiKey(apiKey, connectionId);
+    return this.openRouterService.fetchImageEndpoints(key, modelId.trim());
+  }
+
+  @Get("default/:kind")
+  findDefault(@Param("kind") kind: string): Promise<Connection> {
+    if (kind !== "llm" && kind !== "image") {
+      throw new BadRequestException(`Unknown connection kind "${kind}"`);
+    }
+    return this.connectionsService.findDefault(kind);
+  }
+
   @Get(":id")
   findOne(@Param("id") id: string): Promise<Connection> {
     return this.connectionsService.findOne(id);
@@ -56,7 +86,10 @@ export class ConnectionsController {
 
   @Post()
   create(@Body() body: CreateConnectionDto): Promise<Connection> {
-    return this.connectionsService.create(body);
+    return this.connectionsService.create({
+      ...body,
+      kind: body.kind ?? "llm",
+    });
   }
 
   @Patch(":id")

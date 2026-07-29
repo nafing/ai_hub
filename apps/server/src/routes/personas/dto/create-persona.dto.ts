@@ -1,4 +1,4 @@
-import { IsBoolean, IsString } from "class-validator";
+import { IsBoolean, IsOptional, IsString } from "class-validator";
 
 export class CreatePersonaDto {
   @IsString()
@@ -6,6 +6,10 @@ export class CreatePersonaDto {
 
   @IsString()
   description!: string;
+
+  @IsOptional()
+  @IsString()
+  appearance!: string;
 
   @IsString()
   personality!: string;

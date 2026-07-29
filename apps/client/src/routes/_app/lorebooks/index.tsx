@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
   IconCopy,
@@ -8,10 +8,20 @@ import {
 } from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
+  LOREBOOK_CATEGORIES,
   LOREBOOK_CATEGORY_LABELS,
+  type LorebookCategory,
   type LorebookListItem,
 } from "@ai-hub/shared";
-import { ActionIcon, Button, Modal, notifications } from "@/components/ui";
+import {
+  ActionIcon,
+  Button,
+  Modal,
+  MultiSelect,
+  notifications,
+  Switch,
+  TextInput,
+} from "@/components/ui";
 import { CreateLorebookModal } from "@/features/lorebooks/CreateLorebookModal";
 import { ImportLorebookModal } from "@/features/lorebooks/ImportLorebookModal";
 import {
@@ -34,10 +44,71 @@ function RouteComponent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<LorebookCategory[]>([]);
+  const [enabledOnly, setEnabledOnly] = useState(false);
+  const [globalOnly, setGlobalOnly] = useState(false);
 
   const { data, isLoading, isError } = useLorebooks();
   const deleteMutation = useDeleteLorebook();
   const duplicateMutation = useDuplicateLorebook();
+
+  const categoryOptions = useMemo(
+    () =>
+      LOREBOOK_CATEGORIES.map((category) => ({
+        value: category,
+        label: LOREBOOK_CATEGORY_LABELS[category],
+      })),
+    [],
+  );
+
+  const hasActiveFilters =
+    query.trim().length > 0 ||
+    categoryFilter.length > 0 ||
+    enabledOnly ||
+    globalOnly;
+
+  const filteredLorebooks = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return (data ?? []).filter((lorebook) => {
+      if (enabledOnly && !lorebook.enabled) return false;
+      if (globalOnly && !lorebook.global) return false;
+      if (
+        categoryFilter.length > 0 &&
+        !categoryFilter.includes(lorebook.category)
+      ) {
+        return false;
+      }
+      if (!normalizedQuery) return true;
+      return (
+        lorebook.name.toLowerCase().includes(normalizedQuery) ||
+        lorebook.description.toLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [categoryFilter, data, enabledOnly, globalOnly, query]);
+
+  const grouped = useMemo(() => {
+    const byCategory = new Map<LorebookCategory, LorebookListItem[]>();
+    for (const category of LOREBOOK_CATEGORIES) {
+      byCategory.set(category, []);
+    }
+    for (const lorebook of filteredLorebooks) {
+      const list = byCategory.get(lorebook.category) ?? [];
+      list.push(lorebook);
+      byCategory.set(lorebook.category, list);
+    }
+    return LOREBOOK_CATEGORIES.map((category) => ({
+      category,
+      lorebooks: byCategory.get(category) ?? [],
+    })).filter((group) => group.lorebooks.length > 0);
+  }, [filteredLorebooks]);
+
+  function clearFilters() {
+    setQuery("");
+    setCategoryFilter([]);
+    setEnabledOnly(false);
+    setGlobalOnly(false);
+  }
 
   function handleConfirmDelete() {
     if (!deleteTarget) return;
@@ -106,8 +177,55 @@ function RouteComponent() {
         </div>
         <p className={classes.subtitle}>
           Lorebooks. Create, edit, duplicate, or import JSON.
+          {!isLoading && !isError && hasActiveFilters
+            ? ` Showing ${filteredLorebooks.length} of ${data?.length ?? 0}.`
+            : null}
         </p>
       </header>
+
+      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
+        <div className={classes.filters}>
+          <TextInput
+            className={classes.searchInput}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Search name, description…"
+            aria-label="Search lorebooks"
+          />
+          <MultiSelect
+            className={classes.categoryFilter}
+            searchable
+            clearable
+            data={categoryOptions}
+            value={categoryFilter}
+            onChange={(value) => setCategoryFilter(value as LorebookCategory[])}
+            placeholder="All categories"
+            searchPlaceholder="Filter categories…"
+          />
+          <Switch
+            className={classes.defaultsSwitch}
+            checked={enabledOnly}
+            onChange={setEnabledOnly}
+            label="Enabled only"
+          />
+          <Switch
+            className={classes.defaultsSwitch}
+            checked={globalOnly}
+            onChange={setGlobalOnly}
+            label="Global only"
+          />
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="default"
+              className={classes.clearFilters}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className={classes.loading}>
@@ -125,20 +243,43 @@ function RouteComponent() {
         </p>
       ) : null}
 
-      {!isLoading && !isError && (data?.length ?? 0) > 0 ? (
-        <div className={classes.grid}>
-          {(data ?? []).map((lorebook) => (
-            <LorebookCard
-              key={lorebook.id}
-              lorebook={lorebook}
-              onDuplicate={handleDuplicate}
-              onDelete={(id, name) => setDeleteTarget({ id, name })}
-              duplicatePending={duplicateMutation.isPending}
-              deletePending={deleteMutation.isPending}
-            />
-          ))}
-        </div>
+      {!isLoading &&
+      !isError &&
+      (data?.length ?? 0) > 0 &&
+      grouped.length === 0 ? (
+        <p className={classes.status}>
+          No lorebooks match your filters.{" "}
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className={classes.clearFiltersLink}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </p>
       ) : null}
+
+      {grouped.map(({ category, lorebooks }) => (
+        <section key={category} className={classes.group}>
+          <h3 className={classes.groupTitle}>
+            {LOREBOOK_CATEGORY_LABELS[category]}
+          </h3>
+          <div className={classes.grid}>
+            {lorebooks.map((lorebook) => (
+              <LorebookCard
+                key={lorebook.id}
+                lorebook={lorebook}
+                onDuplicate={handleDuplicate}
+                onDelete={(id, name) => setDeleteTarget({ id, name })}
+                duplicatePending={duplicateMutation.isPending}
+                deletePending={deleteMutation.isPending}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
 
       <CreateLorebookModal
         opened={createOpen}
@@ -196,6 +337,7 @@ function LorebookCard({
 }) {
   return (
     <motion.div
+      className={classes.cardWrap}
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.16 }}

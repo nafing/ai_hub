@@ -10,6 +10,7 @@ export type PersonaListItem = Pick<
   | "avatar"
   | "name"
   | "description"
+  | "appearance"
   | "personality"
   | "about_me"
   | "notes"

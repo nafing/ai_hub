@@ -48,6 +48,8 @@ export type CharacterBook = {
 export type CharacterCardData = {
   name: string;
   description: string;
+  /** Physical look / visual presentation (hub field; useful for image prompts). */
+  appearance: string;
   personality: string;
   scenario: string;
   first_mes: string;

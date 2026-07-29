@@ -16,6 +16,9 @@ export class PersonaEntity {
   description!: string;
 
   @Column("text", { default: "" })
+  appearance!: string;
+
+  @Column("text", { default: "" })
   personality!: string;
 
   @Column("text", { default: "" })

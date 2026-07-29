@@ -173,33 +173,64 @@ export function recallLexicalMemories(input: {
   query: string;
   messages: ChatMessage[];
   limit?: number;
+  /**
+   * Skip the newest N prompt messages when scoring (avoids echoing the live
+   * turn — e.g. the latest "to wysyłaj" — back into `<Memories>`).
+   */
+  excludeRecent?: number;
 }): string | null {
   const query = input.query.trim().toLowerCase();
   if (!query) return null;
   const terms = query
-    .split(/\W+/)
+    .split(/\W+/u)
     .map((term) => term.trim())
     .filter((term) => term.length >= 3);
   if (!terms.length) return null;
 
-  const scored = input.messages
-    .map((message) => {
-      const text = activeMessageText(message);
+  const excludeRecent = Math.max(0, Math.floor(input.excludeRecent ?? 0));
+  const candidates =
+    excludeRecent > 0 && input.messages.length > excludeRecent
+      ? input.messages.slice(0, input.messages.length - excludeRecent)
+      : excludeRecent > 0
+        ? []
+        : input.messages;
+
+  const scored = candidates
+    .map((message, index) => {
+      const text = activeMessageText(message).trim();
+      if (!text) return { text, score: 0, created_at: message.created_at, index };
       const lower = text.toLowerCase();
+      // Exact echo of a short live user line inside the query is noise.
+      if (
+        lower === query ||
+        (lower.length <= 40 && query.includes(lower))
+      ) {
+        return { text, score: 0, created_at: message.created_at, index };
+      }
       let score = 0;
       for (const term of terms) {
         if (lower.includes(term)) score += 1;
       }
-      return { text, score, created_at: message.created_at };
+      // Light recency bias so older keyword spam does not dominate.
+      const recency = index / Math.max(candidates.length, 1);
+      return {
+        text,
+        score: score > 0 ? score + recency * 0.25 : 0,
+        created_at: message.created_at,
+        index,
+      };
     })
     .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score || b.created_at.localeCompare(a.created_at))
+    .sort(
+      (a, b) =>
+        b.score - a.score || b.created_at.localeCompare(a.created_at),
+    )
     .slice(0, input.limit ?? 6);
 
   if (!scored.length) return null;
   return [
     "<Memories>",
-    ...scored.map((item) => item.text.trim().slice(0, 400)),
+    ...scored.map((item) => item.text.slice(0, 400)),
     "</Memories>",
   ].join("\n");
 }
