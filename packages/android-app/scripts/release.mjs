@@ -197,6 +197,13 @@ run("pnpm", ["exec", "vite", "build"], { env });
 run("pnpm", ["exec", "cap", "sync", "android"], { env });
 
 const gradlew = path.join(androidRoot, isWin ? "gradlew.bat" : "gradlew");
+if (!isWin) {
+  try {
+    fs.chmodSync(gradlew, 0o755);
+  } catch {
+    // Ignore if chmod is unavailable; git mode 100755 is preferred.
+  }
+}
 run(gradlew, ["assembleDebug", "--no-daemon"], {
   cwd: androidRoot,
   env,
