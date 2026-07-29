@@ -20,7 +20,7 @@ import {
   usePatchSummaryEntry,
   useUpdateChat,
   chatKeys,
-} from "./queries";
+} from "../shared/queries";
 import { useRollingSummaryBackfill } from "./useRollingSummaryBackfill";
 import classes from "./SummaryPopover.module.css";
 

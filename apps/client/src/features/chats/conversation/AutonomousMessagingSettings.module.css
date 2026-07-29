@@ -1,0 +1,103 @@
+.statusRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.statusText {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-dimmed);
+  font-size: var(--field-hint-size);
+  line-height: 1.45;
+}
+
+.timezoneRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.timezoneRow > :first-child {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.editList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.editListLabel {
+  font-size: var(--field-label-size);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.editRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: inherit;
+  text-align: left;
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.editRow:hover {
+  background: var(--color-surface-hover);
+}
+
+.editCopy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.editName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.editMeta {
+  color: var(--color-text-dimmed);
+  font-size: var(--field-hint-size);
+  line-height: 1.4;
+}
+
+.editIcon {
+  flex-shrink: 0;
+  color: var(--color-text-dimmed);
+}

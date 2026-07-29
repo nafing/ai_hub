@@ -26,6 +26,11 @@ import {
   normalizeImageAspectRatio,
   normalizeImageResolution,
 } from "./image-settings";
+import {
+  normalizeConnectedInfluences,
+  normalizeConnectedNotes,
+} from "./connected-chats";
+import { normalizeChatGenerationParameters } from "./generation-parameters";
 
 type LegacyChatSettings = Partial<ChatSettings> & {
   /** Migrated to character_ids; still accepted when normalizing old chat JSON. */
@@ -33,6 +38,8 @@ type LegacyChatSettings = Partial<ChatSettings> & {
 };
 
 export const DEFAULT_CHAT_HISTORY_DEPTH = 24;
+/** Chat-level lorebook retrieval budget (0 = unlimited). */
+export const DEFAULT_CHAT_LOREBOOK_TOKEN_BUDGET = 8192;
 
 function coercePositiveInt(
   value: unknown,
@@ -76,6 +83,9 @@ export function defaultChatSettings(
     ),
     persona_id: overrides.persona_id ?? null,
     lorebook_ids: overrides.lorebook_ids ?? [],
+    lorebook_token_budget: normalizeLorebookTokenBudget(
+      overrides.lorebook_token_budget,
+    ),
     agent_ids: overrides.agent_ids ?? [],
     agent_settings:
       overrides.agent_settings &&
@@ -104,6 +114,44 @@ export function defaultChatSettings(
       DEFAULT_CHAT_HISTORY_DEPTH,
       200,
     ),
+    context_message_limit: normalizeContextMessageLimit(
+      overrides.context_message_limit,
+    ),
+    exclude_past_reasoning:
+      typeof overrides.exclude_past_reasoning === "boolean"
+        ? overrides.exclude_past_reasoning
+        : true,
+    image_captioning_enabled:
+      typeof overrides.image_captioning_enabled === "boolean"
+        ? overrides.image_captioning_enabled
+        : false,
+    image_captioning_connection_id:
+      typeof overrides.image_captioning_connection_id === "string" &&
+      overrides.image_captioning_connection_id.trim()
+        ? overrides.image_captioning_connection_id.trim()
+        : null,
+    chat_parameters: normalizeChatGenerationParameters(overrides.chat_parameters),
+    enable_agents:
+      typeof overrides.enable_agents === "boolean"
+        ? overrides.enable_agents
+        : (overrides.agent_ids?.length ?? 0) > 0,
+    agent_write_approval_required:
+      typeof overrides.agent_write_approval_required === "boolean"
+        ? overrides.agent_write_approval_required
+        : false,
+    manual_trackers:
+      typeof overrides.manual_trackers === "boolean"
+        ? overrides.manual_trackers
+        : false,
+    enable_tools:
+      typeof overrides.enable_tools === "boolean"
+        ? overrides.enable_tools
+        : false,
+    tool_ids: Array.isArray(overrides.tool_ids)
+      ? overrides.tool_ids.filter(
+          (id): id is string => typeof id === "string" && id.trim().length > 0,
+        )
+      : [],
     automatic_summary_enabled:
       typeof overrides.automatic_summary_enabled === "boolean"
         ? overrides.automatic_summary_enabled
@@ -213,6 +261,10 @@ export function defaultChatSettings(
       overrides.background_image_url.trim()
         ? overrides.background_image_url.trim()
         : null,
+    connected_pending_influences: normalizeConnectedInfluences(
+      overrides.connected_pending_influences,
+    ),
+    connected_notes: normalizeConnectedNotes(overrides.connected_notes),
   };
 }
 
@@ -271,6 +323,40 @@ function coerceDayRolloverHour(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 4;
   return Math.max(0, Math.min(11, Math.floor(parsed)));
+}
+
+function normalizeContextMessageLimit(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const n = Math.floor(value);
+  if (n < 1) return null;
+  return Math.min(9999, n);
+}
+
+function normalizeLorebookTokenBudget(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_CHAT_LOREBOOK_TOKEN_BUDGET;
+  }
+  return Math.max(0, Math.min(100_000, Math.floor(value)));
+}
+
+/** Effective history window for prompts (Marinara context limit + legacy depth). */
+export function effectiveChatContextLimit(settings: {
+  context_message_limit?: number | null;
+  history_depth?: number;
+}): number {
+  if (
+    typeof settings.context_message_limit === "number" &&
+    Number.isFinite(settings.context_message_limit) &&
+    settings.context_message_limit >= 1
+  ) {
+    return Math.min(9999, Math.floor(settings.context_message_limit));
+  }
+  return coercePositiveInt(
+    settings.history_depth,
+    DEFAULT_CHAT_HISTORY_DEPTH,
+    200,
+  );
 }
 
 function normalizeCharacterDmChatIds(

@@ -65,6 +65,23 @@ export class ChatsController {
     return this.chatsService.getOrCreateCharacterDm(id, characterId);
   }
 
+  @Post(":id/connect")
+  connect(
+    @Param("id") id: string,
+    @Body() body: { target_chat_id?: string },
+  ): Promise<Chat> {
+    const target = body?.target_chat_id?.trim();
+    if (!target) {
+      throw new BadRequestException("target_chat_id is required");
+    }
+    return this.chatsService.connectChats(id, target);
+  }
+
+  @Post(":id/disconnect")
+  disconnect(@Param("id") id: string): Promise<Chat> {
+    return this.chatsService.disconnectChat(id);
+  }
+
   @Patch(":id")
   update(
     @Param("id") id: string,
@@ -213,6 +230,54 @@ export class ChatsController {
     @Body() body: ConversationSummaryBackfillInput,
   ) {
     return this.conversationSummaryService.backfillSummaries(id, body);
+  }
+
+  @Get(":id/memories")
+  listMemories(@Param("id") id: string) {
+    return this.chatsService.listMemoryChunks(id);
+  }
+
+  @Post(":id/memories/rebuild")
+  rebuildMemories(@Param("id") id: string): Promise<Chat> {
+    return this.chatsService.rebuildChatMemories(id);
+  }
+
+  @Delete(":id/memories")
+  clearMemories(@Param("id") id: string): Promise<Chat> {
+    return this.chatsService.clearChatMemories(id);
+  }
+
+  @Patch(":id/memories/:chunkId")
+  updateMemory(
+    @Param("id") id: string,
+    @Param("chunkId") chunkId: string,
+    @Body() body: { content?: string },
+  ): Promise<Chat> {
+    return this.chatsService.updateMemoryChunk(
+      id,
+      chunkId,
+      body.content ?? "",
+    );
+  }
+
+  @Delete(":id/memories/:chunkId")
+  deleteMemory(
+    @Param("id") id: string,
+    @Param("chunkId") chunkId: string,
+  ): Promise<Chat> {
+    return this.chatsService.deleteMemoryChunk(id, chunkId);
+  }
+
+  @Post(":id/memories/import")
+  importMemories(
+    @Param("id") id: string,
+    @Body() body: { chunks?: unknown; replace?: boolean },
+  ): Promise<Chat> {
+    return this.chatsService.importMemoryChunks(
+      id,
+      body.chunks ?? [],
+      Boolean(body.replace),
+    );
   }
 
   private async stream(

@@ -1,0 +1,13 @@
+.hint {
+  margin: 0;
+  color: var(--color-text-dimmed);
+  font-size: var(--field-hint-size);
+  line-height: 1.45;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}

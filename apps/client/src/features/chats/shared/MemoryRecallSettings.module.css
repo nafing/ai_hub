@@ -1,0 +1,98 @@
+.manageButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: inherit;
+  text-align: left;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.manageButton:hover {
+  background: var(--color-surface-hover);
+}
+
+.manageTitle {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.manageMeta {
+  flex-shrink: 0;
+  color: var(--color-text-dimmed);
+  font-size: 0.75rem;
+}
+
+.modalStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.modalHint {
+  margin: 0;
+  color: var(--color-text-dimmed);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.empty {
+  margin: 0;
+  padding: 1.25rem;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-dimmed);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-height: min(55vh, 28rem);
+  overflow: auto;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.cardHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.cardMeta {
+  color: var(--color-text-dimmed);
+  font-weight: 500;
+  font-size: 0.6875rem;
+}
+
+.cardActions {
+  display: flex;
+  gap: 0.4rem;
+}

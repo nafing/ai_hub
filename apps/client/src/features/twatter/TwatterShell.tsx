@@ -1,7 +1,9 @@
 import { useState } from "react";
 import {
+  IconArrowLeft,
   IconBell,
   IconHome,
+  IconMenu2,
   IconPlus,
   IconSearch,
   IconSettings,
@@ -15,7 +17,6 @@ import { usePersonas } from "@/features/personas/queries";
 import { personaAvatarSrc } from "@/features/personas/avatar-url";
 import { api } from "@/lib/api";
 import { ComposePost, PersonaPicker } from "./ComposePost";
-import { TwatterAppBackButton } from "./TwatterAppBackButton";
 import { TwatterPersonaProvider, useTwatterPersona } from "./TwatterPersonaContext";
 import { TwatterRefreshTimeline } from "./TwatterRefreshTimeline";
 import { TwatterSettingsPanel } from "./TwatterSettingsPanel";
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { to: "/twatter/search", label: "Explore", icon: IconSearch },
   { to: "/twatter/notifications", label: "Notifications", icon: IconBell },
   { to: "/twatter/profile", label: "Profile", icon: IconUser },
+  { to: "/twatter/settings", label: "Settings", icon: IconSettings },
 ] as const;
 
 function TwatterShellInner() {
@@ -43,6 +45,7 @@ function TwatterShellInner() {
   const { personaId, setPersonaId, personaAccount, unreadCount } =
     useTwatterPersona();
 
+  const [navbarOpen, setNavbarOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -54,13 +57,12 @@ function TwatterShellInner() {
     .slice(0, 1)
     .toUpperCase();
 
-  const isHome =
-    pathname === "/twatter" || pathname === "/twatter/";
-
-  const profileAccountId = pathname.match(/^\/twatter\/profile\/([^/]+)/)?.[1] ?? null;
+  const isHome = pathname === "/twatter" || pathname === "/twatter/";
+  const profileAccountId =
+    pathname.match(/^\/twatter\/profile\/([^/]+)/)?.[1] ?? null;
   const profileQuery = useTwatterAccountProfile(profileAccountId, personaId);
 
-  function mobileHeaderTitle() {
+  function headerTitle() {
     if (isHome) return "Twatter";
     if (pathname.startsWith("/twatter/settings")) return "Settings";
     if (pathname.startsWith("/twatter/search")) return "Explore";
@@ -71,37 +73,183 @@ function TwatterShellInner() {
     return "Twatter";
   }
 
-  return (
-    <div className={classes.shell} data-home={isHome ? "true" : "false"}>
-      <div className={classes.centerWrap}>
-        <div className={classes.centerColumn}>
-          <header className={classes.mobileHeader}>
-            <div className={classes.mobileHeaderStart}>
-              <TwatterAppBackButton />
-              {isHome ? (
-                <Link to="/twatter" className={classes.mobileLogo}>
-                  Twatter
-                </Link>
-              ) : (
-                <span className={classes.mobileTitle}>{mobileHeaderTitle()}</span>
-              )}
-            </div>
-            <div className={classes.mobileHeaderActions}>
-              <button
-                type="button"
-                className={classes.mobileHeaderBtn}
-                aria-label="Settings"
-                onClick={() => void navigate({ to: "/twatter/settings" })}
-              >
-                <IconSettings size={18} />
-              </button>
-            </div>
-          </header>
+  function closeNavbar() {
+    setNavbarOpen(false);
+  }
 
-          <main className={classes.main}>
-            <Outlet />
-          </main>
+  return (
+    <div className={classes.shell}>
+      <header className={classes.header} data-glass-surface>
+        <Button
+          type="button"
+          variant="ghost"
+          className={[classes.burger, navbarOpen ? classes.burgerOpen : ""]
+            .filter(Boolean)
+            .join(" ")}
+          aria-label={navbarOpen ? "Close navigation" : "Open navigation"}
+          aria-expanded={navbarOpen}
+          onClick={() => setNavbarOpen((open) => !open)}
+        >
+          <IconMenu2 />
+        </Button>
+        <h1 className={classes.headerTitle}>{headerTitle()}</h1>
+        <div className={classes.headerActions}>
+          {isHome ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setComposeOpen(true)}
+              leftSection={<IconPlus size={16} />}
+            >
+              Post
+            </Button>
+          ) : null}
         </div>
+      </header>
+
+      {navbarOpen ? (
+        <Button
+          type="button"
+          variant="ghost"
+          className={classes.overlay}
+          aria-label="Close navigation"
+          onClick={closeNavbar}
+        />
+      ) : null}
+
+      <nav
+        className={[classes.navbar, navbarOpen ? classes.navbarOpen : ""]
+          .filter(Boolean)
+          .join(" ")}
+        aria-label="Twatter"
+        data-glass-surface
+      >
+        <div className={classes.navbarTop}>
+          <Button
+            type="button"
+            variant="ghost"
+            className={[classes.burger, navbarOpen ? classes.burgerOpen : ""]
+              .filter(Boolean)
+              .join(" ")}
+            aria-label={navbarOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={navbarOpen}
+            onClick={() => setNavbarOpen((open) => !open)}
+          >
+            <IconMenu2 />
+          </Button>
+          <Link to="/twatter" className={classes.logo} onClick={closeNavbar}>
+            <span className={classes.logoIcon} aria-hidden>
+              T
+            </span>
+            <span className={classes.logoText}>Twatter</span>
+          </Link>
+        </div>
+
+        <div className={classes.navScroll}>
+          <div className={classes.navList}>
+            <Link
+              to="/"
+              className={classes.navLink}
+              onClick={closeNavbar}
+            >
+              <span className={classes.navIcon}>
+                <IconArrowLeft />
+              </span>
+              <span className={classes.navLabel}>Back to Hub</span>
+            </Link>
+
+            <div className={classes.divider}>Twatter</div>
+
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const active =
+                "exact" in item && item.exact
+                  ? pathname === item.to || pathname === `${item.to}/`
+                  : pathname === item.to || pathname.startsWith(`${item.to}/`);
+              const showBadge =
+                item.to === "/twatter/notifications" && unreadCount > 0;
+
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={[
+                    classes.navLink,
+                    active ? classes.navLinkActive : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={closeNavbar}
+                >
+                  <span className={classes.navIcon}>
+                    <Icon />
+                  </span>
+                  <span className={classes.navLabel}>{item.label}</span>
+                  {showBadge ? (
+                    <span className={classes.navBadge}>
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className={classes.navbarFooter}>
+          <Button
+            type="button"
+            className={classes.postBtn}
+            onClick={() => {
+              closeNavbar();
+              setComposeOpen(true);
+            }}
+          >
+            <IconPlus size={16} />
+            Post
+          </Button>
+
+          <button
+            type="button"
+            className={classes.accountCard}
+            onClick={() => {
+              closeNavbar();
+              if (personaAccount) {
+                void navigate({ to: "/twatter/profile" });
+              }
+            }}
+          >
+            {avatarSrc ? (
+              <img
+                className={classes.accountAvatar}
+                src={avatarSrc}
+                alt=""
+                width={40}
+                height={40}
+              />
+            ) : (
+              <span className={classes.accountAvatarFallback} aria-hidden>
+                {avatarInitial}
+              </span>
+            )}
+            <span className={classes.accountMeta}>
+              <span className={classes.accountName}>
+                {personaAccount?.display_name || "Choose persona"}
+              </span>
+              <span className={classes.accountHandle}>
+                {personaAccount?.handle || "@persona"}
+              </span>
+            </span>
+          </button>
+        </div>
+      </nav>
+
+      <div className={classes.mainArea}>
+        <main className={classes.main}>
+          <div className={classes.centerColumn}>
+            <Outlet />
+          </div>
+        </main>
 
         <aside className={classes.rightSidebar} aria-label="Twatter widgets">
           <Link to="/twatter/search" className={classes.searchLink}>
@@ -134,7 +282,7 @@ function TwatterShellInner() {
               onClick={() => void navigate({ to: "/twatter/settings" })}
             >
               <IconSettings size={16} />
-              Open settings page
+              Open settings
             </Button>
             <Button
               type="button"
@@ -146,110 +294,6 @@ function TwatterShellInner() {
           </div>
         </aside>
       </div>
-
-      <aside
-        className={classes.sidebar}
-        aria-label="Twatter navigation"
-        data-glass-surface
-      >
-        <div className={classes.sidebarInner}>
-          <div className={classes.sidebarLogoRow}>
-            <span className={classes.desktopOnly}>
-              <TwatterAppBackButton />
-            </span>
-            <Link to="/twatter" className={classes.logo}>
-              <span className={classes.logoIcon} aria-hidden>
-                T
-              </span>
-              <span className={classes.logoText}>Twatter</span>
-            </Link>
-          </div>
-
-          <nav className={classes.nav}>
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const active =
-                "exact" in item && item.exact
-                  ? pathname === item.to || pathname === `${item.to}/`
-                  : pathname === item.to || pathname.startsWith(`${item.to}/`);
-              const showBadge =
-                item.to === "/twatter/notifications" && unreadCount > 0;
-
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={active ? classes.navLinkActive : classes.navLink}
-                >
-                  <span className={classes.navIconWrap}>
-                    <Icon size={18} stroke={active ? 2.1 : 1.6} />
-                    {showBadge ? (
-                      <span className={classes.navBadge}>
-                        {unreadCount > 99 ? "99+" : unreadCount}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className={classes.navLabel}>{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          <button
-            type="button"
-            className={classes.postBtn}
-            onClick={() => setComposeOpen(true)}
-          >
-            <span className={classes.postBtnLabel}>Post</span>
-            <IconPlus size={18} className={classes.postBtnIcon} />
-          </button>
-
-          <div className={classes.sidebarFooter}>
-            <button
-              type="button"
-              className={classes.accountCard}
-              onClick={() => {
-                if (personaAccount) {
-                  void navigate({ to: "/twatter/profile" });
-                }
-              }}
-            >
-              {avatarSrc ? (
-                <img
-                  className={classes.accountAvatar}
-                  src={avatarSrc}
-                  alt=""
-                  width={40}
-                  height={40}
-                />
-              ) : (
-                <span className={classes.accountAvatarFallback} aria-hidden>
-                  {avatarInitial}
-                </span>
-              )}
-              <span className={classes.accountMeta}>
-                <span className={classes.accountName}>
-                  {personaAccount?.display_name || "Choose persona"}
-                </span>
-                <span className={classes.accountHandle}>
-                  {personaAccount?.handle || "@persona"}
-                </span>
-              </span>
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {isHome ? (
-        <button
-          type="button"
-          className={classes.mobileComposeFab}
-          aria-label="Create post"
-          onClick={() => setComposeOpen(true)}
-        >
-          <IconPlus size={20} />
-        </button>
-      ) : null}
 
       <Modal
         opened={composeOpen}

@@ -16,8 +16,7 @@ import {
 } from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui";
-import { CreateChatModal } from "@/features/chats/CreateChatModal";
-import { useChats } from "@/features/chats/queries";
+import { CreateChatModal, useChats } from "@/features/chats/shared";
 import classes from "./index.module.css";
 
 export const Route = createFileRoute("/_app/")({

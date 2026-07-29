@@ -17,8 +17,7 @@ import {
   RuntimeText,
   TextInput,
 } from "@/components/ui";
-import { CreateChatModal } from "@/features/chats/CreateChatModal";
-import { useChats, useDeleteChat } from "@/features/chats/queries";
+import { CreateChatModal, useChats, useDeleteChat } from "@/features/chats/shared";
 import classes from "./index.module.css";
 
 export const Route = createFileRoute("/_app/chats/")({

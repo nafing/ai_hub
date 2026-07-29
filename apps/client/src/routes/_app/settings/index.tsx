@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Capacitor } from "@capacitor/core";
 import { ThemeSettings } from "@/features/theme/ThemeSettings";
 import { SoundSettings } from "@/features/sounds";
-import { TextFormatsSettings } from "@/features/chats/TextFormatsSettings";
+import { TextFormatsSettings } from "@/features/chats/shared";
 import { ServerConnectionSettings } from "@/features/settings/ServerConnectionSettings";
 import classes from "./index.module.css";
 

@@ -1,5 +1,7 @@
 import type { Connection } from "./types";
 import type { ChatMessage } from "../llm/types";
+import type { ChatGenerationParameterSendKey } from "../chats/generation-parameters";
+import { shouldSendChatParameter } from "../chats/generation-parameters";
 
 export type OpenRouterChatMessage = {
   role: string;
@@ -27,7 +29,16 @@ export type BuildOpenRouterBodyOptions = {
   overrides?: Record<string, unknown>;
   /** OpenAI-compatible tools array. */
   tools?: unknown[];
-  tool_choice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } };
+  tool_choice?:
+    | "auto"
+    | "none"
+    | "required"
+    | { type: "function"; function: { name: string } };
+  /**
+   * When set, omit sampling fields whose send toggle is false.
+   * `null`/undefined → legacy behavior (always include core sampling knobs).
+   */
+  enabled_parameters?: Record<ChatGenerationParameterSendKey, boolean> | null;
 };
 
 /** Append connection assistant_prefill as a trailing assistant message when set. */
@@ -74,6 +85,13 @@ export function withPromptCaching(
   return cloned;
 }
 
+function send(
+  enabled: BuildOpenRouterBodyOptions["enabled_parameters"],
+  key: ChatGenerationParameterSendKey,
+): boolean {
+  return shouldSendChatParameter(enabled ?? null, key);
+}
+
 /** Map a Connection + chat messages into an OpenRouter chat completions body. */
 export function buildOpenRouterBody(
   connection: Pick<
@@ -96,6 +114,7 @@ export function buildOpenRouterBody(
   messages: ChatMessage[],
   options: BuildOpenRouterBodyOptions = {},
 ): OpenRouterChatBody {
+  const enabled = options.enabled_parameters;
   const withPrefill = applyAssistantPrefill(messages, connection.assistant_prefill);
   const openRouterMessages: OpenRouterChatMessage[] = withPrefill.map(
     (message) => {
@@ -119,25 +138,35 @@ export function buildOpenRouterBody(
   const body: OpenRouterChatBody = {
     model: connection.model,
     messages: withPromptCaching(openRouterMessages, connection.prompt_caching),
-    temperature: connection.temperature,
-    top_p: connection.top_p,
-    max_tokens: connection.max_completion_tokens,
     stream: options.stream !== false,
   };
+
+  if (send(enabled, "temperature")) {
+    body.temperature = connection.temperature;
+  }
+  if (send(enabled, "top_p")) {
+    body.top_p = connection.top_p;
+  }
+  if (send(enabled, "max_completion_tokens")) {
+    body.max_tokens = connection.max_completion_tokens;
+  }
 
   if (options.tools?.length) {
     body.tools = options.tools;
     body.tool_choice = options.tool_choice ?? "auto";
   }
 
-  if (connection.frequency_penalty !== 0) {
+  if (
+    send(enabled, "frequency_penalty") &&
+    connection.frequency_penalty !== 0
+  ) {
     body.frequency_penalty = connection.frequency_penalty;
   }
-  if (connection.presence_penalty !== 0) {
+  if (send(enabled, "presence_penalty") && connection.presence_penalty !== 0) {
     body.presence_penalty = connection.presence_penalty;
   }
 
-  if (connection.top_k > 0) {
+  if (send(enabled, "top_k") && connection.top_k > 0) {
     body.top_k = connection.top_k;
   }
 
@@ -152,12 +181,12 @@ export function buildOpenRouterBody(
   }
 
   const effort = connection.reasoning_effort.trim();
-  if (effort && effort !== "none") {
+  if (send(enabled, "reasoning_effort") && effort && effort !== "none") {
     body.reasoning = { effort };
   }
 
   const verbosity = connection.verbosity.trim();
-  if (verbosity && verbosity !== "none") {
+  if (send(enabled, "verbosity") && verbosity && verbosity !== "none") {
     body.verbosity = verbosity;
   }
 

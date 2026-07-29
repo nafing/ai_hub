@@ -44,7 +44,7 @@ import {
 import { ChatAgentPanel } from "./ChatAgentPanel";
 import { ChatMessageBubble } from "./ChatMessageBubble";
 import { PeekPromptModal } from "./PeekPromptModal";
-import { useAutonomousMessaging } from "./useAutonomousMessaging";
+import { useAutonomousMessaging } from "../conversation/useAutonomousMessaging";
 import {
   chatKeys,
   useDeleteChatMessage,

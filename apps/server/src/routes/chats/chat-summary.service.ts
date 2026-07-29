@@ -470,8 +470,10 @@ export class ChatSummaryService {
       conversation_summary_failures: normalizeConversationSummaryFailures(
         row.conversation_summary_failures,
       ),
+      memory_chunks: Array.isArray(row.memory_chunks) ? row.memory_chunks : [],
       agent_state: row.agent_state ?? {},
       parent_chat_id: row.parent_chat_id ?? null,
+      connected_chat_id: row.connected_chat_id ?? null,
       created_at: row.created_at,
       updated_at: row.updated_at,
     };

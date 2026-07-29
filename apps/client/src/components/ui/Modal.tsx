@@ -17,6 +17,7 @@ export type ModalProps = {
   closeOnEscape?: boolean;
   withCloseButton?: boolean;
   className?: string;
+  bodyClassName?: string;
 };
 
 export function Modal({
@@ -29,6 +30,7 @@ export function Modal({
   closeOnEscape = true,
   withCloseButton = true,
   className,
+  bodyClassName,
 }: ModalProps) {
   const titleId = useId();
 
@@ -100,7 +102,11 @@ export function Modal({
                 ) : null}
               </div>
             ) : null}
-            <div className={classes.body}>{children}</div>
+            <div
+              className={[classes.body, bodyClassName].filter(Boolean).join(" ")}
+            >
+              {children}
+            </div>
           </motion.div>
         </motion.div>
       ) : null}

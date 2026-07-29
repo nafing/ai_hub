@@ -9,8 +9,10 @@ import type {
 } from "@ai-hub/shared";
 import {
   createChat,
+  connectChats,
   deleteChat,
   deleteChatMessage,
+  disconnectChat,
   generateChatImage,
   generateChatSummary,
   getChat,
@@ -68,6 +70,42 @@ export function useGetOrCreateCharacterDm() {
       void queryClient.invalidateQueries({
         queryKey: chatKeys.detail(variables.chatId),
       });
+    },
+  });
+}
+
+export function useConnectChat() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      chatId,
+      targetChatId,
+    }: {
+      chatId: string;
+      targetChatId: string;
+    }) => connectChats(chatId, targetChatId),
+    onSuccess: (chat, variables) => {
+      void queryClient.invalidateQueries({ queryKey: chatKeys.all });
+      void queryClient.setQueryData(chatKeys.detail(chat.id), chat);
+      if (chat.connected_chat_id) {
+        void queryClient.invalidateQueries({
+          queryKey: chatKeys.detail(chat.connected_chat_id),
+        });
+      }
+      void queryClient.invalidateQueries({
+        queryKey: chatKeys.detail(variables.targetChatId),
+      });
+    },
+  });
+}
+
+export function useDisconnectChat() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (chatId: string) => disconnectChat(chatId),
+    onSuccess: (chat) => {
+      void queryClient.invalidateQueries({ queryKey: chatKeys.all });
+      void queryClient.setQueryData(chatKeys.detail(chat.id), chat);
     },
   });
 }

@@ -23,16 +23,27 @@ import {
   buildAboutMePromptBlock,
   buildAwarenessBlock,
   buildConnectedParentChatBlock,
+  buildConnectedLinkedRoleplayBlock,
+  buildConnectedLinkInstructions,
+  buildConnectedInfluencesBlock,
+  buildConnectedNotesBlock,
+  buildConnectedOocInstruction,
+  parseConnectedSideEffectTags,
+  parseOocTags,
+  pruneConnectedNotes,
   buildPresetPromptContext,
   buildPromptMessages,
   buildCharacterGreetingMessage,
   buildConversationCommandsReminder,
   createChatMessage,
   defaultChatSettings,
+  connectionWithChatParameters,
+  effectiveChatContextLimit,
   extractThinking,
   fallbackSpeakerId,
   filterEnabledConversationCommands,
   filterOnlineCharacterIds,
+  isConversationCommandEnabled,
   formatChatHistoryMarker,
   formatRecentHistoryForSmart,
   formatSmartCandidate,
@@ -48,6 +59,10 @@ import {
   normalizeDaySummaries,
   normalizeWeekSummaries,
   normalizeConversationSummaryFailures,
+  normalizeChatMemoryChunks,
+  appendPendingMemoryChunks,
+  rebuildMemoryChunks,
+  recallMemoryChunks,
   recallLexicalMemories,
   roleplaySummaryEnabled,
   removeChatMessageSubtree,
@@ -74,6 +89,7 @@ import {
   type CharacterListItem,
   type Chat,
   type ChatListItem,
+  type ChatMemoryChunk,
   type ChatMessage,
   type ChatMode,
   type ChatSettings,
@@ -303,8 +319,10 @@ export class ChatsService {
       day_summaries: {},
       week_summaries: {},
       conversation_summary_failures: { days: {}, weeks: {} },
+      memory_chunks: [],
       agent_state: {},
       parent_chat_id: input.parent_chat_id?.trim() || null,
+      connected_chat_id: null,
       created_at: now,
       updated_at: now,
     });
@@ -333,6 +351,18 @@ export class ChatsService {
           input.settings.character_dm_chat_ids ??
           row.settings.character_dm_chat_ids ??
           {},
+        connected_pending_influences:
+          input.settings.connected_pending_influences ??
+          row.settings.connected_pending_influences ??
+          [],
+        connected_notes:
+          input.settings.connected_notes ??
+          row.settings.connected_notes ??
+          [],
+        chat_parameters:
+          input.settings.chat_parameters ??
+          row.settings.chat_parameters ??
+          {},
       });
     }
     row.updated_at = new Date().toISOString();
@@ -344,7 +374,81 @@ export class ChatsService {
     if (row.parent_chat_id) {
       await this.unlinkCharacterDm(row.parent_chat_id, id);
     }
+    if (row.connected_chat_id) {
+      await this.disconnectChat(id);
+    }
     await this.chats.delete({ id });
+  }
+
+  /**
+   * Bidirectional Conversation ↔ Roleplay link (one-to-one).
+   */
+  async connectChats(chatId: string, targetChatId: string): Promise<Chat> {
+    if (chatId === targetChatId) {
+      throw new BadRequestException("Cannot link a chat to itself");
+    }
+    const a = await this.requireRow(chatId);
+    const b = await this.requireRow(targetChatId);
+
+    if (a.parent_chat_id || b.parent_chat_id) {
+      throw new BadRequestException("Character DMs cannot be linked");
+    }
+
+    const modes = new Set([a.mode, b.mode]);
+    if (!modes.has("conversation") || !modes.has("roleplay")) {
+      throw new BadRequestException(
+        "Link one conversation chat with one roleplay chat",
+      );
+    }
+
+    if (a.connected_chat_id && a.connected_chat_id !== b.id) {
+      throw new BadRequestException("This chat is already linked to another chat");
+    }
+    if (b.connected_chat_id && b.connected_chat_id !== a.id) {
+      throw new BadRequestException("Target chat is already linked to another chat");
+    }
+
+    const now = new Date().toISOString();
+    a.connected_chat_id = b.id;
+    b.connected_chat_id = a.id;
+    a.updated_at = now;
+    b.updated_at = now;
+    await this.chats.save([a, b]);
+    return this.toChat(a);
+  }
+
+  async disconnectChat(chatId: string): Promise<Chat> {
+    const row = await this.requireRow(chatId);
+    const partnerId = row.connected_chat_id;
+    if (!partnerId) return this.toChat(row);
+
+    const now = new Date().toISOString();
+    const partner = await this.chats.findOneBy({ id: partnerId });
+
+    const clearBridgeSettings = (entity: typeof row) => {
+      if (entity.mode !== "roleplay") return;
+      entity.settings = defaultChatSettings({
+        ...entity.settings,
+        connected_pending_influences: [],
+        connected_notes: [],
+      });
+    };
+
+    row.connected_chat_id = null;
+    row.updated_at = now;
+    clearBridgeSettings(row);
+
+    if (partner) {
+      if (partner.connected_chat_id === chatId) {
+        partner.connected_chat_id = null;
+      }
+      partner.updated_at = now;
+      clearBridgeSettings(partner);
+      await this.chats.save([row, partner]);
+    } else {
+      await this.chats.save(row);
+    }
+    return this.toChat(await this.requireRow(chatId));
   }
 
   /**
@@ -565,14 +669,8 @@ export class ChatsService {
       parsed.commands,
       input.settings.conversation_command_toggles,
     );
-    if (!commands.length) {
-      return {
-        content: parsed.cleanContent || input.content,
-        attachments: [],
-        commandTags: [],
-      };
-    }
 
+    let content = parsed.cleanContent || input.content;
     let settings = defaultChatSettings(input.settings);
     const messages = [...normalizeChatMessages(input.row.messages)];
     const attachments: ChatMessageAttachment[] = [];
@@ -759,17 +857,81 @@ export class ChatsService {
       }
     }
 
+    // Linked roleplay bridge: <influence> / <note> tags (XML, stripped from visible text).
+    {
+      const side = parseConnectedSideEffectTags(content);
+      content = side.cleanContent;
+      if (
+        input.row.connected_chat_id &&
+        (side.influences.length || side.notes.length)
+      ) {
+        const toggles = settings.conversation_command_toggles;
+        const influenceOn = isConversationCommandEnabled(toggles, "influence");
+        const noteOn = isConversationCommandEnabled(toggles, "note");
+        if (
+          (influenceOn && side.influences.length) ||
+          (noteOn && side.notes.length)
+        ) {
+          try {
+            const linked = await this.requireRow(input.row.connected_chat_id);
+            if (linked.mode === "roleplay") {
+              const linkedSettings = defaultChatSettings(linked.settings);
+              if (influenceOn && side.influences.length) {
+                linkedSettings.connected_pending_influences = [
+                  ...linkedSettings.connected_pending_influences,
+                  ...side.influences,
+                ].slice(-40);
+                for (const influence of side.influences) {
+                  input.emit({
+                    type: "conversation_command",
+                    command: "influence",
+                    character_id: input.characterId,
+                    detail: influence.slice(0, 120),
+                    chat_id: linked.id,
+                  });
+                }
+              }
+              if (noteOn && side.notes.length) {
+                linkedSettings.connected_notes = pruneConnectedNotes([
+                  ...linkedSettings.connected_notes,
+                  ...side.notes,
+                ]);
+                for (const note of side.notes) {
+                  input.emit({
+                    type: "conversation_command",
+                    command: "note",
+                    character_id: input.characterId,
+                    detail: note.slice(0, 120),
+                    chat_id: linked.id,
+                  });
+                }
+              }
+              linked.settings = linkedSettings;
+              linked.updated_at = new Date().toISOString();
+              await this.chats.save(linked);
+            }
+          } catch (error) {
+            this.logger.warn(
+              `Failed to apply connected influence/note for ${input.row.id}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
+        }
+      }
+    }
+
     input.row.settings = settings;
     input.row.messages = messages;
     input.row.updated_at = new Date().toISOString();
     await this.chats.save(input.row);
 
-    const content = [parsed.cleanContent, ...failedImageTags]
+    const finalContent = [content, ...failedImageTags]
       .filter((part) => part.trim())
       .join("\n\n")
       .trim();
 
-    return { content, attachments, commandTags };
+    return { content: finalContent, attachments, commandTags };
   }
 
   /** Expand a texting brief + character look into an OpenRouter image attachment. */
@@ -1416,8 +1578,12 @@ export class ChatsService {
       historyMessages,
       chatSummary: row.summary,
       parentChatId: row.parent_chat_id,
+      connectedChatId: row.connected_chat_id,
       chatHistoryOverride,
       conversationMemory,
+      chatId: row.id,
+      memoryChunks: row.memory_chunks,
+      consumeConnectedInfluences: false,
     });
 
     if (!messageId) return prompt;
@@ -1812,10 +1978,22 @@ export class ChatsService {
       generationGuide,
       agentInjectTexts: pre.injectTexts,
       parentChatId: row.parent_chat_id,
+      connectedChatId: row.connected_chat_id,
       chatHistoryOverride,
       conversationMemory,
       chatId: row.id,
+      memoryChunks: row.memory_chunks,
+      consumeConnectedInfluences: true,
     });
+
+    if (row.mode === "roleplay") {
+      const refreshedSettings = await this.chats.findOneBy({ id: row.id });
+      if (refreshedSettings) {
+        row.settings = refreshedSettings.settings;
+        // Keep local settings in sync so a later save does not restore consumed influences.
+        Object.assign(settings, defaultChatSettings(refreshedSettings.settings));
+      }
+    }
 
     const { characterId, characterName, role, messages: promptMessages } =
       built;
@@ -1826,17 +2004,28 @@ export class ChatsService {
       character_name: characterName,
     });
 
-    const result = await completeWithConnection(connection, promptMessages, {
-      stream: {
-        onContentDelta: (delta) => emit({ type: "delta", delta }),
-        onReasoningDelta: (delta) => emit({ type: "thinking", delta }),
+    const { connection: generationConnection, enabled_parameters } =
+      connectionWithChatParameters(connection, settings.chat_parameters);
+
+    const result = await completeWithConnection(
+      generationConnection,
+      promptMessages,
+      {
+        stream: {
+          onContentDelta: (delta) => emit({ type: "delta", delta }),
+          onReasoningDelta: (delta) => emit({ type: "thinking", delta }),
+        },
+        parseThinking: true,
+        body: { enabled_parameters },
       },
-      parseThinking: true,
-    });
+    );
 
     let content = result.content;
     let thinking = result.thinking;
-    const parsed = extractThinking(result.reply, connection.thinking_tag);
+    const parsed = extractThinking(
+      result.reply,
+      generationConnection.thinking_tag,
+    );
     if (parsed.thinking) {
       thinking = parsed.thinking || thinking;
       content = parsed.content;
@@ -1881,6 +2070,30 @@ export class ChatsService {
         const refreshed = await this.chats.findOneBy({ id: row.id });
         if (refreshed) {
           row.settings = refreshed.settings;
+        }
+      }
+
+      if (
+        row.mode === "roleplay" &&
+        row.connected_chat_id &&
+        turn.kind !== "impersonate"
+      ) {
+        const ooc = parseOocTags(content);
+        content = ooc.cleanContent;
+        for (const body of ooc.oocBodies) {
+          try {
+            await this.appendChatMessage(row.connected_chat_id, {
+              role: "assistant",
+              content: body,
+              character_id: characterId,
+            });
+          } catch (error) {
+            this.logger.warn(
+              `Failed to post OOC to linked conversation ${row.connected_chat_id}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
         }
       }
 
@@ -1999,6 +2212,18 @@ export class ChatsService {
 
     let chatForDone = this.toChat(row);
     if (
+      defaultChatSettings(row.settings).enable_memory_recall &&
+      savedMessage.role === "assistant" &&
+      !regenerateIndex
+    ) {
+      const synced = await this.syncMemoryChunks(row.id);
+      if (synced) {
+        chatForDone = synced;
+        Object.assign(row, await this.requireRow(row.id));
+      }
+    }
+
+    if (
       roleplaySummaryEnabled(row.mode) &&
       savedMessage.role === "assistant" &&
       !regenerateIndex
@@ -2042,9 +2267,13 @@ export class ChatsService {
     generationGuide?: string;
     agentInjectTexts?: string[];
     parentChatId?: string | null;
+    connectedChatId?: string | null;
     chatHistoryOverride?: string;
     conversationMemory?: string;
     chatId?: string;
+    memoryChunks?: ChatMemoryChunk[];
+    /** When true, clear one-shot influences after injecting them (generation only). */
+    consumeConnectedInfluences?: boolean;
   }): Promise<{
     messages: LlmChatMessage[];
     character_id: string | null;
@@ -2069,14 +2298,17 @@ export class ChatsService {
       generationGuide,
       agentInjectTexts,
       parentChatId,
+      connectedChatId,
       chatHistoryOverride,
       conversationMemory,
       chatId,
+      memoryChunks,
+      consumeConnectedInfluences,
     } = input;
     const promptCharacterIds = activeCharacterIds(settings);
     const primary = characterList[0] ?? null;
 
-    const depth = Math.max(1, settings.history_depth || 24);
+    const depth = effectiveChatContextLimit(settings);
     const historyMessages =
       rawHistory.length <= depth
         ? rawHistory
@@ -2220,6 +2452,85 @@ export class ChatsService {
       }
     }
 
+    if (mode === "conversation" && connectedChatId) {
+      try {
+        const linkedRow = await this.chats.findOneBy({ id: connectedChatId });
+        if (linkedRow?.mode === "roleplay") {
+          const linkedChat = this.toChat(linkedRow);
+          const linkedNameById = new Map(nameByCharacterId);
+          for (const id of linkedChat.settings.character_ids) {
+            if (linkedNameById.has(id)) continue;
+            try {
+              const character = await this.characters.findOne(id);
+              linkedNameById.set(
+                id,
+                character.data.name.trim() || "Character",
+              );
+            } catch {
+              // deleted character — id fallback
+            }
+          }
+          const linkedBlock = buildConnectedLinkedRoleplayBlock({
+            roleplayChat: linkedChat,
+            personaName: persona?.name?.trim() || "User",
+            nameByCharacterId: linkedNameById,
+          });
+          if (linkedBlock) extraSystemParts.push(linkedBlock);
+
+          if (settings.character_commands !== false) {
+            const instructions = buildConnectedLinkInstructions({
+              roleplayTitle: linkedChat.title || "Connected roleplay",
+              influenceEnabled: isConversationCommandEnabled(
+                settings.conversation_command_toggles,
+                "influence",
+              ),
+              noteEnabled: isConversationCommandEnabled(
+                settings.conversation_command_toggles,
+                "note",
+              ),
+            });
+            if (instructions) extraSystemParts.push(instructions);
+          }
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to inject linked roleplay context for ${connectedChatId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    if (mode === "roleplay" && connectedChatId) {
+      const influences = settings.connected_pending_influences ?? [];
+      const notes = settings.connected_notes ?? [];
+      const influenceBlock = buildConnectedInfluencesBlock(influences);
+      if (influenceBlock) {
+        extraSystemParts.push(influenceBlock);
+        // Consume one-shot influences after injection (generation only).
+        if (consumeConnectedInfluences && chatId) {
+          try {
+            const row = await this.requireRow(chatId);
+            row.settings = defaultChatSettings({
+              ...row.settings,
+              connected_pending_influences: [],
+            });
+            row.updated_at = new Date().toISOString();
+            await this.chats.save(row);
+          } catch (error) {
+            this.logger.warn(
+              `Failed to clear connected influences for ${chatId}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
+        }
+      }
+      const notesBlock = buildConnectedNotesBlock(notes);
+      if (notesBlock) extraSystemParts.push(notesBlock);
+      extraSystemParts.push(buildConnectedOocInstruction());
+    }
+
     if (
       mode === "conversation" &&
       settings.cross_chat_awareness !== false &&
@@ -2248,7 +2559,7 @@ export class ChatsService {
       if (awareness) extraSystemParts.push(awareness);
     }
 
-    if (mode === "conversation" && settings.enable_memory_recall) {
+    if (settings.enable_memory_recall) {
       // Query from recent turns (not only the latest user line) so short
       // messages like "to wysyłaj" still retrieve earlier related context.
       const recallQuery = historyMessages
@@ -2256,11 +2567,17 @@ export class ChatsService {
         .map((message) => activeMessageText(message).trim())
         .filter(Boolean)
         .join("\n");
-      const memories = recallLexicalMemories({
-        query: recallQuery,
-        messages: historyMessages,
-        excludeRecent: 2,
-      });
+      const chunks = normalizeChatMemoryChunks(memoryChunks ?? []);
+      const memories =
+        recallMemoryChunks({
+          query: recallQuery,
+          chunks,
+        }) ??
+        recallLexicalMemories({
+          query: recallQuery,
+          messages: historyMessages,
+          excludeRecent: 2,
+        });
       if (memories) extraSystemParts.push(memories);
     }
 
@@ -2284,6 +2601,7 @@ export class ChatsService {
     } = await this.loreRetrieval.filterLorebooksForPrompt({
       lorebooks,
       historyMessages,
+      tokenBudget: settings.lorebook_token_budget,
     });
 
     const prefixHistorySpeakers = groupHistoryUsesSpeakerPrefix(mode, settings);
@@ -2300,6 +2618,8 @@ export class ChatsService {
           settings.conversation_timezone?.trim() ||
           settings.prompt_timezone?.trim() ||
           null,
+        includeThinking: settings.exclude_past_reasoning === false,
+        preferImageCaptions: settings.image_captioning_enabled === true,
       });
 
     const promptContext = buildPresetPromptContext({
@@ -2470,15 +2790,12 @@ export class ChatsService {
   }
 
   private async resolveLorebooks(settings: ChatSettings) {
-    const ids = settings.lorebook_ids ?? [];
-    if (!ids.length) {
-      const all = await this.lorebooks.findAll();
-      const result = [];
-      for (const item of all.filter((book) => book.global && book.enabled)) {
-        result.push(await this.lorebooks.findOne(item.id));
-      }
-      return result;
-    }
+    const pinnedIds = [...new Set((settings.lorebook_ids ?? []).filter(Boolean))];
+    const all = await this.lorebooks.findAll();
+    const globalIds = all
+      .filter((book) => book.global && book.enabled)
+      .map((book) => book.id);
+    const ids = [...new Set([...pinnedIds, ...globalIds])];
     const result = [];
     for (const id of ids) {
       result.push(await this.lorebooks.findOne(id));
@@ -2593,10 +2910,145 @@ export class ChatsService {
       conversation_summary_failures: normalizeConversationSummaryFailures(
         row.conversation_summary_failures,
       ),
+      memory_chunks: normalizeChatMemoryChunks(row.memory_chunks),
       agent_state: row.agent_state ?? {},
       parent_chat_id: row.parent_chat_id ?? null,
+      connected_chat_id: row.connected_chat_id ?? null,
       created_at: row.created_at,
       updated_at: row.updated_at,
+    };
+  }
+
+  async listMemoryChunks(chatId: string): Promise<ChatMemoryChunk[]> {
+    const row = await this.requireRow(chatId);
+    return normalizeChatMemoryChunks(row.memory_chunks);
+  }
+
+  async rebuildChatMemories(chatId: string): Promise<Chat> {
+    const row = await this.requireRow(chatId);
+    const settings = defaultChatSettings(row.settings);
+    const { nameByCharacterId, userName } =
+      await this.resolveMemoryNameMap(row);
+    row.memory_chunks = rebuildMemoryChunks({
+      messages: visibleChatMessages(row.messages ?? []),
+      existing: normalizeChatMemoryChunks(row.memory_chunks),
+      readBehindMessageCount: effectiveChatContextLimit(settings),
+      nameByCharacterId,
+      userName,
+      createId: () => randomUUID(),
+    });
+    row.updated_at = new Date().toISOString();
+    return this.toChat(await this.chats.save(row));
+  }
+
+  async clearChatMemories(chatId: string): Promise<Chat> {
+    const row = await this.requireRow(chatId);
+    row.memory_chunks = [];
+    row.updated_at = new Date().toISOString();
+    return this.toChat(await this.chats.save(row));
+  }
+
+  async updateMemoryChunk(
+    chatId: string,
+    chunkId: string,
+    content: string,
+  ): Promise<Chat> {
+    const row = await this.requireRow(chatId);
+    const chunks = normalizeChatMemoryChunks(row.memory_chunks);
+    const index = chunks.findIndex((chunk) => chunk.id === chunkId);
+    if (index < 0) {
+      throw new NotFoundException(`Memory chunk ${chunkId} not found`);
+    }
+    const trimmed = content.trim();
+    if (!trimmed) {
+      throw new BadRequestException("Memory content cannot be empty");
+    }
+    chunks[index] = { ...chunks[index]!, content: trimmed };
+    row.memory_chunks = chunks;
+    row.updated_at = new Date().toISOString();
+    return this.toChat(await this.chats.save(row));
+  }
+
+  async deleteMemoryChunk(chatId: string, chunkId: string): Promise<Chat> {
+    const row = await this.requireRow(chatId);
+    const chunks = normalizeChatMemoryChunks(row.memory_chunks);
+    const next = chunks.filter((chunk) => chunk.id !== chunkId);
+    if (next.length === chunks.length) {
+      throw new NotFoundException(`Memory chunk ${chunkId} not found`);
+    }
+    row.memory_chunks = next;
+    row.updated_at = new Date().toISOString();
+    return this.toChat(await this.chats.save(row));
+  }
+
+  async importMemoryChunks(
+    chatId: string,
+    chunks: unknown,
+    replace = false,
+  ): Promise<Chat> {
+    const row = await this.requireRow(chatId);
+    const incoming = normalizeChatMemoryChunks(chunks).map((chunk) => ({
+      ...chunk,
+      id: randomUUID(),
+      source_chat_id: chunk.source_chat_id || "import",
+      created_at: new Date().toISOString(),
+    }));
+    const existing = replace
+      ? normalizeChatMemoryChunks(row.memory_chunks).filter(
+          (chunk) => !chunk.source_chat_id,
+        )
+      : normalizeChatMemoryChunks(row.memory_chunks);
+    row.memory_chunks = [...existing, ...incoming].sort((a, b) =>
+      a.first_message_at.localeCompare(b.first_message_at),
+    );
+    row.updated_at = new Date().toISOString();
+    return this.toChat(await this.chats.save(row));
+  }
+
+  private async syncMemoryChunks(chatId: string): Promise<Chat | null> {
+    const row = await this.requireRow(chatId);
+    const settings = defaultChatSettings(row.settings);
+    if (!settings.enable_memory_recall) return null;
+    const existing = normalizeChatMemoryChunks(row.memory_chunks);
+    const { nameByCharacterId, userName } =
+      await this.resolveMemoryNameMap(row);
+    const next = appendPendingMemoryChunks({
+      messages: visibleChatMessages(row.messages ?? []),
+      existing,
+      readBehindMessageCount: effectiveChatContextLimit(settings),
+      nameByCharacterId,
+      userName,
+      createId: () => randomUUID(),
+    });
+    if (
+      next.length === existing.length &&
+      next.every((chunk, index) => chunk.id === existing[index]?.id)
+    ) {
+      return null;
+    }
+    row.memory_chunks = next;
+    row.updated_at = new Date().toISOString();
+    return this.toChat(await this.chats.save(row));
+  }
+
+  private async resolveMemoryNameMap(row: ChatEntity): Promise<{
+    nameByCharacterId: Map<string, string>;
+    userName: string;
+  }> {
+    const settings = defaultChatSettings(row.settings);
+    const characterList = await this.loadPromptCharacters(settings);
+    const persona = await this.resolvePersona(settings.persona_id);
+    const nameByCharacterId = new Map(
+      characterList.map((character) => [
+        character.id,
+        character.data.convo_display_name?.trim() ||
+          character.data.name ||
+          "Character",
+      ]),
+    );
+    return {
+      nameByCharacterId,
+      userName: persona?.name?.trim() || "User",
     };
   }
 
@@ -2613,6 +3065,8 @@ export class ChatsService {
       updated_at: row.updated_at,
       message_count: messages.length,
       preview: last ? activeMessageText(last).slice(0, 160) : null,
+      connected_chat_id: row.connected_chat_id ?? null,
+      parent_chat_id: row.parent_chat_id ?? null,
     };
   }
 }

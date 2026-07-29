@@ -352,6 +352,7 @@ export type {
   ChatMessage,
   ChatMessageRole,
   ChatMessageAttachment,
+  ChatMemoryChunk,
   ChatSettings,
   ChatAgentSetting,
   ChatAgentSettingsMap,
@@ -437,6 +438,8 @@ export {
   createChatMessage,
   primaryCharacterId,
   DEFAULT_CHAT_HISTORY_DEPTH,
+  DEFAULT_CHAT_LOREBOOK_TOKEN_BUDGET,
+  effectiveChatContextLimit,
 } from "./chats/defaults";
 export {
   normalizeInactiveCharacterIds,
@@ -497,6 +500,43 @@ export {
   buildConnectedParentChatBlock,
   recallLexicalMemories,
 } from "./chats/conversation-awareness";
+export {
+  CONNECTED_NOTES_BUDGET_CHARS,
+  CONNECTED_RECENT_MESSAGE_LIMIT,
+  CONNECTED_MESSAGE_CHAR_LIMIT,
+  pruneConnectedNotes,
+  normalizeConnectedNotes,
+  normalizeConnectedInfluences,
+  parseConnectedSideEffectTags,
+  parseOocTags,
+  buildConnectedLinkedRoleplayBlock,
+  buildConnectedLinkInstructions,
+  buildConnectedInfluencesBlock,
+  buildConnectedNotesBlock,
+  buildConnectedOocInstruction,
+} from "./chats/connected-chats";
+export {
+  CHAT_GENERATION_PARAMETER_SEND_KEYS,
+  DEFAULT_CHAT_PARAMETER_SEND,
+  normalizeChatGenerationParameters,
+  resolveEffectiveChatGenerationParameters,
+  connectionWithChatParameters,
+  shouldSendChatParameter,
+} from "./chats/generation-parameters";
+export type {
+  ChatGenerationParameterSendKey,
+  ChatGenerationParameterSendMap,
+  ChatGenerationParameters,
+  EffectiveChatGenerationParameters,
+} from "./chats/generation-parameters";
+export {
+  MEMORY_CHUNK_SIZE,
+  normalizeChatMemoryChunks,
+  appendPendingMemoryChunks,
+  rebuildMemoryChunks,
+  recallMemoryChunks,
+  formatMemoryRecallBlock,
+} from "./chats/memory-recall";
 export {
   parseDirectMessageCommands,
   buildRoleplayDmCommandReminder,

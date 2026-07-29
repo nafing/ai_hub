@@ -39,12 +39,19 @@ export class ChatEntity {
     weeks: Record<string, unknown>;
   };
 
+  @Column("simple-json", { default: [] })
+  memory_chunks!: import("@ai-hub/shared").ChatMemoryChunk[];
+
   @Column("simple-json")
   agent_state!: Record<string, unknown>;
 
   /** Parent chat when this row is a character DM; null for root chats. */
   @Column("text", { nullable: true })
   parent_chat_id!: string | null;
+
+  /** Bidirectional Conversation ↔ Roleplay link; null when unlinked. */
+  @Column("text", { nullable: true })
+  connected_chat_id!: string | null;
 
   @Column("text")
   created_at!: string;

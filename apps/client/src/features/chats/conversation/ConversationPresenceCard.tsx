@@ -4,7 +4,7 @@ import type { Chat, ConversationPresenceStatus } from "@ai-hub/shared";
 import { Button, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { CharacterScheduleEditorModal } from "./CharacterScheduleEditorModal";
-import { chatKeys } from "./queries";
+import { chatKeys } from "../shared/queries";
 import classes from "./ConversationPresenceCard.module.css";
 
 type StatusEntry = {

@@ -78,6 +78,8 @@ export const CONVERSATION_COMMAND_KEYS = [
   "memory",
   "cross_post",
   "send_image",
+  "influence",
+  "note",
 ] as const;
 
 export type ConversationCommandKey = (typeof CONVERSATION_COMMAND_KEYS)[number];

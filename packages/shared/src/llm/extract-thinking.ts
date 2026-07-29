@@ -30,17 +30,17 @@ function collectPairs(
   thinkingTag?: string | null,
 ): Array<{ open: string; close: string }> {
   const pairs: Array<{ open: string; close: string }> = [];
+  const marker = "{{thinking}}";
 
-  const template = thinkingTag?.trim();
-  if (template) {
-    const marker = "{{thinking}}";
+  for (const line of String(thinkingTag ?? "").split(/\r?\n/)) {
+    const template = line.trim();
+    if (!template) continue;
     const at = template.indexOf(marker);
-    if (at !== -1) {
-      pairs.push({
-        open: template.slice(0, at),
-        close: template.slice(at + marker.length),
-      });
-    }
+    if (at === -1) continue;
+    pairs.push({
+      open: template.slice(0, at),
+      close: template.slice(at + marker.length),
+    });
   }
 
   pairs.push(

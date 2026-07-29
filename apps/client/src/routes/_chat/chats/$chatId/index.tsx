@@ -8,13 +8,15 @@ import {
 } from "@tabler/icons-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ActionIcon } from "@/components/ui";
-import { chatAgentPanelHasActivity } from "@/features/chats/ChatAgentPanel";
-import { ChatSession } from "@/features/chats/ChatSession";
-import { useChatGeneration } from "@/features/chats/chatGenerationStore";
-import { ChatSettingsPanel } from "@/features/chats/ChatSettingsPanel";
-import { ConversationPresenceModal } from "@/features/chats/ConversationPresenceModal";
-import { SummaryPopover } from "@/features/chats/SummaryPopover";
-import { useChat } from "@/features/chats/queries";
+import { ConversationPresenceModal } from "@/features/chats/conversation";
+import { SummaryPopover } from "@/features/chats/roleplay";
+import {
+  chatAgentPanelHasActivity,
+  ChatSession,
+  ChatSettingsPanel,
+  useChat,
+  useChatGeneration,
+} from "@/features/chats/shared";
 import classes from "./index.module.css";
 
 export const Route = createFileRoute("/_chat/chats/$chatId/")({

@@ -1,0 +1,100 @@
+.paramGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.paramCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-hover) 45%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.paramHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.paramLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--color-text-dimmed);
+}
+
+.sendToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  color: var(--color-text-dimmed);
+  font-size: 0.5625rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sendToggle input {
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.choiceBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chip,
+.chipActive {
+  padding: 0.3rem 0.55rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font-size: 0.625rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip {
+  color: var(--color-text-dimmed);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.chip:hover {
+  background: var(--color-surface-hover);
+}
+
+.chipActive {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+.error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.6875rem;
+}
+
+@media (max-width: 520px) {
+  .paramGrid {
+    grid-template-columns: 1fr;
+  }
+}

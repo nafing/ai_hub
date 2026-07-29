@@ -1,4 +1,3 @@
-import type { PresetVariableValues } from "../presets/build-prompt";
 import type { ChatSummaryEntry } from "./summary/types";
 import type {
   ConversationSummaryFailures,
@@ -11,6 +10,8 @@ import type {
   ConversationCommandKey,
   ConversationStatusOverride,
 } from "./conversation-presence";
+import type { PresetVariableValues } from "../presets/build-prompt";
+import type { ChatGenerationParameters } from "./generation-parameters";
 
 export const CHAT_MODES = ["roleplay", "conversation"] as const;
 
@@ -22,6 +23,18 @@ export const CHAT_MODE_LABELS: Record<ChatMode, string> = {
 };
 
 export type ChatMessageRole = "user" | "assistant" | "system";
+
+/** Durable memory-recall fragment (usually 5 messages). */
+export type ChatMemoryChunk = {
+  id: string;
+  content: string;
+  message_count: number;
+  first_message_at: string;
+  last_message_at: string;
+  created_at: string;
+  /** When set, chunk was imported from another chat. */
+  source_chat_id?: string | null;
+};
 
 export type RoleplayDmSource = {
   source_chat_id: string;
@@ -142,6 +155,11 @@ export type ChatSettings = {
   /** null → default persona */
   persona_id: string | null;
   lorebook_ids: string[];
+  /**
+   * Chat-wide cap for activated lorebook content in the prompt.
+   * `0` = unlimited. Default 8192 (Marinara).
+   */
+  lorebook_token_budget: number;
   agent_ids: string[];
   /** Per-agent overrides keyed by agent id or slug. */
   agent_settings: ChatAgentSettingsMap;
@@ -171,8 +189,40 @@ export type ChatSettings = {
    * Marinara default is off.
    */
   group_speaker_names_in_history: boolean;
-  /** How many recent messages stay in the full chat_history marker. */
+  /** How many recent messages stay in the full chat_history marker (legacy fallback). */
   history_depth: number;
+  /**
+   * When set, only the last N messages are sent to the model.
+   * `null` = use `history_depth` as the effective limit.
+   */
+  context_message_limit: number | null;
+  /** Keep stored thinking/reasoning metadata out of future prompts. */
+  exclude_past_reasoning: boolean;
+  /** Describe image attachments with an LLM instead of sending native images. */
+  image_captioning_enabled: boolean;
+  /** Connection used for image captioning; null → chat connection. */
+  image_captioning_connection_id: string | null;
+  /**
+   * Sparse chat-level generation overrides (temp, tokens, reasoning, …).
+   * Empty = use the chat connection as-is.
+   */
+  chat_parameters: ChatGenerationParameters;
+  /** Master switch for the pre/parallel/post agent pipeline (roleplay). */
+  enable_agents: boolean;
+  /**
+   * When true, lorebook/summary agent writes need approval before commit.
+   * Character card edits still ask first.
+   */
+  agent_write_approval_required: boolean;
+  /** When true, tracker agents do not auto-run after every generation. */
+  manual_trackers: boolean;
+  /** Allow AI / agents to call functions (dice, game state, etc.). */
+  enable_tools: boolean;
+  /**
+   * Tools available to this chat when `enable_tools` is on.
+   * Empty = all tools; non-empty = restrict to this set (Marinara `activeToolIds`).
+   */
+  tool_ids: string[];
   /** When true, run rolling summary after enough user turns (roleplay). */
   automatic_summary_enabled: boolean;
   /** User messages between automatic summary runs. */
@@ -238,7 +288,7 @@ export type ChatSettings = {
   conversation_command_toggles: Partial<
     Record<ConversationCommandKey, boolean>
   >;
-  /** Vector memory recall for conversation (no-ops without embeddings). */
+  /** Recall relevant earlier fragments into the prompt (durable chunks). */
   enable_memory_recall: boolean;
   /** Durable facts recorded via [memory] commands, keyed by character id. */
   character_memories: Record<string, string[]>;
@@ -251,6 +301,15 @@ export type ChatSettings = {
    * (e.g. `/characters/{id}/gallery/{imageId}`), or null for default stage.
    */
   background_image_url: string | null;
+  /**
+   * One-shot influences queued from a linked conversation into this roleplay.
+   * Consumed (cleared) after injection into a roleplay turn.
+   */
+  connected_pending_influences: string[];
+  /**
+   * Durable notes from a linked conversation for this roleplay (char budget).
+   */
+  connected_notes: string[];
 };
 
 export type Chat = {
@@ -269,10 +328,20 @@ export type Chat = {
   week_summaries: Record<string, WeekSummaryEntry>;
   /** Retry bookkeeping for conversation auto-summaries. */
   conversation_summary_failures: ConversationSummaryFailures;
+  /**
+   * Durable memory-recall chunks (groups of past messages).
+   * Used when `settings.enable_memory_recall` is on.
+   */
+  memory_chunks: ChatMemoryChunk[];
   /** Tracker / agent JSON keyed by agent slug */
   agent_state: Record<string, unknown>;
   /** Parent roleplay/group chat when this is a character DM; null for root chats. */
   parent_chat_id: string | null;
+  /**
+   * Bidirectional Conversation ↔ Roleplay link (one-to-one).
+   * Null when this chat is not linked.
+   */
+  connected_chat_id: string | null;
   created_at: string;
   updated_at: string;
 };

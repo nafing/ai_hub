@@ -47,6 +47,13 @@ class UpdateChatSettingsDto {
   lorebook_ids?: string[];
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  lorebook_token_budget?: number;
+
+  @IsOptional()
   agent_ids?: string[];
 
   @IsOptional()
@@ -87,6 +94,46 @@ class UpdateChatSettingsDto {
   @Min(1)
   @Max(200)
   history_depth?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(9999)
+  context_message_limit?: number | null;
+
+  @IsOptional()
+  @IsBoolean()
+  exclude_past_reasoning?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  image_captioning_enabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  image_captioning_connection_id?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  enable_agents?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  agent_write_approval_required?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  manual_trackers?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  enable_tools?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tool_ids?: string[];
 
   @IsOptional()
   @IsBoolean()
@@ -232,6 +279,20 @@ class UpdateChatSettingsDto {
   @IsOptional()
   @IsString()
   background_image_url?: string | null;
+
+  @IsOptional()
+  @IsObject()
+  chat_parameters?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  connected_pending_influences?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  connected_notes?: string[];
 }
 
 export class UpdateChatDto {

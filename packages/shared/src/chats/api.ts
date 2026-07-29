@@ -96,10 +96,12 @@ export type GenerateChatImageInput = {
 
 export type ChatListItem = Pick<
   Chat,
-  "id" | "title" | "mode" | "created_at" | "updated_at"
+  "id" | "title" | "mode" | "created_at" | "updated_at" | "connected_chat_id"
 > & {
   message_count: number;
   preview: string | null;
+  /** Present when this is a character DM spawned from another chat. */
+  parent_chat_id?: string | null;
 };
 
 export type ChatStreamEvent =
@@ -141,7 +143,14 @@ export type ChatStreamEvent =
     }
   | {
       type: "conversation_command";
-      command: "react" | "schedule_update" | "memory" | "cross_post" | "send_image";
+      command:
+        | "react"
+        | "schedule_update"
+        | "memory"
+        | "cross_post"
+        | "send_image"
+        | "influence"
+        | "note";
       character_id?: string | null;
       detail?: string;
       chat_id?: string;

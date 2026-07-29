@@ -23,7 +23,7 @@ import {
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui";
 import { useCharacterImportSessionStore } from "@/features/characters/characterImportSessionStore";
-import { useChatGenerationStore } from "@/features/chats/chatGenerationStore";
+import { useChatGenerationStore } from "@/features/chats/shared";
 import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
 import classes from "./route.module.css";
 

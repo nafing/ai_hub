@@ -6,6 +6,24 @@
   padding-top: var(--space-xs);
 }
 
+.accordion {
+  gap: 0.5rem;
+}
+
+.accordionTitle {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.sectionStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-width: 0;
+  padding-top: 0.65rem;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -25,17 +43,6 @@
   color: var(--color-text-dimmed);
 }
 
-.sectionLabel {
-  margin: 0.35rem 0 0;
-  padding-top: 0.65rem;
-  border-top: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-  font-size: 0.625rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .summaryHint {
   margin: 0;
   color: var(--color-text-dimmed);
@@ -43,49 +50,11 @@
   line-height: 1.45;
 }
 
-.input,
 .textarea {
   width: 100%;
-  min-height: 2.1rem;
-  padding: 0.4rem 0.65rem;
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
-  font: inherit;
-}
-
-.textarea {
   min-height: 4rem;
   resize: none;
   line-height: 1.45;
-}
-
-.input:focus,
-.textarea:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
-
-.input::placeholder,
-.textarea::placeholder {
-  color: var(--color-text-muted);
-}
-
-.switch {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-sm);
-  padding: 0.5rem 0.65rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  background: transparent;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.switch:hover {
-  background: var(--color-surface-hover);
 }
 
 .memberList {
@@ -136,30 +105,50 @@
   white-space: nowrap;
 }
 
-.switch input {
-  margin-top: 0.15rem;
-  accent-color: var(--color-primary);
-}
-
-.switchBody {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.switchLabel {
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-
-.switchHint {
-  margin: 0;
-  font-size: var(--field-hint-size);
-  color: var(--color-text-dimmed);
-}
-
 .inlineCode {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.85em;
   color: var(--color-primary);
+}
+
+.segmented {
+  display: flex;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  background: var(--color-surface);
+}
+
+.segment {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.65rem;
+  border: 0;
+  color: var(--color-text-dimmed);
+  background: transparent;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.segment:hover:not(:disabled):not(.segmentActive) {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.segmentActive {
+  color: #fff;
+  background: var(--color-primary);
+}
+
+.segment + .segment {
+  box-shadow: inset 1px 0 0 var(--color-border);
+}
+
+.segmentActive + .segment,
+.segment + .segmentActive {
+  box-shadow: none;
 }

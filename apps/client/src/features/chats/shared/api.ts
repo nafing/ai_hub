@@ -47,6 +47,21 @@ export async function getOrCreateCharacterDm(
   return data;
 }
 
+export async function connectChats(
+  chatId: string,
+  targetChatId: string,
+): Promise<Chat> {
+  const { data } = await api.post<Chat>(`/chats/${chatId}/connect`, {
+    target_chat_id: targetChatId,
+  });
+  return data;
+}
+
+export async function disconnectChat(chatId: string): Promise<Chat> {
+  const { data } = await api.post<Chat>(`/chats/${chatId}/disconnect`);
+  return data;
+}
+
 export async function updateChat(
   id: string,
   input: UpdateChatInput,
@@ -171,6 +186,54 @@ export async function backfillConversationSummaries(
   import("@ai-hub/shared").ConversationSummaryBackfillResult & { chat: Chat }
 > {
   const { data } = await api.post(`/chats/${id}/backfill-summaries`, input);
+  return data;
+}
+
+export async function listChatMemories(
+  id: string,
+): Promise<import("@ai-hub/shared").ChatMemoryChunk[]> {
+  const { data } = await api.get(`/chats/${id}/memories`);
+  return data;
+}
+
+export async function rebuildChatMemories(id: string): Promise<Chat> {
+  const { data } = await api.post<Chat>(`/chats/${id}/memories/rebuild`);
+  return data;
+}
+
+export async function clearChatMemories(id: string): Promise<Chat> {
+  const { data } = await api.delete<Chat>(`/chats/${id}/memories`);
+  return data;
+}
+
+export async function updateChatMemoryChunk(
+  id: string,
+  chunkId: string,
+  content: string,
+): Promise<Chat> {
+  const { data } = await api.patch<Chat>(`/chats/${id}/memories/${chunkId}`, {
+    content,
+  });
+  return data;
+}
+
+export async function deleteChatMemoryChunk(
+  id: string,
+  chunkId: string,
+): Promise<Chat> {
+  const { data } = await api.delete<Chat>(`/chats/${id}/memories/${chunkId}`);
+  return data;
+}
+
+export async function importChatMemories(
+  id: string,
+  chunks: unknown,
+  replace = false,
+): Promise<Chat> {
+  const { data } = await api.post<Chat>(`/chats/${id}/memories/import`, {
+    chunks,
+    replace,
+  });
   return data;
 }
 

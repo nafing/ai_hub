@@ -6,8 +6,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { Button, notifications, TextInput } from "@/components/ui";
-import { formatChatText } from "@/features/chats/formatChatText";
-import { useChatTextFormat } from "@/features/chats/useChatTextFormat";
+import { formatChatText, useChatTextFormat } from "@/features/chats/shared";
 import {
   displayColorLabel,
   extractColorsFromImageUrl,

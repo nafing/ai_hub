@@ -1,8 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui";
 import { useCharacterImportSessionStore } from "@/features/characters/characterImportSessionStore";
-import { useChatGenerationStore } from "@/features/chats/chatGenerationStore";
-import { chatKeys } from "@/features/chats/queries";
+import { chatKeys, useChatGenerationStore } from "@/features/chats/shared";
 import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
 import { queryClient } from "@/lib/queryClient";
 import classes from "./index.module.css";

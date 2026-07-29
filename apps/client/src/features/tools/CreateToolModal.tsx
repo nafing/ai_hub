@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { defaultTool } from "@ai-hub/shared";
+import { defaultTool, type Tool } from "@ai-hub/shared";
 import { Button, Modal, TextInput, notifications } from "@/components/ui";
 import { useCreateTool } from "./queries";
 import classes from "./CreateToolModal.module.css";
@@ -8,9 +8,15 @@ import classes from "./CreateToolModal.module.css";
 type CreateToolModalProps = {
   opened: boolean;
   onClose: () => void;
+  /** When set, called instead of navigating to the tool editor. */
+  onCreated?: (tool: Tool) => void;
 };
 
-export function CreateToolModal({ opened, onClose }: CreateToolModalProps) {
+export function CreateToolModal({
+  opened,
+  onClose,
+  onCreated,
+}: CreateToolModalProps) {
   const navigate = useNavigate();
   const createMutation = useCreateTool();
   const [name, setName] = useState("");
@@ -35,6 +41,10 @@ export function CreateToolModal({ opened, onClose }: CreateToolModalProps) {
         color: "green",
       });
       handleClose();
+      if (onCreated) {
+        onCreated(created);
+        return;
+      }
       await navigate({
         to: "/tools/$toolId",
         params: { toolId: created.id },
@@ -71,12 +81,14 @@ export function CreateToolModal({ opened, onClose }: CreateToolModalProps) {
           />
         </label>
         <div className={classes.actions}>
-          <Button variant="default" type="button"
-            onClick={handleClose}>
+          <Button variant="default" type="button" onClick={handleClose}>
             Cancel
           </Button>
-          <Button variant="primary" type="submit"
-            disabled={!name.trim() || createMutation.isPending}>
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={!name.trim() || createMutation.isPending}
+          >
             {createMutation.isPending ? "Creating…" : "Create"}
           </Button>
         </div>

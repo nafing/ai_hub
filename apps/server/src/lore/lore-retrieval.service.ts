@@ -86,6 +86,8 @@ export class LoreRetrievalService {
   async filterLorebooksForPrompt(input: {
     lorebooks: Lorebook[];
     historyMessages: ChatMessage[];
+    /** Chat-level budget; 0 = unlimited. */
+    tokenBudget?: number;
   }): Promise<{
     lorebooks: Lorebook[];
     hits: LoreSearchResultEntry[];
@@ -101,9 +103,19 @@ export class LoreRetrievalService {
       2,
     );
     const queryText = buildScanText(input.historyMessages, scanDepth);
-    const tokenBudget = Math.min(
+    const chatBudget =
+      typeof input.tokenBudget === "number" && Number.isFinite(input.tokenBudget)
+        ? Math.max(0, Math.floor(input.tokenBudget))
+        : null;
+    const bookBudget = Math.min(
       ...books.map((book) => book.token_budget ?? 2048),
     );
+    const tokenBudget =
+      chatBudget === 0
+        ? Number.MAX_SAFE_INTEGER
+        : chatBudget != null
+          ? Math.min(chatBudget, bookBudget)
+          : bookBudget;
 
     const selected = await this.searchEntries({
       lorebooks: books,

@@ -95,6 +95,8 @@ export class AgentRunnerService {
     runDirector?: boolean;
     parentChatId?: string | null;
   }): Promise<Agent[]> {
+    if (input.settings.enable_agents === false) return [];
+
     const agentIds = input.settings.agent_ids ?? [];
     if (!agentIds.length) return [];
 
@@ -112,6 +114,12 @@ export class AgentRunnerService {
       }
       if (!agentAllowedForMode(agent, input.mode)) return false;
       if (agent.slug === "director" && !input.runDirector) return false;
+      if (
+        input.settings.manual_trackers === true &&
+        agent.category === "tracker"
+      ) {
+        return false;
+      }
       const interval = resolveAgentRunInterval(
         agent,
         input.settings.agent_settings,
@@ -276,7 +284,19 @@ export class AgentRunnerService {
           });
           let state: unknown = tryParseJsonValue(raw) ?? { raw };
           if (agent.slug === "lorebook-keeper") {
-            state = await this.applyLorebookKeeperUpdates(state, ctx);
+            if (ctx.settings.agent_write_approval_required === true) {
+              state = {
+                ...(typeof state === "object" &&
+                state &&
+                !Array.isArray(state)
+                  ? state
+                  : { raw: state }),
+                pending_approval: true,
+                applied: [],
+              };
+            } else {
+              state = await this.applyLorebookKeeperUpdates(state, ctx);
+            }
           }
           if (agent.slug === "card-evolution-auditor") {
             state = this.normalizeCardEvolutionProposals(state);
@@ -556,7 +576,7 @@ export class AgentRunnerService {
     ];
 
     const toolDefs =
-      agent.default_tools?.length > 0
+      ctx.settings.enable_tools === true && agent.default_tools?.length > 0
         ? await this.tools.findByNames(agent.default_tools)
         : [];
     const llmTools = toLlmToolDefinitions(toolDefs);

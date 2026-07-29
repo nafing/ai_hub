@@ -28,12 +28,18 @@ export function formatChatHistoryMarker(
     messengerTimestamps?: boolean;
     /** IANA timezone for messenger timestamps (falls back to local). */
     timezone?: string | null;
+    /** When true, append stored thinking/reasoning into history lines. */
+    includeThinking?: boolean;
+    /** Prefer attachment prompt/caption text over bare [attached: …] notes. */
+    preferImageCaptions?: boolean;
   } = {},
 ): string {
   const userLabel = options.userName?.trim() || "User";
   const charLabel = options.charName?.trim() || "Char";
   const prefixSpeakerNames = options.prefixSpeakerNames !== false;
   const messengerTimestamps = options.messengerTimestamps === true;
+  const includeThinking = options.includeThinking === true;
+  const preferImageCaptions = options.preferImageCaptions === true;
   const nameMap =
     options.nameByCharacterId instanceof Map
       ? options.nameByCharacterId
@@ -46,8 +52,14 @@ export function formatChatHistoryMarker(
 
   for (const message of messages) {
     const text = activeMessageText(message).trim();
-    const attachmentNote = formatAttachmentNote(message);
-    const body = [text, attachmentNote].filter(Boolean).join("\n");
+    const attachmentNote = formatAttachmentNote(message, preferImageCaptions);
+    const thinkingNote =
+      includeThinking && message.thinking?.trim()
+        ? `[thinking]\n${message.thinking.trim()}\n[/thinking]`
+        : null;
+    const body = [text, thinkingNote, attachmentNote]
+      .filter(Boolean)
+      .join("\n");
     if (!body) continue;
 
     let line: string;
@@ -120,12 +132,30 @@ function formatInTimeZone(
   }).format(date);
 }
 
-function formatAttachmentNote(message: ChatMessage): string | null {
+function formatAttachmentNote(
+  message: ChatMessage,
+  preferImageCaptions = false,
+): string | null {
   const attachments = activeMessageAttachments(message);
   if (!attachments.length) return null;
-  const names = attachments
-    .map((item) => item.name.trim() || (item.kind === "image" ? "image" : "file"))
-    .filter(Boolean);
+  const parts = attachments.map((item) => {
+    const caption = item.prompt?.trim();
+    if (preferImageCaptions && item.kind === "image" && caption) {
+      return `[image caption: ${caption}]`;
+    }
+    return item.name.trim() || (item.kind === "image" ? "image" : "file");
+  });
+  if (preferImageCaptions && parts.every((part) => part.startsWith("[image caption:"))) {
+    return parts.join("\n");
+  }
+  const names = parts.filter(Boolean);
   if (names.length === 0) return "[attachment]";
+  if (preferImageCaptions) {
+    return names
+      .map((name) =>
+        name.startsWith("[image caption:") ? name : `[attached: ${name}]`,
+      )
+      .join("\n");
+  }
   return `[attached: ${names.join(", ")}]`;
 }
