@@ -10,10 +10,11 @@
     "preview": "vite preview",
     "cap:sync": "cap sync android",
     "cap:open": "cap open android",
-    "android": "node ./scripts/build-android.mjs",
+    "android": "pnpm --filter @ai-hub/android-app build",
     "android:sync": "vite build && cap sync android",
     "android:dev": "cap run android --livereload --external",
-    "android:open": "cap open android"
+    "android:open": "cap open android",
+    "android:release": "pnpm --filter @ai-hub/android-app release"
   },
   "dependencies": {
     "@ai-hub/shared": "workspace:*",

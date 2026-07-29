@@ -34,6 +34,10 @@ apps/client/android/captures/
 *.aab
 *.keystore
 !debug.keystore
+!packages/android-app/dist/.gitkeep
+
+# Keep versioned APK metadata package; binaries stay local / Releases
+packages/android-app/dist/*.apk
 
 
 # Debug
