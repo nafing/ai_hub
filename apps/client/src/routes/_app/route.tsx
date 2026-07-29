@@ -6,6 +6,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import {
+  IconActivity,
   IconAiAgent,
   IconBook,
   IconBrandTwitter,
@@ -21,6 +22,9 @@ import {
   IconUsers,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui";
+import { useCharacterImportSessionStore } from "@/features/characters/characterImportSessionStore";
+import { useChatGenerationStore } from "@/features/chats/chatGenerationStore";
+import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
 import classes from "./route.module.css";
 
 export const Route = createFileRoute("/_app")({
@@ -45,6 +49,7 @@ const NAVBAR_ITEMS: NavItem[] = [
   { label: "Home", icon: IconHome, to: "/" },
   { label: "Chats", icon: IconMessages, to: "/chats" },
   { label: "Twatter", icon: IconBrandTwitter, to: "/twatter" },
+  { label: "Activity", icon: IconActivity, to: "/activity" },
 
   { label: "User Data", type: "divider" },
   { label: "Personas", icon: IconUser, to: "/personas" },
@@ -65,6 +70,13 @@ const NAVBAR_ITEMS: NavItem[] = [
 function RouteComponent() {
   const [navbarOpen, setNavbarOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const runningJobs = useGeneratorJobsStore((state) => state.activeCount());
+  const importAttention = useCharacterImportSessionStore((state) =>
+    state.attentionCount(),
+  );
+  const chatJobs = useChatGenerationStore((state) => state.jobs);
+  const activeChats = Object.values(chatJobs).filter((job) => job.streaming).length;
+  const activityBadge = runningJobs + importAttention + activeChats;
 
   function closeNavbar() {
     setNavbarOpen(false);
@@ -155,6 +167,11 @@ function RouteComponent() {
                     <Icon />
                   </span>
                   <span className={classes.navLabel}>{item.label}</span>
+                  {item.to === "/activity" && activityBadge > 0 ? (
+                    <span className={classes.navBadge}>
+                      {activityBadge > 99 ? "99+" : activityBadge}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}

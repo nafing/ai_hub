@@ -168,66 +168,74 @@
   color: var(--color-text-dimmed);
 }
 
-.destList {
+.featureGrid {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--color-border);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: 0.65rem;
 }
 
-.destLink {
+.featureCard {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 0.9rem;
-  padding: 1rem 0.15rem;
-  border-bottom: 1px solid var(--color-border);
-  transition: background 0.16s ease, padding-inline 0.16s ease;
+  gap: 0.85rem;
+  height: 100%;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface) 45%, transparent);
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.16s ease;
 }
 
-.destLink:hover {
-  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
-  padding-inline: 0.55rem;
+.featureCard:hover {
+  background: color-mix(in srgb, var(--color-surface) 75%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  transform: translateY(-1px);
 }
 
-.destIcon {
+.featureIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.35rem;
+  height: 2.35rem;
   border-radius: var(--radius-md);
   color: var(--color-primary);
   background: var(--color-primary-soft);
 }
 
-.destCopy {
+.featureCopy {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
   min-width: 0;
 }
 
-.destLabel {
+.featureLabel {
   font-family: var(--font-heading);
-  font-size: 1rem;
+  font-size: 0.975rem;
   font-weight: 650;
   letter-spacing: -0.015em;
 }
 
-.destBlurb {
+.featureBlurb {
   font-size: 0.8125rem;
+  line-height: 1.35;
   color: var(--color-text-dimmed);
 }
 
-.destArrow {
+.featureArrow {
   color: var(--color-text-muted);
   transition: transform 0.16s ease, color 0.16s ease;
 }
 
-.destLink:hover .destArrow {
+.featureCard:hover .featureArrow {
   color: var(--color-primary);
   transform: translateX(3px);
 }
@@ -288,8 +296,8 @@
     max-width: none;
   }
 
-  .destLink {
-    gap: 0.7rem;
+  .featureGrid {
+    grid-template-columns: 1fr;
   }
 }
 

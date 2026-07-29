@@ -234,6 +234,9 @@ export type TwatterGeneratedPost = {
   authorHandle: string;
   content: string;
   poll?: { question: string; options: string[] } | null;
+  /** When set, this item is a reply — not a new top-level post. */
+  inReplyToPostId?: string | null;
+  inReplyToTempId?: string | null;
 };
 
 export type TwatterGeneratedInteraction = {

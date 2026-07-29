@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   IconHeart,
   IconHeartFilled,
@@ -6,6 +6,7 @@ import {
   IconRepeat,
   IconTrash,
 } from "@tabler/icons-react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   parseTwatterPollFromMetadata,
   type TwatterAccount,
@@ -41,25 +42,24 @@ function formatRelativeTime(iso: string): string {
 
 type PostCardProps = {
   post: TwatterPost;
+  posts: TwatterPost[];
   accounts: TwatterAccount[];
   interactions: TwatterInteraction[];
   personaId: string | null;
   personaAccount: TwatterAccount | null;
   onReply?: (post: TwatterPost) => void;
-  onMentionClick?: (accountId: string) => void;
-  onAuthorClick?: (accountId: string) => void;
 };
 
 export function PostCard({
   post,
+  posts,
   accounts,
   interactions,
   personaId,
   personaAccount,
   onReply,
-  onMentionClick,
-  onAuthorClick,
 }: PostCardProps) {
+  const navigate = useNavigate();
   const createInteraction = useCreateTwatterInteraction();
   const removeInteraction = useRemoveTwatterInteraction();
   const deleteMutation = useDeleteTwatterPost();
@@ -97,7 +97,14 @@ export function PostCard({
   const initial = (author?.display_name || "?").slice(0, 1).toUpperCase();
   const likes = postInteractions.filter((item) => item.type === "like");
   const reposts = postInteractions.filter((item) => item.type === "repost");
-  const replies = postInteractions.filter((item) => item.type === "reply");
+  const interactionReplies = postInteractions.filter(
+    (item) => item.type === "reply",
+  );
+  const threadReplies = useMemo(
+    () => posts.filter((item) => item.parent_post_id === post.id),
+    [posts, post.id],
+  );
+  const replyCount = interactionReplies.length + threadReplies.length;
 
   const personaLiked = personaAccount
     ? likes.some((item) => item.actor_account_id === personaAccount.id)
@@ -106,6 +113,13 @@ export function PostCard({
     ? reposts.some((item) => item.actor_account_id === personaAccount.id)
     : false;
   const isOwnPost = personaAccount?.id === post.author_account_id;
+
+  function openProfile(accountId: string) {
+    void navigate({
+      to: "/twatter/profile/$accountId",
+      params: { accountId },
+    });
+  }
 
   function toggle(type: "like" | "repost") {
     if (!personaId) return;
@@ -145,8 +159,8 @@ export function PostCard({
         <button
           type="button"
           className={classes.avatarButton}
-          onClick={() => author && onAuthorClick?.(author.id)}
-          disabled={!author || !onAuthorClick}
+          onClick={() => author && openProfile(author.id)}
+          disabled={!author}
         >
           {avatarSrc ? (
             <img
@@ -168,8 +182,8 @@ export function PostCard({
             <button
               type="button"
               className={classes.postNameButton}
-              onClick={() => author && onAuthorClick?.(author.id)}
-              disabled={!author || !onAuthorClick}
+              onClick={() => author && openProfile(author.id)}
+              disabled={!author}
             >
               <span className={classes.postName}>
                 {author?.display_name || "Anonymous"}
@@ -188,7 +202,7 @@ export function PostCard({
             <TwatterMentionText
               text={post.content}
               accounts={accounts}
-              onMentionClick={onMentionClick}
+              onMentionClick={openProfile}
             />
           </p>
 
@@ -231,9 +245,9 @@ export function PostCard({
             </div>
           ) : null}
 
-          {replies.length > 0 ? (
+          {replyCount > 0 ? (
             <div className={classes.replyList}>
-              {replies.map((reply) => (
+              {interactionReplies.map((reply) => (
                 <div key={reply.id} className={classes.replyCard}>
                   <span className={classes.replyHandle}>
                     {reply.actor_snapshot?.handle ?? "@unknown"}
@@ -242,11 +256,30 @@ export function PostCard({
                     <TwatterMentionText
                       text={reply.content ?? ""}
                       accounts={accounts}
-                      onMentionClick={onMentionClick}
+                      onMentionClick={openProfile}
                     />
                   </span>
                 </div>
               ))}
+              {threadReplies.map((reply) => {
+                const replyAuthor =
+                  reply.author_snapshot ??
+                  accounts.find((account) => account.id === reply.author_account_id);
+                return (
+                  <div key={reply.id} className={classes.replyCard}>
+                    <span className={classes.replyHandle}>
+                      {replyAuthor?.handle ?? "@unknown"}
+                    </span>
+                    <span>
+                      <TwatterMentionText
+                        text={reply.content}
+                        accounts={accounts}
+                        onMentionClick={openProfile}
+                      />
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           ) : null}
 
@@ -259,8 +292,8 @@ export function PostCard({
               aria-label="Reply"
             >
               <IconMessageCircle size={17} />
-              {replies.length > 0 ? (
-                <span className={classes.actionCount}>{replies.length}</span>
+              {replyCount > 0 ? (
+                <span className={classes.actionCount}>{replyCount}</span>
               ) : null}
             </button>
             <button

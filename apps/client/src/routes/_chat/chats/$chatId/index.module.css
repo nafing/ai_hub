@@ -116,10 +116,6 @@
   font-weight: 700;
 }
 
-.asideClose {
-  display: none;
-}
-
 @media (max-width: 767px) {
   .shellAsideOpen {
     grid-template-columns: minmax(0, 1fr);
@@ -135,10 +131,6 @@
     display: flex;
     border-left: 0;
     background: var(--color-bg);
-  }
-
-  .asideClose {
-    display: inline-flex;
   }
 }
 
@@ -169,4 +161,19 @@
 .error {
   margin: 0;
   color: var(--color-danger);
+}
+
+.agentsButtonActive {
+  position: relative;
+}
+
+.agentsBadge {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.2rem;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 1.5px var(--color-bg);
 }

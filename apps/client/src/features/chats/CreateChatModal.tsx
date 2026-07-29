@@ -199,8 +199,10 @@ export function CreateChatModal({ opened, onClose }: CreateChatModalProps) {
           <p className={classes.fieldHint}>
             First selected is primary (
             <RuntimeText>{"{{char}}"}</RuntimeText>
-            ). Each character opens with their greeting and alternate greetings
-            as swipes.
+            ).
+            {mode === "roleplay"
+              ? " Each character opens with their greeting and alternate greetings as swipes."
+              : " Conversation starts empty — characters reply when triggered or messaged."}
           </p>
           <MultiSelect
             placeholder="Select characters"

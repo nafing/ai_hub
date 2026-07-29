@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { TwatterAccount, TwatterBootstrap } from "@ai-hub/shared";
+import { useNavigate } from "@tanstack/react-router";
 import { Button, TextInput } from "@/components/ui";
 import { PostCard } from "./PostCard";
 import { useTwatterSearch } from "./queries";
@@ -9,20 +10,26 @@ type TwatterSearchProps = {
   bootstrap: TwatterBootstrap | undefined;
   personaId: string | null;
   personaAccount: TwatterAccount | null;
-  onOpenProfile: (accountId: string) => void;
 };
 
 export function TwatterSearch({
   bootstrap,
   personaId,
   personaAccount,
-  onOpenProfile,
 }: TwatterSearchProps) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
   const searchQuery = useTwatterSearch(submitted);
 
   const results = searchQuery.data ?? { accounts: [], posts: [] };
+
+  function openProfile(accountId: string) {
+    void navigate({
+      to: "/twatter/profile/$accountId",
+      params: { accountId },
+    });
+  }
 
   return (
     <div className={classes.panel}>
@@ -60,7 +67,7 @@ export function TwatterSearch({
                     key={account.id}
                     type="button"
                     className={classes.searchAccountRow}
-                    onClick={() => onOpenProfile(account.id)}
+                    onClick={() => openProfile(account.id)}
                   >
                     <span className={classes.searchAccountName}>
                       {account.display_name}
@@ -87,12 +94,11 @@ export function TwatterSearch({
                   <PostCard
                     key={post.id}
                     post={post}
+                    posts={bootstrap?.posts ?? results.posts}
                     accounts={bootstrap?.accounts ?? []}
                     interactions={bootstrap?.interactions ?? []}
                     personaId={personaId}
                     personaAccount={personaAccount}
-                    onMentionClick={onOpenProfile}
-                    onAuthorClick={onOpenProfile}
                   />
                 ))}
               </div>

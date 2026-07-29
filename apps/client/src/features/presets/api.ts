@@ -11,6 +11,7 @@ import type {
 } from "@ai-hub/shared";
 import { promptPresetVariables } from "@/features/presets/PresetCommandBridge";
 import { extractNeedsPresetVariables } from "@/features/presets/needsPresetVariables";
+import { playAppSound } from "@/features/sounds";
 import { api } from "@/lib/api";
 
 export async function listPresets(): Promise<PresetListItem[]> {
@@ -86,6 +87,7 @@ export async function testPreset(
         ...input,
         variables,
       });
+      playAppSound("generator");
       return data;
     } catch (error) {
       const command = extractNeedsPresetVariables(error);

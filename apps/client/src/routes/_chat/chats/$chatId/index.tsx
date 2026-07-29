@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   IconArrowLeft,
   IconNotebook,
+  IconRobot,
   IconSettings,
   IconUsers,
 } from "@tabler/icons-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ActionIcon } from "@/components/ui";
+import { chatAgentPanelHasActivity } from "@/features/chats/ChatAgentPanel";
 import { ChatSession } from "@/features/chats/ChatSession";
+import { useChatGeneration } from "@/features/chats/chatGenerationStore";
 import { ChatSettingsPanel } from "@/features/chats/ChatSettingsPanel";
 import { ConversationPresenceModal } from "@/features/chats/ConversationPresenceModal";
 import { SummaryPopover } from "@/features/chats/SummaryPopover";
@@ -25,6 +28,22 @@ function RouteComponent() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [presenceOpen, setPresenceOpen] = useState(false);
+  const [agentsOpen, setAgentsOpen] = useState(false);
+  const { agentStatus } = useChatGeneration(chatId);
+  const hasActiveAgents = (chat?.settings.agent_ids ?? []).length > 0;
+  const isConversation = chat?.mode === "conversation";
+
+  useEffect(() => {
+    if (!hasActiveAgents) {
+      setAgentsOpen(false);
+    }
+  }, [hasActiveAgents]);
+
+  useEffect(() => {
+    if (isConversation) {
+      setSummaryOpen(false);
+    }
+  }, [isConversation]);
 
   if (isLoading) {
     return (
@@ -41,6 +60,9 @@ function RouteComponent() {
       </div>
     );
   }
+
+  const agentsHaveActivity =
+    Boolean(agentStatus) || chatAgentPanelHasActivity(chat);
 
   return (
     <div
@@ -75,7 +97,25 @@ function RouteComponent() {
           </div>
         </div>
         <div className={classes.headerActions}>
-          {chat.mode === "conversation" ? (
+          {hasActiveAgents ? (
+            <ActionIcon
+              type="button"
+              variant={agentsOpen ? "primary" : "default"}
+              aria-label="Agents"
+              aria-pressed={agentsOpen}
+              title="Agents"
+              className={
+                agentsHaveActivity ? classes.agentsButtonActive : undefined
+              }
+              onClick={() => setAgentsOpen((open) => !open)}
+            >
+              <IconRobot size={18} />
+              {agentsHaveActivity ? (
+                <span className={classes.agentsBadge} aria-hidden />
+              ) : null}
+            </ActionIcon>
+          ) : null}
+          {isConversation ? (
             <ActionIcon
               type="button"
               variant={presenceOpen ? "primary" : "default"}
@@ -86,15 +126,17 @@ function RouteComponent() {
               <IconUsers size={18} />
             </ActionIcon>
           ) : null}
-          <ActionIcon
-            type="button"
-            variant={summaryOpen ? "primary" : "default"}
-            aria-label="Chat summary"
-            aria-pressed={summaryOpen}
-            onClick={() => setSummaryOpen(true)}
-          >
-            <IconNotebook size={18} />
-          </ActionIcon>
+          {!isConversation ? (
+            <ActionIcon
+              type="button"
+              variant={summaryOpen ? "primary" : "default"}
+              aria-label="Chat summary"
+              aria-pressed={summaryOpen}
+              onClick={() => setSummaryOpen(true)}
+            >
+              <IconNotebook size={18} />
+            </ActionIcon>
+          ) : null}
           <ActionIcon
             type="button"
             variant={settingsOpen ? "primary" : "default"}
@@ -108,30 +150,27 @@ function RouteComponent() {
       </header>
 
       <main className={classes.main}>
-        <ChatSession chat={chat} />
+        <ChatSession
+          chat={chat}
+          agentsOpen={agentsOpen}
+          onAgentsOpenChange={setAgentsOpen}
+        />
       </main>
 
       <aside className={classes.aside} data-glass-surface>
         <div className={classes.asideHeader}>
           <p className={classes.asideTitle}>Chat Settings</p>
-          <ActionIcon
-            type="button"
-            variant={settingsOpen ? "primary" : "default"}
-            className={classes.asideClose}
-            aria-label="Close settings"
-            onClick={() => setSettingsOpen(false)}
-          >
-            <IconSettings size={18} />
-          </ActionIcon>
         </div>
         <ChatSettingsPanel chat={chat} />
       </aside>
 
-      <SummaryPopover
-        chat={chat}
-        opened={summaryOpen}
-        onClose={() => setSummaryOpen(false)}
-      />
+      {!isConversation ? (
+        <SummaryPopover
+          chat={chat}
+          opened={summaryOpen}
+          onClose={() => setSummaryOpen(false)}
+        />
+      ) : null}
 
       <ConversationPresenceModal
         chat={chat}

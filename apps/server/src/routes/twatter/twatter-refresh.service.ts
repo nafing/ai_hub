@@ -94,6 +94,7 @@ export class TwatterRefreshService {
       accounts: bootstrap.accounts,
       participantAccounts,
       recentPosts: bootstrap.posts,
+      recentInteractions: bootstrap.interactions,
       personaAccount,
     });
 
@@ -179,9 +180,22 @@ export class TwatterRefreshService {
 
     const postsToCreate = generated.posts.slice(
       0,
-      settings.max_generated_posts_per_refresh,
+      settings.max_generated_posts_per_refresh + settings.max_replies_per_refresh,
     );
-    for (const item of postsToCreate) {
+
+    const rootPosts = postsToCreate.filter(
+      (item) => !item.inReplyToPostId && !item.inReplyToTempId,
+    );
+    const replyPosts = postsToCreate.filter(
+      (item) => item.inReplyToPostId || item.inReplyToTempId,
+    );
+
+    let replyCount = 0;
+
+    for (const item of rootPosts.slice(
+      0,
+      settings.max_generated_posts_per_refresh,
+    )) {
       const account = handleToAccount.get(
         normalizeTwatterHandle(item.authorHandle),
       );
@@ -210,7 +224,39 @@ export class TwatterRefreshService {
       if (item.tempId) tempIdToPostId.set(item.tempId, id);
     }
 
-    let replyCount = 0;
+    for (const item of replyPosts) {
+      if (replyCount >= settings.max_replies_per_refresh) continue;
+
+      const account = handleToAccount.get(
+        normalizeTwatterHandle(item.authorHandle),
+      );
+      if (!account || account.kind === "persona") continue;
+
+      const parentPostId =
+        item.inReplyToPostId ??
+        (item.inReplyToTempId
+          ? tempIdToPostId.get(item.inReplyToTempId)
+          : undefined);
+      if (!parentPostId || !item.content?.trim()) continue;
+
+      const id = randomUUID();
+      const entity = this.posts.create({
+        id,
+        author_account_id: account.id,
+        content: item.content.trim().slice(0, 4000),
+        image_url: null,
+        parent_post_id: parentPostId,
+        quote_post_id: null,
+        source: "generated",
+        metadata: {},
+        author_snapshot: accountSnapshot(account),
+        created_at: now,
+        updated_at: now,
+      });
+      await this.posts.save(entity);
+      replyCount += 1;
+    }
+
     let repostCount = 0;
     let likeCount = 0;
 

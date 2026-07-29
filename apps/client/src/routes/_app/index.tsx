@@ -1,10 +1,17 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import {
+  IconAiAgent,
   IconArrowRight,
   IconBook,
+  IconBrandTwitter,
+  IconConnection,
+  IconFunction,
   IconMessages,
   IconPresentation,
+  IconRegex,
+  IconSettings,
+  IconUser,
   IconUsers,
 } from "@tabler/icons-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -17,32 +24,116 @@ export const Route = createFileRoute("/_app/")({
   component: RouteComponent,
 });
 
-const DESTINATIONS = [
+type FeatureItem = {
+  to: string;
+  label: string;
+  blurb: string;
+  icon: typeof IconMessages;
+};
+
+type FeatureGroup = {
+  id: string;
+  title: string;
+  lede: string;
+  items: FeatureItem[];
+};
+
+const FEATURE_GROUPS: FeatureGroup[] = [
   {
-    to: "/characters",
-    label: "Characters",
-    blurb: "Cards, greetings, and generation.",
-    icon: IconUsers,
+    id: "play",
+    title: "Play",
+    lede: "Jump into a scene or scroll the feed.",
+    items: [
+      {
+        to: "/chats",
+        label: "Chats",
+        blurb: "Roleplay threads with your cast.",
+        icon: IconMessages,
+      },
+      {
+        to: "/twatter",
+        label: "Twatter",
+        blurb: "Social timeline for personas and characters.",
+        icon: IconBrandTwitter,
+      },
+    ],
   },
   {
-    to: "/presets",
-    label: "Presets",
-    blurb: "Prompt stacks for every mode.",
-    icon: IconPresentation,
+    id: "user-data",
+    title: "User data",
+    lede: "Profiles, cards, and world facts you reuse everywhere.",
+    items: [
+      {
+        to: "/personas",
+        label: "Personas",
+        blurb: "Your voice across chats and Twatter.",
+        icon: IconUser,
+      },
+      {
+        to: "/characters",
+        label: "Characters",
+        blurb: "Cards, greetings, and generation.",
+        icon: IconUsers,
+      },
+      {
+        to: "/lorebooks",
+        label: "Lorebooks",
+        blurb: "World facts that stay in play.",
+        icon: IconBook,
+      },
+    ],
   },
   {
-    to: "/lorebooks",
-    label: "Lorebooks",
-    blurb: "World facts that stay in play.",
-    icon: IconBook,
+    id: "llm-settings",
+    title: "LLM settings",
+    lede: "Wire models, shape prompts, and extend what the model can do.",
+    items: [
+      {
+        to: "/connections",
+        label: "Connections",
+        blurb: "API keys and model providers.",
+        icon: IconConnection,
+      },
+      {
+        to: "/presets",
+        label: "Presets",
+        blurb: "Prompt stacks for every mode.",
+        icon: IconPresentation,
+      },
+      {
+        to: "/regexes",
+        label: "Regexes",
+        blurb: "Find-and-replace rules for output.",
+        icon: IconRegex,
+      },
+      {
+        to: "/tools",
+        label: "Tools",
+        blurb: "Custom functions the model can call.",
+        icon: IconFunction,
+      },
+      {
+        to: "/agents",
+        label: "Agents",
+        blurb: "Autonomous helpers inside chats.",
+        icon: IconAiAgent,
+      },
+    ],
   },
   {
-    to: "/chats",
-    label: "Chats",
-    blurb: "Pick up a scene mid-thread.",
-    icon: IconMessages,
+    id: "settings",
+    title: "App",
+    lede: "Theme, sounds, and global preferences.",
+    items: [
+      {
+        to: "/settings",
+        label: "Settings",
+        blurb: "Appearance, audio, and app defaults.",
+        icon: IconSettings,
+      },
+    ],
   },
-] as const;
+];
 
 function RouteComponent() {
   const [createOpen, setCreateOpen] = useState(false);
@@ -91,7 +182,8 @@ function RouteComponent() {
               ease: [0.22, 1, 0.36, 1],
             }}
           >
-            Wire models, shape presets, and keep every scene under your roof.
+            Everything in one place — chats, social feed, presets, and model
+            wiring.
           </motion.p>
 
           <motion.div
@@ -111,58 +203,62 @@ function RouteComponent() {
             >
               Start a chat
             </Button>
-            <Link to="/characters" className={classes.ctaGhost}>
-              Browse characters
+            <Link to="/twatter" className={classes.ctaGhost}>
+              Open Twatter
               <IconArrowRight size={16} stroke={1.75} />
             </Link>
           </motion.div>
         </div>
       </section>
 
-      <section className={classes.section} aria-labelledby="home-destinations">
-        <div className={classes.sectionIntro}>
-          <h2 id="home-destinations" className={classes.sectionTitle}>
-            Open a workshop
-          </h2>
-          <p className={classes.sectionLede}>
-            Jump straight into the piece you need next.
-          </p>
-        </div>
+      {FEATURE_GROUPS.map((group, groupIndex) => (
+        <section
+          key={group.id}
+          className={classes.section}
+          aria-labelledby={`home-${group.id}`}
+        >
+          <div className={classes.sectionIntro}>
+            <h2 id={`home-${group.id}`} className={classes.sectionTitle}>
+              {group.title}
+            </h2>
+            <p className={classes.sectionLede}>{group.lede}</p>
+          </div>
 
-        <ul className={classes.destList}>
-          {DESTINATIONS.map((item, index) => {
-            const Icon = item.icon;
-            return (
-              <motion.li
-                key={item.to}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{
-                  duration: 0.35,
-                  delay: 0.28 + index * 0.05,
-                  ease: [0.22, 1, 0.36, 1],
-                }}
-              >
-                <Link to={item.to} className={classes.destLink}>
-                  <span className={classes.destIcon} aria-hidden>
-                    <Icon size={18} stroke={1.6} />
-                  </span>
-                  <span className={classes.destCopy}>
-                    <span className={classes.destLabel}>{item.label}</span>
-                    <span className={classes.destBlurb}>{item.blurb}</span>
-                  </span>
-                  <IconArrowRight
-                    className={classes.destArrow}
-                    size={16}
-                    stroke={1.75}
-                    aria-hidden
-                  />
-                </Link>
-              </motion.li>
-            );
-          })}
-        </ul>
-      </section>
+          <ul className={classes.featureGrid}>
+            {group.items.map((item, index) => {
+              const Icon = item.icon;
+              return (
+                <motion.li
+                  key={item.to}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    duration: 0.35,
+                    delay: 0.2 + groupIndex * 0.06 + index * 0.04,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                >
+                  <Link to={item.to} className={classes.featureCard}>
+                    <span className={classes.featureIcon} aria-hidden>
+                      <Icon size={20} stroke={1.6} />
+                    </span>
+                    <span className={classes.featureCopy}>
+                      <span className={classes.featureLabel}>{item.label}</span>
+                      <span className={classes.featureBlurb}>{item.blurb}</span>
+                    </span>
+                    <IconArrowRight
+                      className={classes.featureArrow}
+                      size={16}
+                      stroke={1.75}
+                      aria-hidden
+                    />
+                  </Link>
+                </motion.li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
 
       {recent.length > 0 ? (
         <section className={classes.section} aria-labelledby="home-recent">

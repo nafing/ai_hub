@@ -14,6 +14,7 @@ type TwatterSettingsPanelProps = {
   characters: CharacterListItem[];
   connections: ConnectionListItem[];
   onClose: () => void;
+  embedded?: boolean;
 };
 
 export function TwatterSettingsPanel({
@@ -21,6 +22,7 @@ export function TwatterSettingsPanel({
   characters,
   connections,
   onClose,
+  embedded = false,
 }: TwatterSettingsPanelProps) {
   const settings = bootstrap?.settings;
   const updateSettings = useUpdateTwatterSettings();
@@ -213,11 +215,13 @@ export function TwatterSettingsPanel({
         </Button>
       </section>
 
-      <div className={classes.settingsFooter}>
-        <Button type="button" variant="primary" onClick={onClose}>
-          Done
-        </Button>
-      </div>
+      {!embedded ? (
+        <div className={classes.settingsFooter}>
+          <Button type="button" variant="primary" onClick={onClose}>
+            Done
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

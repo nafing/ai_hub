@@ -315,11 +315,12 @@ export function useFilteredTwatterPosts({
   posts,
 }: Pick<TwatterTimelineProps, "tab" | "personaAccount" | "posts">) {
   return useMemo(() => {
-    if (tab === "main") return posts;
+    const rootPosts = posts.filter((post) => !post.parent_post_id);
+    if (tab === "main") return rootPosts;
     const following = new Set(
       personaAccount?.settings.social.following_account_ids ?? [],
     );
-    return posts.filter((post) => following.has(post.author_account_id));
+    return rootPosts.filter((post) => following.has(post.author_account_id));
   }, [tab, personaAccount, posts]);
 }
 

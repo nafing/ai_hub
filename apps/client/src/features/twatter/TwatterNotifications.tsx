@@ -1,4 +1,5 @@
 import type { TwatterAccount, TwatterBootstrap } from "@ai-hub/shared";
+import { useNavigate } from "@tanstack/react-router";
 import { characterAvatarSrc } from "@/features/characters/avatar-url";
 import { personaAvatarSrc } from "@/features/personas/avatar-url";
 import { api } from "@/lib/api";
@@ -10,7 +11,6 @@ import classes from "./TwatterFeed.module.css";
 type TwatterNotificationsProps = {
   bootstrap: TwatterBootstrap | undefined;
   personaId: string | null;
-  onOpenProfile: (accountId: string) => void;
 };
 
 function actorAvatar(
@@ -30,8 +30,8 @@ function actorAvatar(
 export function TwatterNotifications({
   bootstrap,
   personaId,
-  onOpenProfile,
 }: TwatterNotificationsProps) {
+  const navigate = useNavigate();
   const notificationsQuery = useTwatterNotifications(personaId, false);
   const apiBase = String(api.defaults.baseURL);
 
@@ -54,12 +54,15 @@ export function TwatterNotifications({
     (bootstrap?.accounts ?? []).map((account) => [account.id, account]),
   );
 
+  function openProfile(accountId: string) {
+    void navigate({
+      to: "/twatter/profile/$accountId",
+      params: { accountId },
+    });
+  }
+
   return (
     <div className={classes.panel}>
-      <div className={classes.panelHeader}>
-        <h2 className={classes.panelTitle}>Notifications</h2>
-      </div>
-
       {notifications.length === 0 ? (
         <p className={classes.status}>No notifications yet.</p>
       ) : (
@@ -73,7 +76,7 @@ export function TwatterNotifications({
                 key={notification.id}
                 type="button"
                 className={classes.notificationRow}
-                onClick={() => onOpenProfile(notification.actor_account_id)}
+                onClick={() => openProfile(notification.actor_account_id)}
               >
                 {avatar ? (
                   <img

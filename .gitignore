@@ -37,9 +37,11 @@ yarn-error.log*
 # Uploaded user files
 uploads/
 apps/server/uploads/
+server/uploads/
 
 # Local SQLite database
 database.sqlite
+apps/server/database.sqlite
 database.sqlite-*
 *.sqlite
 *.sqlite-journal

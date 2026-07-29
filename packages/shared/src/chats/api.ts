@@ -39,6 +39,8 @@ export type UpdateChatMessageInput = {
    * If it was the last swipe, the message is deleted.
    */
   remove_active_swipe?: boolean;
+  /** Append a reaction emoji chip (user or manual). */
+  add_reaction?: string;
 };
 
 export type GenerateChatInput = {
@@ -122,6 +124,8 @@ export type ChatStreamEvent =
       character_id?: string | null;
       detail?: string;
       chat_id?: string;
+      /** Target message for react commands. */
+      message_id?: string;
     }
   | {
       type: "done";

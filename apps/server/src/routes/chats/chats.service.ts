@@ -248,9 +248,9 @@ export class ChatsService {
               : `${names[0]} +${names.length - 1}`;
       }
 
-      if (!input.skip_greeting) {
+      if (!input.skip_greeting && input.mode === "roleplay") {
         for (const [index, character] of resolvedCharacters.entries()) {
-          // Each character gets first_mes + alternate_greetings as swipe branches.
+          // Roleplay only: each character gets first_mes + alternate_greetings as swipe branches.
           // greeting_index only picks the initial active swipe for the primary.
           const greeting = buildCharacterGreetingMessage({
             character,
@@ -586,6 +586,7 @@ export class ChatsService {
           command: "react",
           character_id: input.characterId,
           detail: command.emoji,
+          message_id: target.id,
         });
       }
 
@@ -854,6 +855,23 @@ export class ChatsService {
       message.swipes = swipes;
     }
     if (input.thinking !== undefined) message.thinking = input.thinking;
+    if (input.add_reaction !== undefined) {
+      const emoji = input.add_reaction.trim();
+      if (!emoji) {
+        throw new BadRequestException("add_reaction must be a non-empty emoji");
+      }
+      if (emoji.length > 32) {
+        throw new BadRequestException("add_reaction is too long");
+      }
+      message.reactions = [
+        ...(message.reactions ?? []),
+        {
+          emoji,
+          character_id: null,
+          created_at: new Date().toISOString(),
+        },
+      ];
+    }
 
     row.messages = row.messages.map((item, i) =>
       i === index ? message : item,
@@ -1550,6 +1568,7 @@ export class ChatsService {
         if (refreshed) {
           row.settings = refreshed.settings;
           row.messages = refreshed.messages;
+          mutable.messages = refreshed.messages;
         }
       }
 
@@ -1557,6 +1576,12 @@ export class ChatsService {
       row.summary = mutable.summary;
       row.messages = mutable.messages;
     }
+
+    const commandOnlyTurn =
+      role === "assistant" &&
+      row.mode === "conversation" &&
+      !content.trim() &&
+      !thinking?.trim();
 
     let savedMessage: ChatMessage;
     if (regenerateIndex !== undefined) {
@@ -1572,6 +1597,14 @@ export class ChatsService {
       row.messages = row.messages.map((message, index) =>
         index === regenerateIndex ? savedMessage : message,
       );
+    } else if (commandOnlyTurn) {
+      row.messages = normalizeChatMessages(row.messages);
+      row.updated_at = new Date().toISOString();
+      const saved = await this.chats.save(row);
+      Object.assign(row, saved);
+      const visible = visibleChatMessages(row.messages);
+      savedMessage =
+        visible[visible.length - 1] ?? row.messages[row.messages.length - 1]!;
     } else {
       row.messages = normalizeChatMessages(row.messages);
       savedMessage = createChatMessage({
@@ -1585,19 +1618,21 @@ export class ChatsService {
       row.messages = [...row.messages, savedMessage];
     }
 
-    row.updated_at = new Date().toISOString();
-    const saved = await this.chats.save(row);
-    Object.assign(row, saved);
+    if (!commandOnlyTurn) {
+      row.updated_at = new Date().toISOString();
+      const saved = await this.chats.save(row);
+      Object.assign(row, saved);
+    }
 
-    if (row.mode === "conversation" && savedMessage.role === "assistant") {
+    if (row.mode === "conversation" && role === "assistant" && characterId) {
       this.conversationAutonomous.recordAssistantActivity(
         row.id,
-        savedMessage.character_id,
+        characterId,
       );
-      if (autonomous && savedMessage.character_id) {
+      if (autonomous) {
         await this.conversationAutonomous.bumpAutonomousBudget(
           row.id,
-          savedMessage.character_id,
+          characterId,
           autonomousIntentKey,
         );
         const refreshed = await this.chats.findOneBy({ id: row.id });

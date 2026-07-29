@@ -516,7 +516,7 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
       <p className={classes.sectionLabel}>Agents</p>
       <Field
         label="Active agents"
-        hint="Pre/parallel/post agents run around each reply. Open Agents from the composer to view results and templates."
+        hint="Pre/parallel/post agents run around each reply. Open Agents from the header to view results and templates."
       >
         <MultiSelect
           data={agentOptions}

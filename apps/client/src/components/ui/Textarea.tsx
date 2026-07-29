@@ -5,8 +5,11 @@ import {
   type TextareaHTMLAttributes,
   type Ref,
 } from "react";
+import classes from "./Textarea.module.css";
 
-export type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
+export type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  error?: boolean;
+};
 
 function mergeRefs<T>(...refs: Array<Ref<T> | undefined>) {
   return (node: T | null) => {
@@ -25,7 +28,10 @@ function autosize(el: HTMLTextAreaElement | null) {
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  function Textarea({ onInput, style, value, defaultValue, ...props }, ref) {
+  function Textarea(
+    { onInput, style, value, defaultValue, error = false, className, ...props },
+    ref,
+  ) {
     const localRef = useRef<HTMLTextAreaElement>(null);
 
     useLayoutEffect(() => {
@@ -46,6 +52,9 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         ref={mergeRefs(localRef, ref)}
         value={value}
         defaultValue={defaultValue}
+        className={[classes.root, error ? classes.error : "", className]
+          .filter(Boolean)
+          .join(" ")}
         style={{ resize: "none", overflow: "hidden", ...style }}
         onInput={(event) => {
           autosize(event.currentTarget);

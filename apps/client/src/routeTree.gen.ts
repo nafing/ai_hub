@@ -9,10 +9,11 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TwatterRouteRouteImport } from './routes/_twatter/route'
 import { Route as ChatRouteRouteImport } from './routes/_chat/route'
 import { Route as AppRouteRouteImport } from './routes/_app/route'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as AppTwatterIndexRouteImport } from './routes/_app/twatter/index'
+import { Route as TwatterTwatterIndexRouteImport } from './routes/_twatter/twatter/index'
 import { Route as AppToolsIndexRouteImport } from './routes/_app/tools/index'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppRegexesIndexRouteImport } from './routes/_app/regexes/index'
@@ -23,6 +24,11 @@ import { Route as AppConnectionsIndexRouteImport } from './routes/_app/connectio
 import { Route as AppChatsIndexRouteImport } from './routes/_app/chats/index'
 import { Route as AppCharactersIndexRouteImport } from './routes/_app/characters/index'
 import { Route as AppAgentsIndexRouteImport } from './routes/_app/agents/index'
+import { Route as AppActivityIndexRouteImport } from './routes/_app/activity/index'
+import { Route as TwatterTwatterSettingsRouteImport } from './routes/_twatter/twatter/settings'
+import { Route as TwatterTwatterSearchRouteImport } from './routes/_twatter/twatter/search'
+import { Route as TwatterTwatterNotificationsRouteImport } from './routes/_twatter/twatter/notifications'
+import { Route as TwatterTwatterProfileIndexRouteImport } from './routes/_twatter/twatter/profile/index'
 import { Route as ChatChatsChatIdIndexRouteImport } from './routes/_chat/chats/$chatId/index'
 import { Route as AppToolsToolIdIndexRouteImport } from './routes/_app/tools/$toolId/index'
 import { Route as AppRegexesRegexIdIndexRouteImport } from './routes/_app/regexes/$regexId/index'
@@ -32,7 +38,12 @@ import { Route as AppLorebooksLorebookIdIndexRouteImport } from './routes/_app/l
 import { Route as AppConnectionsConnectionIdIndexRouteImport } from './routes/_app/connections/$connectionId/index'
 import { Route as AppCharactersCharacterIdIndexRouteImport } from './routes/_app/characters/$characterId/index'
 import { Route as AppAgentsAgentIdIndexRouteImport } from './routes/_app/agents/$agentId/index'
+import { Route as TwatterTwatterProfileAccountIdRouteImport } from './routes/_twatter/twatter/profile/$accountId'
 
+const TwatterRouteRoute = TwatterRouteRouteImport.update({
+  id: '/_twatter',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChatRouteRoute = ChatRouteRouteImport.update({
   id: '/_chat',
   getParentRoute: () => rootRouteImport,
@@ -46,10 +57,10 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRouteRoute,
 } as any)
-const AppTwatterIndexRoute = AppTwatterIndexRouteImport.update({
+const TwatterTwatterIndexRoute = TwatterTwatterIndexRouteImport.update({
   id: '/twatter/',
   path: '/twatter/',
-  getParentRoute: () => AppRouteRoute,
+  getParentRoute: () => TwatterRouteRoute,
 } as any)
 const AppToolsIndexRoute = AppToolsIndexRouteImport.update({
   id: '/tools/',
@@ -101,6 +112,33 @@ const AppAgentsIndexRoute = AppAgentsIndexRouteImport.update({
   path: '/agents/',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppActivityIndexRoute = AppActivityIndexRouteImport.update({
+  id: '/activity/',
+  path: '/activity/',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const TwatterTwatterSettingsRoute = TwatterTwatterSettingsRouteImport.update({
+  id: '/twatter/settings',
+  path: '/twatter/settings',
+  getParentRoute: () => TwatterRouteRoute,
+} as any)
+const TwatterTwatterSearchRoute = TwatterTwatterSearchRouteImport.update({
+  id: '/twatter/search',
+  path: '/twatter/search',
+  getParentRoute: () => TwatterRouteRoute,
+} as any)
+const TwatterTwatterNotificationsRoute =
+  TwatterTwatterNotificationsRouteImport.update({
+    id: '/twatter/notifications',
+    path: '/twatter/notifications',
+    getParentRoute: () => TwatterRouteRoute,
+  } as any)
+const TwatterTwatterProfileIndexRoute =
+  TwatterTwatterProfileIndexRouteImport.update({
+    id: '/twatter/profile/',
+    path: '/twatter/profile/',
+    getParentRoute: () => TwatterRouteRoute,
+  } as any)
 const ChatChatsChatIdIndexRoute = ChatChatsChatIdIndexRouteImport.update({
   id: '/chats/$chatId/',
   path: '/chats/$chatId/',
@@ -150,9 +188,19 @@ const AppAgentsAgentIdIndexRoute = AppAgentsAgentIdIndexRouteImport.update({
   path: '/agents/$agentId/',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const TwatterTwatterProfileAccountIdRoute =
+  TwatterTwatterProfileAccountIdRouteImport.update({
+    id: '/twatter/profile/$accountId',
+    path: '/twatter/profile/$accountId',
+    getParentRoute: () => TwatterRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/twatter/notifications': typeof TwatterTwatterNotificationsRoute
+  '/twatter/search': typeof TwatterTwatterSearchRoute
+  '/twatter/settings': typeof TwatterTwatterSettingsRoute
+  '/activity/': typeof AppActivityIndexRoute
   '/agents/': typeof AppAgentsIndexRoute
   '/characters/': typeof AppCharactersIndexRoute
   '/chats/': typeof AppChatsIndexRoute
@@ -163,7 +211,8 @@ export interface FileRoutesByFullPath {
   '/regexes/': typeof AppRegexesIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/tools/': typeof AppToolsIndexRoute
-  '/twatter/': typeof AppTwatterIndexRoute
+  '/twatter/': typeof TwatterTwatterIndexRoute
+  '/twatter/profile/$accountId': typeof TwatterTwatterProfileAccountIdRoute
   '/agents/$agentId/': typeof AppAgentsAgentIdIndexRoute
   '/characters/$characterId/': typeof AppCharactersCharacterIdIndexRoute
   '/connections/$connectionId/': typeof AppConnectionsConnectionIdIndexRoute
@@ -173,9 +222,14 @@ export interface FileRoutesByFullPath {
   '/regexes/$regexId/': typeof AppRegexesRegexIdIndexRoute
   '/tools/$toolId/': typeof AppToolsToolIdIndexRoute
   '/chats/$chatId/': typeof ChatChatsChatIdIndexRoute
+  '/twatter/profile/': typeof TwatterTwatterProfileIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
+  '/twatter/notifications': typeof TwatterTwatterNotificationsRoute
+  '/twatter/search': typeof TwatterTwatterSearchRoute
+  '/twatter/settings': typeof TwatterTwatterSettingsRoute
+  '/activity': typeof AppActivityIndexRoute
   '/agents': typeof AppAgentsIndexRoute
   '/characters': typeof AppCharactersIndexRoute
   '/chats': typeof AppChatsIndexRoute
@@ -186,7 +240,8 @@ export interface FileRoutesByTo {
   '/regexes': typeof AppRegexesIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/tools': typeof AppToolsIndexRoute
-  '/twatter': typeof AppTwatterIndexRoute
+  '/twatter': typeof TwatterTwatterIndexRoute
+  '/twatter/profile/$accountId': typeof TwatterTwatterProfileAccountIdRoute
   '/agents/$agentId': typeof AppAgentsAgentIdIndexRoute
   '/characters/$characterId': typeof AppCharactersCharacterIdIndexRoute
   '/connections/$connectionId': typeof AppConnectionsConnectionIdIndexRoute
@@ -196,12 +251,18 @@ export interface FileRoutesByTo {
   '/regexes/$regexId': typeof AppRegexesRegexIdIndexRoute
   '/tools/$toolId': typeof AppToolsToolIdIndexRoute
   '/chats/$chatId': typeof ChatChatsChatIdIndexRoute
+  '/twatter/profile': typeof TwatterTwatterProfileIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteRouteWithChildren
   '/_chat': typeof ChatRouteRouteWithChildren
+  '/_twatter': typeof TwatterRouteRouteWithChildren
   '/_app/': typeof AppIndexRoute
+  '/_twatter/twatter/notifications': typeof TwatterTwatterNotificationsRoute
+  '/_twatter/twatter/search': typeof TwatterTwatterSearchRoute
+  '/_twatter/twatter/settings': typeof TwatterTwatterSettingsRoute
+  '/_app/activity/': typeof AppActivityIndexRoute
   '/_app/agents/': typeof AppAgentsIndexRoute
   '/_app/characters/': typeof AppCharactersIndexRoute
   '/_app/chats/': typeof AppChatsIndexRoute
@@ -212,7 +273,8 @@ export interface FileRoutesById {
   '/_app/regexes/': typeof AppRegexesIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/tools/': typeof AppToolsIndexRoute
-  '/_app/twatter/': typeof AppTwatterIndexRoute
+  '/_twatter/twatter/': typeof TwatterTwatterIndexRoute
+  '/_twatter/twatter/profile/$accountId': typeof TwatterTwatterProfileAccountIdRoute
   '/_app/agents/$agentId/': typeof AppAgentsAgentIdIndexRoute
   '/_app/characters/$characterId/': typeof AppCharactersCharacterIdIndexRoute
   '/_app/connections/$connectionId/': typeof AppConnectionsConnectionIdIndexRoute
@@ -222,11 +284,16 @@ export interface FileRoutesById {
   '/_app/regexes/$regexId/': typeof AppRegexesRegexIdIndexRoute
   '/_app/tools/$toolId/': typeof AppToolsToolIdIndexRoute
   '/_chat/chats/$chatId/': typeof ChatChatsChatIdIndexRoute
+  '/_twatter/twatter/profile/': typeof TwatterTwatterProfileIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/twatter/notifications'
+    | '/twatter/search'
+    | '/twatter/settings'
+    | '/activity/'
     | '/agents/'
     | '/characters/'
     | '/chats/'
@@ -238,6 +305,7 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/tools/'
     | '/twatter/'
+    | '/twatter/profile/$accountId'
     | '/agents/$agentId/'
     | '/characters/$characterId/'
     | '/connections/$connectionId/'
@@ -247,9 +315,14 @@ export interface FileRouteTypes {
     | '/regexes/$regexId/'
     | '/tools/$toolId/'
     | '/chats/$chatId/'
+    | '/twatter/profile/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/twatter/notifications'
+    | '/twatter/search'
+    | '/twatter/settings'
+    | '/activity'
     | '/agents'
     | '/characters'
     | '/chats'
@@ -261,6 +334,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tools'
     | '/twatter'
+    | '/twatter/profile/$accountId'
     | '/agents/$agentId'
     | '/characters/$characterId'
     | '/connections/$connectionId'
@@ -270,11 +344,17 @@ export interface FileRouteTypes {
     | '/regexes/$regexId'
     | '/tools/$toolId'
     | '/chats/$chatId'
+    | '/twatter/profile'
   id:
     | '__root__'
     | '/_app'
     | '/_chat'
+    | '/_twatter'
     | '/_app/'
+    | '/_twatter/twatter/notifications'
+    | '/_twatter/twatter/search'
+    | '/_twatter/twatter/settings'
+    | '/_app/activity/'
     | '/_app/agents/'
     | '/_app/characters/'
     | '/_app/chats/'
@@ -285,7 +365,8 @@ export interface FileRouteTypes {
     | '/_app/regexes/'
     | '/_app/settings/'
     | '/_app/tools/'
-    | '/_app/twatter/'
+    | '/_twatter/twatter/'
+    | '/_twatter/twatter/profile/$accountId'
     | '/_app/agents/$agentId/'
     | '/_app/characters/$characterId/'
     | '/_app/connections/$connectionId/'
@@ -295,15 +376,24 @@ export interface FileRouteTypes {
     | '/_app/regexes/$regexId/'
     | '/_app/tools/$toolId/'
     | '/_chat/chats/$chatId/'
+    | '/_twatter/twatter/profile/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AppRouteRoute: typeof AppRouteRouteWithChildren
   ChatRouteRoute: typeof ChatRouteRouteWithChildren
+  TwatterRouteRoute: typeof TwatterRouteRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/_twatter': {
+      id: '/_twatter'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof TwatterRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_chat': {
       id: '/_chat'
       path: ''
@@ -325,12 +415,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRouteRoute
     }
-    '/_app/twatter/': {
-      id: '/_app/twatter/'
+    '/_twatter/twatter/': {
+      id: '/_twatter/twatter/'
       path: '/twatter'
       fullPath: '/twatter/'
-      preLoaderRoute: typeof AppTwatterIndexRouteImport
-      parentRoute: typeof AppRouteRoute
+      preLoaderRoute: typeof TwatterTwatterIndexRouteImport
+      parentRoute: typeof TwatterRouteRoute
     }
     '/_app/tools/': {
       id: '/_app/tools/'
@@ -402,6 +492,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAgentsIndexRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_app/activity/': {
+      id: '/_app/activity/'
+      path: '/activity'
+      fullPath: '/activity/'
+      preLoaderRoute: typeof AppActivityIndexRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_twatter/twatter/settings': {
+      id: '/_twatter/twatter/settings'
+      path: '/twatter/settings'
+      fullPath: '/twatter/settings'
+      preLoaderRoute: typeof TwatterTwatterSettingsRouteImport
+      parentRoute: typeof TwatterRouteRoute
+    }
+    '/_twatter/twatter/search': {
+      id: '/_twatter/twatter/search'
+      path: '/twatter/search'
+      fullPath: '/twatter/search'
+      preLoaderRoute: typeof TwatterTwatterSearchRouteImport
+      parentRoute: typeof TwatterRouteRoute
+    }
+    '/_twatter/twatter/notifications': {
+      id: '/_twatter/twatter/notifications'
+      path: '/twatter/notifications'
+      fullPath: '/twatter/notifications'
+      preLoaderRoute: typeof TwatterTwatterNotificationsRouteImport
+      parentRoute: typeof TwatterRouteRoute
+    }
+    '/_twatter/twatter/profile/': {
+      id: '/_twatter/twatter/profile/'
+      path: '/twatter/profile'
+      fullPath: '/twatter/profile/'
+      preLoaderRoute: typeof TwatterTwatterProfileIndexRouteImport
+      parentRoute: typeof TwatterRouteRoute
+    }
     '/_chat/chats/$chatId/': {
       id: '/_chat/chats/$chatId/'
       path: '/chats/$chatId'
@@ -465,11 +590,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAgentsAgentIdIndexRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_twatter/twatter/profile/$accountId': {
+      id: '/_twatter/twatter/profile/$accountId'
+      path: '/twatter/profile/$accountId'
+      fullPath: '/twatter/profile/$accountId'
+      preLoaderRoute: typeof TwatterTwatterProfileAccountIdRouteImport
+      parentRoute: typeof TwatterRouteRoute
+    }
   }
 }
 
 interface AppRouteRouteChildren {
   AppIndexRoute: typeof AppIndexRoute
+  AppActivityIndexRoute: typeof AppActivityIndexRoute
   AppAgentsIndexRoute: typeof AppAgentsIndexRoute
   AppCharactersIndexRoute: typeof AppCharactersIndexRoute
   AppChatsIndexRoute: typeof AppChatsIndexRoute
@@ -480,7 +613,6 @@ interface AppRouteRouteChildren {
   AppRegexesIndexRoute: typeof AppRegexesIndexRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
   AppToolsIndexRoute: typeof AppToolsIndexRoute
-  AppTwatterIndexRoute: typeof AppTwatterIndexRoute
   AppAgentsAgentIdIndexRoute: typeof AppAgentsAgentIdIndexRoute
   AppCharactersCharacterIdIndexRoute: typeof AppCharactersCharacterIdIndexRoute
   AppConnectionsConnectionIdIndexRoute: typeof AppConnectionsConnectionIdIndexRoute
@@ -493,6 +625,7 @@ interface AppRouteRouteChildren {
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppIndexRoute: AppIndexRoute,
+  AppActivityIndexRoute: AppActivityIndexRoute,
   AppAgentsIndexRoute: AppAgentsIndexRoute,
   AppCharactersIndexRoute: AppCharactersIndexRoute,
   AppChatsIndexRoute: AppChatsIndexRoute,
@@ -503,7 +636,6 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppRegexesIndexRoute: AppRegexesIndexRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
   AppToolsIndexRoute: AppToolsIndexRoute,
-  AppTwatterIndexRoute: AppTwatterIndexRoute,
   AppAgentsAgentIdIndexRoute: AppAgentsAgentIdIndexRoute,
   AppCharactersCharacterIdIndexRoute: AppCharactersCharacterIdIndexRoute,
   AppConnectionsConnectionIdIndexRoute: AppConnectionsConnectionIdIndexRoute,
@@ -530,9 +662,32 @@ const ChatRouteRouteWithChildren = ChatRouteRoute._addFileChildren(
   ChatRouteRouteChildren,
 )
 
+interface TwatterRouteRouteChildren {
+  TwatterTwatterNotificationsRoute: typeof TwatterTwatterNotificationsRoute
+  TwatterTwatterSearchRoute: typeof TwatterTwatterSearchRoute
+  TwatterTwatterSettingsRoute: typeof TwatterTwatterSettingsRoute
+  TwatterTwatterIndexRoute: typeof TwatterTwatterIndexRoute
+  TwatterTwatterProfileAccountIdRoute: typeof TwatterTwatterProfileAccountIdRoute
+  TwatterTwatterProfileIndexRoute: typeof TwatterTwatterProfileIndexRoute
+}
+
+const TwatterRouteRouteChildren: TwatterRouteRouteChildren = {
+  TwatterTwatterNotificationsRoute: TwatterTwatterNotificationsRoute,
+  TwatterTwatterSearchRoute: TwatterTwatterSearchRoute,
+  TwatterTwatterSettingsRoute: TwatterTwatterSettingsRoute,
+  TwatterTwatterIndexRoute: TwatterTwatterIndexRoute,
+  TwatterTwatterProfileAccountIdRoute: TwatterTwatterProfileAccountIdRoute,
+  TwatterTwatterProfileIndexRoute: TwatterTwatterProfileIndexRoute,
+}
+
+const TwatterRouteRouteWithChildren = TwatterRouteRoute._addFileChildren(
+  TwatterRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   AppRouteRoute: AppRouteRouteWithChildren,
   ChatRouteRoute: ChatRouteRouteWithChildren,
+  TwatterRouteRoute: TwatterRouteRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

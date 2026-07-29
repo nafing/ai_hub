@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  IconChevronDown,
   IconMessage,
   IconPlayerStop,
-  IconRobot,
   IconSend,
   IconUsers,
 } from "@tabler/icons-react";
@@ -23,7 +23,6 @@ import {
   visibleChatMessagesThrough,
   type Chat,
   type ChatMessage,
-  type ChatStreamEvent,
   type GenerateChatInput,
   type SlashCommandAction,
 } from "@ai-hub/shared";
@@ -34,11 +33,12 @@ import { useCharacters } from "@/features/characters/queries";
 import { personaAvatarSrc } from "@/features/personas/avatar-url";
 import { usePersonas } from "@/features/personas/queries";
 import { api } from "@/lib/api";
-import { addChatMessage, PresetVariablesCancelledError, streamGenerate, streamRegenerate } from "./api";
+import { addChatMessage } from "./api";
 import {
-  ChatAgentPanel,
-  chatAgentPanelHasActivity,
-} from "./ChatAgentPanel";
+  useChatGeneration,
+  useChatGenerationStore,
+} from "./chatGenerationStore";
+import { ChatAgentPanel } from "./ChatAgentPanel";
 import { ChatMessageBubble } from "./ChatMessageBubble";
 import { PeekPromptModal } from "./PeekPromptModal";
 import { useAutonomousMessaging } from "./useAutonomousMessaging";
@@ -52,14 +52,15 @@ import classes from "./ChatSession.module.css";
 
 type ChatSessionProps = {
   chat: Chat;
+  agentsOpen: boolean;
+  onAgentsOpenChange: (open: boolean) => void;
 };
 
-type StreamSpeaker = {
-  character_id: string | null;
-  character_name: string;
-};
-
-export function ChatSession({ chat }: ChatSessionProps) {
+export function ChatSession({
+  chat,
+  agentsOpen,
+  onAgentsOpenChange,
+}: ChatSessionProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const updateMessage = useUpdateChatMessage();
@@ -71,6 +72,17 @@ export function ChatSession({ chat }: ChatSessionProps) {
   const { applyToText } = useApplyRegex({
     characterId: primaryCharacterId(chat.settings),
   });
+  const {
+    streaming,
+    streamText,
+    streamThinking,
+    streamSpeaker,
+    agentStatus,
+    regenHideAfterId,
+  } = useChatGeneration(chat.id);
+  const generateInBackground = useChatGenerationStore((s) => s.generate);
+  const regenerateInBackground = useChatGenerationStore((s) => s.regenerate);
+  const stopGeneration = useChatGenerationStore((s) => s.stop);
 
   const chatCharacters = useMemo(() => {
     const all = charactersQuery.data ?? [];
@@ -221,12 +233,6 @@ export function ChatSession({ chat }: ChatSessionProps) {
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(
     primaryCharacterId(chat.settings),
   );
-  const [streaming, setStreaming] = useState(false);
-  const [streamText, setStreamText] = useState("");
-  const [streamThinking, setStreamThinking] = useState("");
-  const [streamSpeaker, setStreamSpeaker] = useState<StreamSpeaker | null>(
-    null,
-  );
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>(
     chat.messages,
   );
@@ -236,19 +242,11 @@ export function ChatSession({ chat }: ChatSessionProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [peekMessageId, setPeekMessageId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ChatMessage | null>(null);
-  const [regenHideAfterId, setRegenHideAfterId] = useState<string | null>(null);
-  const [agentsOpen, setAgentsOpen] = useState(false);
-  const [agentStatus, setAgentStatus] = useState<{
-    slug: string;
-    name: string;
-    phase: string;
-  } | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!streaming) setLocalMessages(chat.messages);
-  }, [chat.messages, streaming]);
+    setLocalMessages(chat.messages);
+  }, [chat.messages]);
 
   useEffect(() => {
     const primary = primaryCharacterId(chat.settings);
@@ -351,6 +349,20 @@ export function ChatSession({ chat }: ChatSessionProps) {
     [activeChatCharacters],
   );
 
+  const selectedCharacterLabel = useMemo(() => {
+    if (!selectedCharacterId) return "Select character";
+    return (
+      characterSelectOptions.find((option) => option.value === selectedCharacterId)
+        ?.label ?? "Select character"
+    );
+  }, [characterSelectOptions, selectedCharacterId]);
+
+  const selectedCharacterAvatar = selectedCharacterId
+    ? characterAvatarById.get(selectedCharacterId) ?? null
+    : null;
+
+  const showResponseAsPicker = characterSelectOptions.length > 0;
+
   const mentionSuggestions = useMemo(() => {
     if (mentionFilter === null) return [];
     const q = mentionFilter.toLowerCase();
@@ -410,96 +422,6 @@ export function ChatSession({ chat }: ChatSessionProps) {
     }
   }
 
-  function applyStreamEvent(event: ChatStreamEvent) {
-    if (event.type === "user_message") {
-      setLocalMessages((prev) => [...prev, event.message]);
-      return;
-    }
-    if (event.type === "turn_start") {
-      setStreamText("");
-      setStreamThinking("");
-      setStreamSpeaker({
-        character_id: event.character_id,
-        character_name: event.character_name,
-      });
-      return;
-    }
-    if (event.type === "delta") {
-      setStreamText((prev) => prev + event.delta);
-      return;
-    }
-    if (event.type === "thinking") {
-      setStreamThinking((prev) => prev + event.delta);
-      return;
-    }
-    if (event.type === "agent_phase") {
-      setAgentStatus({
-        slug: event.slug,
-        name: event.name,
-        phase: event.phase,
-      });
-      return;
-    }
-    if (event.type === "agent_done") {
-      setAgentStatus(null);
-      return;
-    }
-    if (event.type === "roleplay_dm") {
-      void queryClient.invalidateQueries({ queryKey: chatKeys.list() });
-      void queryClient.invalidateQueries({
-        queryKey: chatKeys.detail(event.chat_id),
-      });
-      notifications.show({
-        title:
-          event.action === "created"
-            ? `DM with ${event.character_name}`
-            : `Message from ${event.character_name}`,
-        message:
-          event.action === "created"
-            ? `Opened ${event.chat_title}.`
-            : `Posted to ${event.chat_title}.`,
-        color: "blue",
-      });
-      return;
-    }
-    if (event.type === "conversation_command") {
-      void queryClient.invalidateQueries({
-        queryKey: chatKeys.detail(chat.id),
-      });
-      if (event.chat_id) {
-        void queryClient.invalidateQueries({
-          queryKey: chatKeys.detail(event.chat_id),
-        });
-      }
-      notifications.show({
-        title: `Command · ${event.command}`,
-        message: event.detail || "Applied",
-        color: "blue",
-      });
-      return;
-    }
-    if (event.type === "error") {
-      notifications.show({
-        title: "Generation failed",
-        message: event.message,
-        color: "red",
-      });
-      return;
-    }
-    if (event.type === "chat_summary") {
-      queryClient.setQueryData(chatKeys.detail(chat.id), event.chat);
-      return;
-    }
-    if (event.type === "done") {
-      setLocalMessages(event.chat.messages);
-      queryClient.setQueryData(chatKeys.detail(chat.id), event.chat);
-      void queryClient.invalidateQueries({ queryKey: chatKeys.list() });
-      setStreamText("");
-      setStreamThinking("");
-      setStreamSpeaker(null);
-    }
-  }
-
   function draftHasMention(text: string): boolean {
     return parseMentions(text, mentionCharacters).length > 0;
   }
@@ -524,35 +446,9 @@ export function ChatSession({ chat }: ChatSessionProps) {
   }
 
   async function runGenerate(input: GenerateChatInput) {
-    setStreaming(true);
-    setStreamText("");
-    setStreamThinking("");
-    setStreamSpeaker(null);
-    setAgentStatus(null);
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      await streamGenerate(chat.id, input, applyStreamEvent, controller.signal);
-    } catch (error) {
-      if (error instanceof PresetVariablesCancelledError) {
-        if (input.userMessage) setDraft(input.userMessage);
-        return;
-      }
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        notifications.show({
-          title: "Send failed",
-          message: error instanceof Error ? error.message : "Unknown error",
-          color: "red",
-        });
-      }
-    } finally {
-      setStreaming(false);
-      abortRef.current = null;
-      setStreamText("");
-      setStreamThinking("");
-      setStreamSpeaker(null);
-      setAgentStatus(null);
+    const result = await generateInBackground(chat.id, input);
+    if (result === "cancelled" && input.userMessage) {
+      setDraft(input.userMessage);
     }
   }
 
@@ -561,7 +457,6 @@ export function ChatSession({ chat }: ChatSessionProps) {
     streaming,
     generate: runGenerate,
   });
-
   async function applySlashActions(actions: SlashCommandAction[]) {
     for (const action of actions) {
       if (action.type === "feedback") {
@@ -667,38 +562,7 @@ export function ChatSession({ chat }: ChatSessionProps) {
     if (streaming || !targetId) return;
 
     setSelectedCharacterId(targetId);
-    setStreaming(true);
-    setStreamText("");
-    setStreamThinking("");
-    setStreamSpeaker(null);
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      await streamGenerate(
-        chat.id,
-        { forCharacterId: targetId },
-        applyStreamEvent,
-        controller.signal,
-      );
-    } catch (error) {
-      if (error instanceof PresetVariablesCancelledError) {
-        return;
-      }
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        notifications.show({
-          title: "Trigger failed",
-          message: error instanceof Error ? error.message : "Unknown error",
-          color: "red",
-        });
-      }
-    } finally {
-      setStreaming(false);
-      abortRef.current = null;
-      setStreamText("");
-      setStreamThinking("");
-      setStreamSpeaker(null);
-    }
+    await generateInBackground(chat.id, { forCharacterId: targetId });
   }
 
   async function handleOpenCharacterDm(characterId: string) {
@@ -735,44 +599,11 @@ export function ChatSession({ chat }: ChatSessionProps) {
       return;
     }
 
-    setRegenHideAfterId(targetId);
-    setStreaming(true);
-    setStreamText("");
-    setStreamThinking("");
-    setStreamSpeaker(null);
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      await streamRegenerate(
-        chat.id,
-        applyStreamEvent,
-        controller.signal,
-        targetId,
-      );
-    } catch (error) {
-      if (error instanceof PresetVariablesCancelledError) {
-        return;
-      }
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        notifications.show({
-          title: "Regenerate failed",
-          message: error instanceof Error ? error.message : "Unknown error",
-          color: "red",
-        });
-      }
-    } finally {
-      setStreaming(false);
-      setRegenHideAfterId(null);
-      abortRef.current = null;
-      setStreamText("");
-      setStreamThinking("");
-      setStreamSpeaker(null);
-    }
+    await regenerateInBackground(chat.id, targetId);
   }
 
   function handleStop() {
-    abortRef.current?.abort();
+    stopGeneration(chat.id);
   }
 
   function handleSwipe(messageId: string, swipeId: number) {
@@ -801,6 +632,30 @@ export function ChatSession({ chat }: ChatSessionProps) {
       id: chat.id,
       messageId,
       input: { content },
+    });
+  }
+
+  function handleReact(messageId: string, emoji: string) {
+    setLocalMessages((prev) =>
+      prev.map((message) => {
+        if (message.id !== messageId) return message;
+        return {
+          ...message,
+          reactions: [
+            ...(message.reactions ?? []),
+            {
+              emoji,
+              character_id: null,
+              created_at: new Date().toISOString(),
+            },
+          ],
+        };
+      }),
+    );
+    updateMessage.mutate({
+      id: chat.id,
+      messageId,
+      input: { add_reaction: emoji },
     });
   }
 
@@ -927,8 +782,6 @@ export function ChatSession({ chat }: ChatSessionProps) {
 
   const deleteSwipeCount = deleteTarget?.swipes.length ?? 0;
   const deleteHasMultipleSwipes = deleteSwipeCount > 1;
-  const agentsHaveActivity =
-    Boolean(agentStatus) || chatAgentPanelHasActivity(chat);
 
   return (
     <div className={classes.root}>
@@ -994,6 +847,12 @@ export function ChatSession({ chat }: ChatSessionProps) {
                   onDelete={
                     showMessageActions ? () => handleDelete(message) : undefined
                   }
+                  onReact={
+                    showMessageActions &&
+                    (message.role === "assistant" || message.role === "user")
+                      ? (emoji) => handleReact(message.id, emoji)
+                      : undefined
+                  }
                 />
               );
             },
@@ -1052,14 +911,14 @@ export function ChatSession({ chat }: ChatSessionProps) {
       <ChatAgentPanel
         chat={chat}
         opened={agentsOpen}
-        onClose={() => setAgentsOpen(false)}
+        onClose={() => onAgentsOpenChange(false)}
         disabled={streaming}
         agentStatus={agentStatus}
         onSendChoice={(text) => {
           void runGenerate({ userMessage: text });
         }}
         onRunDirector={() => {
-          setAgentsOpen(false);
+          onAgentsOpenChange(false);
           void runGenerate({ runDirector: true });
         }}
       />
@@ -1105,6 +964,67 @@ export function ChatSession({ chat }: ChatSessionProps) {
       </Modal>
 
       <div className={classes.composerWrap}>
+        {showResponseAsPicker ? (
+          <div className={classes.composerToolbar}>
+            <Menu>
+              <Menu.Target>
+                <Button
+                  type="button"
+                  variant="subtle"
+                  size="sm"
+                  className={classes.responseAsButton}
+                  disabled={streaming}
+                  leftSection={
+                    <span className={classes.responseAsAvatar}>
+                      {selectedCharacterAvatar ? (
+                        <img src={selectedCharacterAvatar} alt="" />
+                      ) : (
+                        selectedCharacterLabel.slice(0, 1).toUpperCase()
+                      )}
+                    </span>
+                  }
+                  rightSection={<IconChevronDown size={14} aria-hidden />}
+                >
+                  <span className={classes.responseAsText}>
+                    <span className={classes.responseAsLabel}>Response as</span>
+                    <span className={classes.responseAsName}>
+                      {selectedCharacterLabel}
+                    </span>
+                  </span>
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown className={classes.menuDropdownAbove}>
+                <Menu.Label>Response as</Menu.Label>
+                {characterSelectOptions.map((option) => {
+                  const avatarUrl = characterAvatarById.get(option.value) || null;
+                  const isSelected = option.value === selectedCharacterId;
+                  return (
+                    <Menu.Item
+                      key={option.value}
+                      className={streaming ? classes.menuItemDisabled : undefined}
+                      aria-selected={isSelected}
+                      leftSection={
+                        <span className={classes.menuAvatar}>
+                          {avatarUrl ? (
+                            <img src={avatarUrl} alt="" />
+                          ) : (
+                            option.label.slice(0, 1).toUpperCase()
+                          )}
+                        </span>
+                      }
+                      onClick={() => {
+                        if (streaming) return;
+                        setSelectedCharacterId(option.value);
+                      }}
+                    >
+                      {option.label}
+                    </Menu.Item>
+                  );
+                })}
+              </Menu.Dropdown>
+            </Menu>
+          </div>
+        ) : null}
         <div className={classes.composerBar} data-glass-surface>
           <div className={classes.composerInputWrap}>
             {showSuggestions ? (
@@ -1211,22 +1131,6 @@ export function ChatSession({ chat }: ChatSessionProps) {
               }}
             />
           </div>
-
-          <ActionIcon
-            type="button"
-            variant={agentsOpen ? "primary" : "ghost"}
-            aria-label="Agents"
-            title="Agents"
-            className={
-              agentsHaveActivity ? classes.agentsButtonActive : undefined
-            }
-            onClick={() => setAgentsOpen(true)}
-          >
-            <IconRobot size={16} />
-            {agentsHaveActivity ? (
-              <span className={classes.agentsBadge} aria-hidden />
-            ) : null}
-          </ActionIcon>
 
           {chat.settings.allow_character_dms &&
           characterSelectOptions.length > 0 ? (

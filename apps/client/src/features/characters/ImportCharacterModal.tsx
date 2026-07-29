@@ -10,7 +10,6 @@ import { IconPhoto, IconUpload } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  buildPresetPromptContext,
   CharacterImportError,
   defaultCharacter,
   lorebookFromCharacterBook,
@@ -30,20 +29,10 @@ import {
   RuntimeText,
 } from "@/components/ui";
 import { useConnections } from "@/features/connections/queries";
-import { getPersona } from "@/features/personas/api";
 import { usePersonas } from "@/features/personas/queries";
-import { createCharacter, getCharacter, uploadCharacterAvatar } from "./api";
-import {
-  extractFullCards,
-  extractedToCardData,
-  resolvePresetVariables,
-} from "./characterGenerateShared";
-import {
-  ImportAiReviewModal,
-  type ImportAiReviewContext,
-} from "./ImportAiReviewModal";
+import { createCharacter, uploadCharacterAvatar } from "./api";
+import { useCharacterImportSessionStore } from "./characterImportSessionStore";
 import { characterKeys, useCharacters } from "./queries";
-import { runGenerator } from "@/features/generators/api";
 import {
   useDefaultPreset,
   usePreset,
@@ -137,11 +126,9 @@ export function ImportCharacterModal({
   const [pendingBook, setPendingBook] = useState<PendingCharacterBook | null>(
     null,
   );
-  const [aiReviewOpen, setAiReviewOpen] = useState(false);
-  const [aiReviewCards, setAiReviewCards] = useState<CharacterCardData[]>([]);
-  const [aiReviewContext, setAiReviewContext] =
-    useState<ImportAiReviewContext | null>(null);
-  const [confirmingAi, setConfirmingAi] = useState(false);
+  const startBackgroundImport = useCharacterImportSessionStore(
+    (state) => state.startAiImport,
+  );
 
   const defaultConnectionId =
     connectionsQuery.data?.find((connection) => connection.is_default)?.id ??
@@ -229,16 +216,8 @@ export function ImportCharacterModal({
     }
   }
 
-  function clearAiReview() {
-    setAiReviewOpen(false);
-    setAiReviewCards([]);
-    setAiReviewContext(null);
-    setConfirmingAi(false);
-  }
-
   function handleClose() {
     clearPreview();
-    clearAiReview();
     setParsing(false);
     setImporting(false);
     setDragOver(false);
@@ -298,69 +277,6 @@ export function ImportCharacterModal({
       return;
     }
     void handleFile(file);
-  }
-
-  async function runAiImport(baseData: CharacterCardData): Promise<{
-    cards: CharacterCardData[];
-  }> {
-    if (!resolvedConnectionId) {
-      throw new Error("Select a connection to import with AI.");
-    }
-    const preset = presetDetailQuery.data;
-    if (!presetId || !preset) {
-      throw new Error("Select a Character Generator preset.");
-    }
-
-    const userBrief = generatorBrief.trim();
-    const [persona, libraryReferences] = await Promise.all([
-      personaId ? getPersona(personaId) : Promise.resolve(null),
-      Promise.all(referenceCharacterIds.map((id) => getCharacter(id))),
-    ]);
-    const promptContext = buildPresetPromptContext({
-      generatorBrief: userBrief || null,
-      persona,
-      referenceCharacterList: [{ data: baseData }, ...libraryReferences],
-      variables: {
-        ...resolvePresetVariables(preset.variables),
-        generation_mode: "import",
-        char: baseData.name.trim(),
-        target_field: "all card fields",
-        existing_description: "",
-        existing_personality: "",
-        existing_scenario: "",
-        existing_first_mes: "",
-        existing_mes_example: "",
-        existing_alternate_greetings: "",
-      },
-    });
-
-    const result = await runGenerator({
-      category: "character_generator",
-      connectionId: resolvedConnectionId,
-      presetId: preset.id,
-      variables: promptContext.variables,
-      markers: promptContext.markers,
-    });
-
-    const extracted = extractFullCards(result.content || result.reply || "");
-    if (extracted.length === 0) {
-      throw new Error("Model returned an empty character card.");
-    }
-
-    return {
-      cards: extracted.map((card, index) => {
-        const data = extractedToCardData(card);
-        return {
-          ...baseData,
-          ...data,
-          creator: index === 0 ? baseData.creator : (data.creator ?? ""),
-          character_version:
-            index === 0
-              ? baseData.character_version
-              : (data.character_version ?? ""),
-        };
-      }),
-    };
   }
 
   async function persistImportedCards(
@@ -425,18 +341,15 @@ export function ImportCharacterModal({
         if (!resolvedConnectionId || !presetId || !preset) {
           throw new Error("Select connection and Character Generator preset.");
         }
-        const aiResult = await runAiImport(dataWithoutBook);
-        setAiReviewCards(aiResult.cards);
-        setAiReviewContext({
+        startBackgroundImport({
+          preview,
           connectionId: resolvedConnectionId,
-          presetId: preset.id,
-          presetVariables: preset.variables,
+          preset,
           personaId,
           referenceCharacterIds,
-          sourceCard: dataWithoutBook,
           generatorBrief: generatorBrief.trim(),
         });
-        setAiReviewOpen(true);
+        onClose();
         return;
       }
 
@@ -449,22 +362,6 @@ export function ImportCharacterModal({
       });
     } finally {
       setImporting(false);
-    }
-  }
-
-  async function handleConfirmAiReview() {
-    if (aiReviewCards.length === 0) return;
-    setConfirmingAi(true);
-    try {
-      await persistImportedCards(aiReviewCards, { fromAi: true });
-    } catch (error) {
-      notifications.show({
-        title: "Import failed",
-        message: error instanceof Error ? error.message : "Unknown error",
-        color: "red",
-      });
-    } finally {
-      setConfirmingAi(false);
     }
   }
 
@@ -502,16 +399,16 @@ export function ImportCharacterModal({
 
   const primaryLabel = importing
     ? importWithAi
-      ? "Generating…"
+      ? "Starting…"
       : "Importing…"
     : importWithAi
-      ? "Generate with AI"
+      ? "Generate in background"
       : "Import";
 
   return (
     <>
       <Modal
-        opened={opened && !aiReviewOpen}
+        opened={opened}
         onClose={handleClose}
         title="Import character"
         centered
@@ -609,9 +506,9 @@ export function ImportCharacterModal({
             variant="card"
             checked={importWithAi}
             onChange={setImportWithAi}
-            disabled={importing || aiReviewOpen}
+            disabled={importing}
             label="Import with AI"
-            description="Runs the Character Generator, then opens a preview where you can rebuild concept or individual fields before saving. Multi-character cards become separate previews."
+            description="Runs in the background. You can close this modal and use chats or Activity while it generates. Review opens when ready."
           />
 
           {importWithAi ? (
@@ -738,20 +635,6 @@ export function ImportCharacterModal({
           </Button>
         </div>
       </Modal>
-
-      {aiReviewContext ? (
-        <ImportAiReviewModal
-          opened={aiReviewOpen}
-          cards={aiReviewCards}
-          onCardsChange={setAiReviewCards}
-          context={aiReviewContext}
-          confirming={confirmingAi}
-          onConfirm={() => void handleConfirmAiReview()}
-          onCancel={() => {
-            clearAiReview();
-          }}
-        />
-      ) : null}
 
       <ImportLorebookModal
         opened={pendingBook != null}

@@ -967,7 +967,10 @@ Rules:
 Rules:
 - Structured actions are limited to posts, polls, follows, likes, reposts, replies, and poll votes.
 - Generated interactions may target existing posts included in the Timeline Brief or posts you create in this response.
-- To respond directly to an existing comment, create a reply interaction for its post and set parentInteractionId to that comment's exact id.
+- When a character responds to an existing post or to a post created earlier in this same JSON batch, use an interaction with type "reply" and non-empty content. Do NOT create a new top-level post for a reply.
+- To reply to a post you create in this batch, set targetTempId to that post's tempId and targetPostId to null.
+- To reply to an existing timeline post, set targetPostId to its exact postId from the Timeline Brief and targetTempId to null.
+- To respond directly to an existing comment, create a reply interaction for its post and set parentInteractionId to that comment's exact interactionId from the Timeline Brief.
 - Never generate posts, replies, likes, reposts, poll votes, or follows as a persona account. Personas may only be mentioned or targeted by other accounts.
 - Every persona account is a separate user identity.
 - Never reuse the same message text for more than one post or reply by the same account.
@@ -994,7 +997,7 @@ Rules:
         content: `Generate one batch of Twatter timeline activity from the Timeline Brief above.
 
 Output only a JSON object:
-{"posts":[{"tempId":"p1","authorHandle":"@name","content":"..."}],"interactions":[{"actorHandle":"@name","targetPostId":"...","type":"like"}],"follows":[{"actorHandle":"@name","targetHandle":"@other"}],"digests":[{"accountEntityIds":["character-id"],"content":"short summary"}]}`,
+{"posts":[{"tempId":"p1","authorHandle":"@name","content":"..."}],"interactions":[{"actorHandle":"@name","targetTempId":"p1","targetPostId":null,"type":"reply","content":"...","pollOptionIndex":null},{"actorHandle":"@name","targetPostId":"existing-post-id","targetTempId":null,"type":"like","pollOptionIndex":null}],"follows":[{"actorHandle":"@name","targetHandle":"@other"}],"digests":[{"accountEntityIds":["character-id"],"content":"short summary"}]}`,
       }),
     ],
   },

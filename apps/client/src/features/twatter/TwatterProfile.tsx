@@ -18,7 +18,6 @@ type TwatterProfileProps = {
   personaAccount: TwatterAccount | null;
   accounts: TwatterAccount[];
   interactions: TwatterInteraction[];
-  onMentionClick?: (accountId: string) => void;
 };
 
 export function TwatterProfile({
@@ -27,7 +26,6 @@ export function TwatterProfile({
   personaAccount,
   accounts,
   interactions,
-  onMentionClick,
 }: TwatterProfileProps) {
   const profileQuery = useTwatterAccountProfile(accountId, personaId);
   const updateProfile = useUpdateTwatterProfile();
@@ -104,21 +102,56 @@ export function TwatterProfile({
   }
 
   return (
-    <div className={classes.panel}>
+    <div className={classes.profileShell}>
+      <div className={classes.profileBanner} aria-hidden />
+
       <div className={classes.profileHeader}>
-        {avatarSrc ? (
-          <img
-            className={classes.profileAvatar}
-            src={avatarSrc}
-            alt=""
-            width={72}
-            height={72}
-          />
-        ) : (
-          <span className={classes.profileAvatarFallback} aria-hidden>
-            {profile.display_name.slice(0, 1).toUpperCase()}
-          </span>
-        )}
+        <div className={classes.profileTopRow}>
+          {avatarSrc ? (
+            <img
+              className={classes.profileAvatar}
+              src={avatarSrc}
+              alt=""
+              width={88}
+              height={88}
+            />
+          ) : (
+            <span className={classes.profileAvatarFallback} aria-hidden>
+              {profile.display_name.slice(0, 1).toUpperCase()}
+            </span>
+          )}
+
+          {!editing ? (
+            <div className={classes.profileActions}>
+              {isOwnProfile ? (
+                <Button type="button" variant="default" onClick={startEditing}>
+                  Edit profile
+                </Button>
+              ) : null}
+              {canFollow ? (
+                <Button
+                  type="button"
+                  variant={isFollowing ? "default" : "primary"}
+                  disabled={followMutation.isPending}
+                  onClick={() =>
+                    personaAccount &&
+                    personaId &&
+                    followMutation.mutate({
+                      followerAccountId: personaAccount.id,
+                      targetAccountId: profile.id,
+                      input: {
+                        persona_id: personaId,
+                        following: !isFollowing,
+                      },
+                    })
+                  }
+                >
+                  {isFollowing ? "Following" : "Follow"}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
         <div className={classes.profileMeta}>
           {editing ? (
@@ -172,41 +205,23 @@ export function TwatterProfile({
                 <span>{profile.follower_count} followers</span>
                 <span>{profile.following_count} following</span>
               </p>
-              <div className={classes.profileActions}>
-                {isOwnProfile ? (
-                  <Button type="button" variant="default" onClick={startEditing}>
-                    Edit profile
-                  </Button>
-                ) : null}
-                {canFollow ? (
-                  <Button
-                    type="button"
-                    variant={isFollowing ? "default" : "primary"}
-                    disabled={followMutation.isPending}
-                    onClick={() =>
-                      personaAccount &&
-                      personaId &&
-                      followMutation.mutate({
-                        followerAccountId: personaAccount.id,
-                        targetAccountId: profile.id,
-                        input: {
-                          persona_id: personaId,
-                          following: !isFollowing,
-                        },
-                      })
-                    }
-                  >
-                    {isFollowing ? "Unfollow" : "Follow"}
-                  </Button>
-                ) : null}
-              </div>
             </>
           )}
         </div>
       </div>
 
-      <section className={classes.searchSection}>
-        <h3 className={classes.panelHeading}>Posts</h3>
+      <section className={classes.profilePosts}>
+        <div className={classes.profilePostsTabs} role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected
+            className={classes.profilePostsTabActive}
+          >
+            Posts
+          </button>
+        </div>
+
         {profile.posts.length === 0 ? (
           <p className={classes.status}>No posts yet.</p>
         ) : (
@@ -215,12 +230,11 @@ export function TwatterProfile({
               <PostCard
                 key={post.id}
                 post={post}
+                posts={profile.posts}
                 accounts={accounts}
                 interactions={interactions}
                 personaId={personaId}
                 personaAccount={personaAccount}
-                onMentionClick={onMentionClick}
-                onAuthorClick={onMentionClick}
               />
             ))}
           </div>

@@ -16,4 +16,8 @@ export class UpdateChatMessageDto {
   @IsOptional()
   @IsBoolean()
   remove_active_swipe?: boolean;
+
+  @IsOptional()
+  @IsString()
+  add_reaction?: string;
 }

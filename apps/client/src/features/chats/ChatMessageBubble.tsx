@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
   IconChevronUp,
   IconEye,
+  IconMoodSmile,
   IconPencil,
   IconRefresh,
   IconTrash,
@@ -15,6 +16,21 @@ import { ActionIcon, Button, Textarea, RuntimeText } from "@/components/ui";
 import { formatChatText } from "./formatChatText";
 import classes from "./ChatMessageBubble.module.css";
 import type { PresetVariableValues } from "@ai-hub/shared";
+
+const QUICK_REACTIONS = [
+  "😂",
+  "❤️",
+  "👍",
+  "😮",
+  "😢",
+  "🔥",
+  "👀",
+  "💀",
+  "✨",
+  "🙏",
+  "💯",
+  "🫡",
+] as const;
 
 type ChatMessageBubbleProps = {
   message: ChatMessage;
@@ -35,6 +51,7 @@ type ChatMessageBubbleProps = {
   onRegenerate?: () => void;
   onPeekPrompt?: () => void;
   onDelete?: () => void;
+  onReact?: (emoji: string) => void;
 };
 
 function formatMessageTime(iso: string): string {
@@ -44,6 +61,76 @@ function formatMessageTime(iso: string): string {
   if (date.isSame(now, "day")) return date.format("HH:mm");
   if (date.isSame(now, "year")) return date.format("D MMM, HH:mm");
   return date.format("D MMM YYYY, HH:mm");
+}
+
+function MessageReactPicker({
+  disabled,
+  onReact,
+}: {
+  disabled?: boolean;
+  onReact: (emoji: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  function pick(emoji: string) {
+    onReact(emoji);
+    setOpen(false);
+  }
+
+  return (
+    <div ref={rootRef} className={classes.reactMenu}>
+      <ActionIcon
+        type="button"
+        variant="ghost"
+        title="React"
+        aria-label="React"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <IconMoodSmile size={16} />
+      </ActionIcon>
+      {open ? (
+        <div className={classes.emojiPicker} role="menu">
+          {QUICK_REACTIONS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              role="menuitem"
+              className={classes.emojiOption}
+              aria-label={`React with ${emoji}`}
+              disabled={disabled}
+              onClick={() => pick(emoji)}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function ChatMessageBubble({
@@ -61,6 +148,7 @@ export function ChatMessageBubble({
   onRegenerate,
   onPeekPrompt,
   onDelete,
+  onReact,
 }: ChatMessageBubbleProps) {
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -195,7 +283,7 @@ export function ChatMessageBubble({
               <span
                 key={`${reaction.emoji}-${reaction.created_at}-${index}`}
                 className={classes.reactionChip}
-                title={reaction.character_id ?? undefined}
+                title={reaction.character_id ? undefined : "You"}
               >
                 {reaction.emoji}
               </span>
@@ -205,6 +293,9 @@ export function ChatMessageBubble({
 
         {canSwipe || showActions ? (
           <div className={classes.actions}>
+            {onReact ? (
+              <MessageReactPicker disabled={disabled} onReact={onReact} />
+            ) : null}
             {onEdit ? (
               <ActionIcon type="button" variant="ghost" title="Edit" aria-label="Edit" disabled={disabled} onClick={startEdit}>
                 <IconPencil size={16} />
