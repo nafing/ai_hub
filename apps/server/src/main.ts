@@ -19,10 +19,22 @@ async function bootstrap() {
   const globalPrefix = process.env.SERVER_GLOBAL_PREFIX ?? "/api";
   app.setGlobalPrefix(globalPrefix);
 
-  // Reflect any Origin (browser, Capacitor https://localhost, LAN devices).
+  // Capacitor WebView is https://localhost → http://127.0.0.1 API (cross-origin).
+  // GET often works without preflight; DELETE/PUT/PATCH need full CORS.
   await app.register(cors, {
     origin: true,
     credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Accept",
+      "Authorization",
+      "X-Requested-With",
+      "Origin",
+    ],
+    exposedHeaders: ["Content-Disposition"],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
 
   app.useGlobalPipes(

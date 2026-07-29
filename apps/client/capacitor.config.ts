@@ -13,6 +13,10 @@ const config: CapacitorConfig = {
     allowMixedContent: true,
   },
   plugins: {
+    // Native HTTP bypasses WebView CORS (fixes DELETE/PUT from Capacitor).
+    CapacitorHttp: {
+      enabled: true,
+    },
     StatusBar: {
       overlaysWebView: true,
       style: "DARK",
