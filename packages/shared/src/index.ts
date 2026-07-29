@@ -282,6 +282,16 @@ export {
   type ParsedCharacterImport,
 } from "./characters/import";
 
+export type { CharacterFolder } from "./character-folders/types";
+export type {
+  CreateCharacterFolderInput,
+  UpdateCharacterFolderInput,
+} from "./character-folders/api";
+export {
+  defaultCharacterFolder,
+  normalizeCharacterFolder,
+} from "./character-folders/defaults";
+
 export type {
   Lorebook,
   LorebookCategory,
@@ -357,6 +367,7 @@ export type {
   CreateChatMessageInput,
   UpdateChatMessageInput,
   GenerateChatInput,
+  GenerateChatImageInput,
   ChatListItem,
   ChatStreamEvent,
   PeekPromptResult,
@@ -507,6 +518,8 @@ export {
   activeMessageAttachments,
   assignSwipeAttachments,
   removeSwipeAttachments,
+  activeMessageCommandTags,
+  assignSwipeCommandTags,
 } from "./chats/attachments";
 export {
   normalizeChatMessages,

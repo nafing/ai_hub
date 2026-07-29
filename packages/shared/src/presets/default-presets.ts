@@ -1169,14 +1169,14 @@ Return only valid JSON:
 Primary visual subject sources (prefer these in order):
 1. Character Appearance: {{char_appearance || (not provided)}}
 2. Persona Appearance: {{user_appearance || (not provided)}}
-3. Image Brief + Character / Persona marker sections below.
+3. Image Brief (pose / scene). Character / Persona marker sections below only repeat Appearance — ignore any other card fields.
 
 Rules:
 - Produce ONE detailed English prompt suitable to send directly to an image model.
 - The Style line above is MANDATORY medium. If it asks for anime / illustration / painting / comic, the prompt MUST stay in that medium — never switch to photorealistic, DSLR, live-action, "real photo", or "authentic photography".
 - Words like selfie / phone photo in the brief mean pose and framing only, not medium — keep the Style medium.
-- When Character Appearance or Persona Appearance is provided, treat it as ground truth for look (face, body, hair, clothing, distinctive details). Do not invent conflicting features.
-- Use Description / Personality only as light supporting context — never let them override Appearance.
+- When Character Appearance or Persona Appearance is provided, treat it as the ONLY ground truth for look (face, body, hair, clothing, distinctive details). Do not invent conflicting features.
+- Do NOT use description, personality, scenario, or other character-card lore. Appearance only.
 - Describe subject, appearance, pose, expression, clothing, setting, lighting, camera/composition, and mood.
 - Prefer concrete visual details over abstract personality talk.
 - Do not include meta instructions ("generate an image of…"), markdown, or commentary.
@@ -1221,7 +1221,7 @@ Rules:
         position: "ordered",
         content: `Write the image prompt.
 
-Ground the subject look in Character Appearance / Persona Appearance when present. Use the Image Brief for pose and scene. Obey Style/Framing exactly (medium from Style is non-negotiable).
+Ground the subject look ONLY in Character Appearance / Persona Appearance when present. Use the Image Brief for pose and scene. Obey Style/Framing exactly (medium from Style is non-negotiable). Do not pull description, personality, or scenario.
 
 Output only:
 {"prompt":"..."}`,

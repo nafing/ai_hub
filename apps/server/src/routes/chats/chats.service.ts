@@ -15,6 +15,8 @@ import {
   activeMessageAttachments,
   ancestorChatMessages,
   assignSwipeAttachments,
+  assignSwipeCommandTags,
+  activeMessageCommandTags,
   activeCharacterIds,
   applyRegexScriptsToPromptMessages,
   branchParentOf,
@@ -81,6 +83,7 @@ import {
   type CreateChatMessageInput,
   type ChatMessageAttachment,
   type GenerateChatInput,
+  type GenerateChatImageInput,
   type LlmChatMessage,
   type PeekPromptLoreHit,
   type PeekPromptResult,
@@ -551,7 +554,11 @@ export class ChatsService {
     characterId: string | null;
     historyMessages: ChatMessage[];
     emit: StreamEmit;
-  }): Promise<{ content: string; attachments: ChatMessageAttachment[] }> {
+  }): Promise<{
+    content: string;
+    attachments: ChatMessageAttachment[];
+    commandTags: string[];
+  }> {
     const parsed = parseConversationCommands(input.content);
     const commands = filterEnabledConversationCommands(
       parsed.commands,
@@ -561,12 +568,15 @@ export class ChatsService {
       return {
         content: parsed.cleanContent || input.content,
         attachments: [],
+        commandTags: [],
       };
     }
 
     let settings = defaultChatSettings(input.settings);
     const messages = [...normalizeChatMessages(input.row.messages)];
     const attachments: ChatMessageAttachment[] = [];
+    const commandTags = commands.map((command) => command.raw);
+    const failedImageTags: string[] = [];
 
     for (const command of commands) {
       if (command.type === "react") {
@@ -721,6 +731,7 @@ export class ChatsService {
           const attachment = await this.generateConversationImageAttachment({
             chatId: input.row.id,
             brief: command.prompt,
+            sourceCommand: command.raw,
             character: speaker,
             aspectRatio: settings.image_aspect_ratio,
             resolution: settings.image_resolution,
@@ -736,6 +747,7 @@ export class ChatsService {
           const message =
             error instanceof Error ? error.message : "Image generation failed";
           this.logger.warn(`send_image failed for chat ${input.row.id}: ${message}`);
+          failedImageTags.push(command.raw);
           input.emit({
             type: "conversation_command",
             command: "send_image",
@@ -750,13 +762,20 @@ export class ChatsService {
     input.row.messages = messages;
     input.row.updated_at = new Date().toISOString();
     await this.chats.save(input.row);
-    return { content: parsed.cleanContent, attachments };
+
+    const content = [parsed.cleanContent, ...failedImageTags]
+      .filter((part) => part.trim())
+      .join("\n\n")
+      .trim();
+
+    return { content, attachments, commandTags };
   }
 
   /** Expand a texting brief + character look into an OpenRouter image attachment. */
   private async generateConversationImageAttachment(input: {
     chatId: string;
     brief: string;
+    sourceCommand?: string;
     character: Character | null;
     aspectRatio?: string;
     resolution?: string;
@@ -774,9 +793,7 @@ export class ChatsService {
     }
 
     const appearance =
-      input.character?.data.appearance?.trim() ||
-      input.character?.data.description?.trim() ||
-      "";
+      input.character?.data.appearance?.trim() || "";
     const name = input.character?.data.name?.trim() || "Character";
 
     let imagePresetVariables: ReturnType<typeof selectedVariableValues> = {};
@@ -889,13 +906,97 @@ export class ChatsService {
       outputFormat: "png",
     });
 
-    return writeChatAttachment({
-      chatId: input.chatId,
-      attachmentId: randomUUID(),
-      buffer: generated.buffer,
-      mime: generated.mime,
-      name: `${name.replace(/[^\w.-]+/g, "_").slice(0, 40) || "photo"}.png`,
+    return {
+      ...(await writeChatAttachment({
+        chatId: input.chatId,
+        attachmentId: randomUUID(),
+        buffer: generated.buffer,
+        mime: generated.mime,
+        name: `${name.replace(/[^\w.-]+/g, "_").slice(0, 40) || "photo"}.png`,
+      })),
+      prompt: imagePrompt,
+      source_command: input.sourceCommand,
+    };
+  }
+
+  /**
+   * Force-generate an image for an assistant message (same pipeline as
+   * conversation `[send_image]`), without requiring the model to emit a tag.
+   */
+  async generateImage(
+    id: string,
+    input: GenerateChatImageInput = {},
+  ): Promise<Chat> {
+    const row = await this.requireRow(id);
+    if (row.mode !== "conversation") {
+      throw new BadRequestException(
+        "Force image generation is only available in conversation chats.",
+      );
+    }
+
+    row.messages = normalizeChatMessages(row.messages);
+    const settings = defaultChatSettings(row.settings);
+    const visible = visibleChatMessages(row.messages);
+
+    const messageId = input.messageId?.trim();
+    const target =
+      (messageId
+        ? row.messages.find((message) => message.id === messageId)
+        : undefined) ??
+      [...visible].reverse().find((message) => message.role === "assistant");
+
+    if (!target || target.role !== "assistant") {
+      throw new BadRequestException(
+        "No assistant message to attach an image to.",
+      );
+    }
+
+    const characterId =
+      input.characterId?.trim() ||
+      target.character_id ||
+      primaryCharacterId(settings);
+
+    let speaker: Character | null = null;
+    if (characterId) {
+      try {
+        speaker = await this.characters.findOne(characterId);
+      } catch {
+        speaker = null;
+      }
+    }
+
+    const brief =
+      input.prompt?.trim() ||
+      "Casual phone selfie matching the chat vibe.";
+    const sourceCommand = `[send_image: prompt="${brief.replace(/"/g, "'")}"]`;
+
+    const attachment = await this.generateConversationImageAttachment({
+      chatId: row.id,
+      brief,
+      sourceCommand,
+      character: speaker,
+      aspectRatio: settings.image_aspect_ratio,
+      resolution: settings.image_resolution,
     });
+
+    const swipeId = target.swipe_id;
+    const existingAttachments = activeMessageAttachments(target);
+    const existingTags = activeMessageCommandTags(target);
+    const updated = assignSwipeCommandTags(
+      assignSwipeAttachments(target, swipeId, [
+        ...existingAttachments,
+        attachment,
+      ]),
+      swipeId,
+      [...existingTags, sourceCommand],
+    );
+
+    row.messages = row.messages.map((message) =>
+      message.id === target.id ? updated : message,
+    );
+    row.updated_at = new Date().toISOString();
+    const saved = await this.chats.save(row);
+    return this.toChat(saved);
   }
 
   async applyAgentProposal(
@@ -1302,7 +1403,7 @@ export class ChatsService {
       conversationMemory = prepared.importantMemory ?? undefined;
     }
 
-    return this.buildTurnPrompt({
+    const prompt = await this.buildTurnPrompt({
       mode: row.mode,
       settings,
       preset,
@@ -1317,6 +1418,30 @@ export class ChatsService {
       chatHistoryOverride,
       conversationMemory,
     });
+
+    if (!messageId) return prompt;
+
+    const target = row.messages.find((message) => message.id === messageId);
+    if (!target) return prompt;
+
+    const command_tags = activeMessageCommandTags(target);
+    const image_prompts = activeMessageAttachments(target)
+      .filter(
+        (attachment) =>
+          Boolean(attachment.prompt?.trim()) ||
+          Boolean(attachment.source_command?.trim()),
+      )
+      .map((attachment) => ({
+        name: attachment.name || "image",
+        prompt: attachment.prompt?.trim() || "",
+        command: attachment.source_command?.trim() || undefined,
+      }));
+
+    return {
+      ...prompt,
+      ...(command_tags.length > 0 ? { command_tags } : {}),
+      ...(image_prompts.length > 0 ? { image_prompts } : {}),
+    };
   }
 
   private async runCompletion(
@@ -1604,6 +1729,7 @@ export class ChatsService {
       messages: [...row.messages],
     };
     let commandAttachments: ChatMessageAttachment[] = [];
+    let commandTags: string[] = [];
 
     const agentCtxBase = {
       chat: this.toChat(row),
@@ -1758,6 +1884,7 @@ export class ChatsService {
       }
 
       let turnCommandAttachments: ChatMessageAttachment[] = [];
+      let turnCommandTags: string[] = [];
       if (
         row.mode === "conversation" &&
         settings.character_commands !== false &&
@@ -1774,6 +1901,7 @@ export class ChatsService {
         });
         content = commandResult.content;
         turnCommandAttachments = commandResult.attachments;
+        turnCommandTags = commandResult.commandTags;
         const refreshed = await this.chats.findOneBy({ id: row.id });
         if (refreshed) {
           row.settings = refreshed.settings;
@@ -1786,6 +1914,7 @@ export class ChatsService {
       row.summary = mutable.summary;
       row.messages = mutable.messages;
       commandAttachments = turnCommandAttachments;
+      commandTags = turnCommandTags;
     }
 
     const commandOnlyTurn =
@@ -1800,16 +1929,20 @@ export class ChatsService {
       const existing = row.messages[regenerateIndex];
       const swipes = [...existing.swipes, content];
       const nextSwipeId = swipes.length - 1;
-      savedMessage = assignSwipeAttachments(
-        {
-          ...existing,
-          swipes,
-          swipe_id: nextSwipeId,
-          thinking: thinking || null,
-          character_id: existing.character_id ?? characterId,
-        },
+      savedMessage = assignSwipeCommandTags(
+        assignSwipeAttachments(
+          {
+            ...existing,
+            swipes,
+            swipe_id: nextSwipeId,
+            thinking: thinking || null,
+            character_id: existing.character_id ?? characterId,
+          },
+          nextSwipeId,
+          commandAttachments,
+        ),
         nextSwipeId,
-        commandAttachments,
+        commandTags,
       );
       row.messages = row.messages.map((message, index) =>
         index === regenerateIndex ? savedMessage : message,
@@ -1830,9 +1963,14 @@ export class ChatsService {
         id: randomUUID(),
         thinking: role === "assistant" ? thinking || null : null,
         character_id: role === "assistant" ? characterId : null,
-        attachments: commandAttachments.length ? commandAttachments : undefined,
+        attachments: commandAttachments.length
+          ? commandAttachments
+          : undefined,
         ...branchParentOf(row.messages),
       });
+      if (commandTags.length > 0) {
+        savedMessage = assignSwipeCommandTags(savedMessage, 0, commandTags);
+      }
       row.messages = [...row.messages, savedMessage];
     }
 

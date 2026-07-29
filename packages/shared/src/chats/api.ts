@@ -84,6 +84,16 @@ export type GenerateChatInput = {
   skip_presence_delay?: boolean;
 };
 
+/** Force-generate an image and attach it to an assistant message swipe. */
+export type GenerateChatImageInput = {
+  /** Target assistant message (default: latest visible assistant). */
+  messageId?: string;
+  /** Optional visual brief; defaults to a casual selfie prompt. */
+  prompt?: string;
+  /** Override speaker for appearance (default: message.character_id). */
+  characterId?: string;
+};
+
 export type ChatListItem = Pick<
   Chat,
   "id" | "title" | "mode" | "created_at" | "updated_at"
@@ -163,4 +173,15 @@ export type PeekPromptResult = {
   lore_hits: PeekPromptLoreHit[];
   /** Rough token estimate of injected lore content. */
   lore_token_estimate: number;
+  /**
+   * Raw conversation command tags from the peeked assistant swipe
+   * (e.g. `[send_image:…]`) — always shown even when stripped from chat text.
+   */
+  command_tags?: string[];
+  /** Image prompts used for attachments on the peeked swipe. */
+  image_prompts?: Array<{
+    name: string;
+    prompt: string;
+    command?: string;
+  }>;
 };

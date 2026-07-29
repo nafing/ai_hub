@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateChatInput,
+  GenerateChatImageInput,
   GenerateChatSummaryInput,
   SummaryEntriesPatchBody,
   UpdateChatInput,
@@ -10,6 +11,7 @@ import {
   createChat,
   deleteChat,
   deleteChatMessage,
+  generateChatImage,
   generateChatSummary,
   getChat,
   getOrCreateCharacterDm,
@@ -115,6 +117,23 @@ export function useDeleteChatMessage() {
   return useMutation({
     mutationFn: ({ id, messageId }: { id: string; messageId: string }) =>
       deleteChatMessage(id, messageId),
+    onSuccess: (chat) => {
+      void queryClient.setQueryData(chatKeys.detail(chat.id), chat);
+      void queryClient.invalidateQueries({ queryKey: chatKeys.list() });
+    },
+  });
+}
+
+export function useGenerateChatImage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: string;
+      input?: GenerateChatImageInput;
+    }) => generateChatImage(id, input),
     onSuccess: (chat) => {
       void queryClient.setQueryData(chatKeys.detail(chat.id), chat);
       void queryClient.invalidateQueries({ queryKey: chatKeys.list() });

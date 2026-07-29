@@ -56,25 +56,85 @@ export function removeSwipeAttachments(
   message: ChatMessage,
   swipeId: number,
 ): ChatMessage {
+  let next: ChatMessage = message;
   if (!message.attachments_by_swipe && message.attachments?.length) {
     if (swipeId === 0) {
-      return { ...message, attachments: undefined, attachments_by_swipe: undefined };
-    }
-    // Removing a later swipe; migrate legacy to by_swipe then splice.
-    return removeSwipeAttachments(
-      {
+      next = {
         ...message,
-        attachments_by_swipe: [message.attachments],
         attachments: undefined,
-      },
-      swipeId,
-    );
+        attachments_by_swipe: undefined,
+      };
+    } else {
+      // Removing a later swipe; migrate legacy to by_swipe then splice.
+      next = removeSwipeAttachments(
+        {
+          ...message,
+          attachments_by_swipe: [message.attachments],
+          attachments: undefined,
+        },
+        swipeId,
+      );
+      // Recursive call already stripped command tags.
+      return next;
+    }
+  } else if (message.attachments_by_swipe) {
+    next = {
+      ...message,
+      attachments_by_swipe: message.attachments_by_swipe.filter(
+        (_, index) => index !== swipeId,
+      ),
+      attachments: undefined,
+    };
   }
-  if (!message.attachments_by_swipe) return message;
-  const next = message.attachments_by_swipe.filter((_, index) => index !== swipeId);
+  return removeSwipeCommandTags(next, swipeId);
+}
+
+function removeSwipeCommandTags(
+  message: ChatMessage,
+  swipeId: number,
+): ChatMessage {
+  if (!message.command_tags_by_swipe) return message;
   return {
     ...message,
-    attachments_by_swipe: next,
-    attachments: undefined,
+    command_tags_by_swipe: message.command_tags_by_swipe.filter(
+      (_, index) => index !== swipeId,
+    ),
+  };
+}
+
+/** Raw command tags for the active swipe (Peek Prompt). */
+export function activeMessageCommandTags(
+  message: Pick<ChatMessage, "command_tags_by_swipe" | "swipe_id">,
+): string[] {
+  const bySwipe = message.command_tags_by_swipe;
+  if (!Array.isArray(bySwipe)) return [];
+  const list = bySwipe[message.swipe_id];
+  return Array.isArray(list)
+    ? list.filter(
+        (tag): tag is string =>
+          typeof tag === "string" && Boolean(tag.trim()),
+      )
+    : [];
+}
+
+/** Set / replace command tags for one swipe. */
+export function assignSwipeCommandTags(
+  message: ChatMessage,
+  swipeId: number,
+  tags: string[],
+): ChatMessage {
+  const count = Math.max(message.swipes.length, swipeId + 1, 1);
+  const next: string[][] = [];
+  for (let index = 0; index < count; index += 1) {
+    if (Array.isArray(message.command_tags_by_swipe?.[index])) {
+      next[index] = message.command_tags_by_swipe![index]!;
+    } else {
+      next[index] = [];
+    }
+  }
+  next[swipeId] = tags;
+  return {
+    ...message,
+    command_tags_by_swipe: next,
   };
 }

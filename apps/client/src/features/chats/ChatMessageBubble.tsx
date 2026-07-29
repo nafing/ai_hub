@@ -8,6 +8,7 @@ import {
   IconFile,
   IconMoodSmile,
   IconPencil,
+  IconPhoto,
   IconRefresh,
   IconTrash,
 } from "@tabler/icons-react";
@@ -55,6 +56,7 @@ type ChatMessageBubbleProps = {
   onSwipe?: (swipeId: number) => void;
   onEdit?: (content: string) => void;
   onRegenerate?: () => void;
+  onGenerateImage?: () => void;
   onPeekPrompt?: () => void;
   onDelete?: () => void;
   onReact?: (emoji: string) => void;
@@ -152,6 +154,7 @@ export function ChatMessageBubble({
   onSwipe,
   onEdit,
   onRegenerate,
+  onGenerateImage,
   onPeekPrompt,
   onDelete,
   onReact,
@@ -358,6 +361,18 @@ export function ChatMessageBubble({
             {onRegenerate ? (
               <ActionIcon type="button" variant="ghost" title="Regenerate" aria-label="Regenerate" disabled={disabled} onClick={onRegenerate}>
                 <IconRefresh size={16} />
+              </ActionIcon>
+            ) : null}
+            {onGenerateImage ? (
+              <ActionIcon
+                type="button"
+                variant="ghost"
+                title="Generate image"
+                aria-label="Generate image"
+                disabled={disabled}
+                onClick={onGenerateImage}
+              >
+                <IconPhoto size={16} />
               </ActionIcon>
             ) : null}
             {onPeekPrompt ? (

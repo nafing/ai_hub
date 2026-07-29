@@ -12,6 +12,7 @@ import {
   uploadCharacterAvatar,
 } from "./api";
 import { lorebookKeys } from "@/features/lorebooks/queries";
+import { characterFolderKeys } from "./foldersQueries";
 
 export const characterKeys = {
   all: ["characters"] as const,
@@ -70,6 +71,9 @@ export function useDeleteCharacter() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: characterKeys.list() });
       void queryClient.invalidateQueries({ queryKey: lorebookKeys.all });
+      void queryClient.invalidateQueries({
+        queryKey: characterFolderKeys.all,
+      });
     },
   });
 }

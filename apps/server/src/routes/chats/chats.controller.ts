@@ -28,6 +28,7 @@ import { ConversationSummaryService } from "./conversation-summary.service";
 import { CreateChatDto } from "./dto/create-chat.dto";
 import { CreateChatMessageDto } from "./dto/create-chat-message.dto";
 import { GenerateChatDto } from "./dto/generate-chat.dto";
+import { GenerateChatImageDto } from "./dto/generate-chat-image.dto";
 import { RegenerateChatDto } from "./dto/regenerate-chat.dto";
 import { UpdateChatDto } from "./dto/update-chat.dto";
 import { UpdateChatMessageDto } from "./dto/update-chat-message.dto";
@@ -148,6 +149,14 @@ export class ChatsController {
     await this.stream(reply, (emit) =>
       this.chatsService.regenerate(id, emit, body.messageId),
     );
+  }
+
+  @Post(":id/generate-image")
+  generateImage(
+    @Param("id") id: string,
+    @Body() body: GenerateChatImageDto,
+  ): Promise<Chat> {
+    return this.chatsService.generateImage(id, body);
   }
 
   @Get(":id/peek-prompt")

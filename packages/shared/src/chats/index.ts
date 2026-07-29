@@ -58,6 +58,7 @@ export type {
   CreateChatMessageInput,
   UpdateChatMessageInput,
   GenerateChatInput,
+  GenerateChatImageInput,
   ChatListItem,
   ChatStreamEvent,
   PeekPromptResult,
@@ -155,6 +156,8 @@ export {
   activeMessageAttachments,
   assignSwipeAttachments,
   removeSwipeAttachments,
+  activeMessageCommandTags,
+  assignSwipeCommandTags,
 } from "./attachments";
 export {
   normalizeChatMessages,

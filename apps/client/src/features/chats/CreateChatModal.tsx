@@ -13,6 +13,8 @@ import { Button,
   RuntimeText,
 } from "@/components/ui";
 import { useCharacters } from "@/features/characters/queries";
+import { useCharacterFolders } from "@/features/characters/foldersQueries";
+import { CharacterFolderQuickPick } from "@/features/characters/CharacterFolderQuickPick";
 import { useConnectionSelectOptions } from "@/features/connections/queries";
 import { usePersonas } from "@/features/personas/queries";
 import { useDefaultPreset, usePresets } from "@/features/presets/queries";
@@ -28,6 +30,7 @@ export function CreateChatModal({ opened, onClose }: CreateChatModalProps) {
   const navigate = useNavigate();
   const createMutation = useCreateChat();
   const charactersQuery = useCharacters();
+  const foldersQuery = useCharacterFolders();
   const personasQuery = usePersonas();
   const connectionsQuery = useConnectionSelectOptions("llm");
   const presetsQuery = usePresets();
@@ -201,6 +204,11 @@ export function CreateChatModal({ opened, onClose }: CreateChatModalProps) {
             onChange={setCharacterIds}
             searchable
             clearable
+          />
+          <CharacterFolderQuickPick
+            folders={foldersQuery.data ?? []}
+            selectedIds={characterIds}
+            onChange={setCharacterIds}
           />
         </div>
 

@@ -20,6 +20,7 @@ import {
   type CreateCharacterInput,
   type UpdateCharacterInput,
 } from "@ai-hub/shared";
+import { CharacterFoldersService } from "../character-folders/character-folders.service";
 import { LorebooksService } from "../lorebooks/lorebooks.service";
 import { CharacterEntity } from "./character.entity";
 import {
@@ -36,6 +37,7 @@ export class CharactersService {
     @InjectRepository(CharacterEntity)
     private readonly characters: Repository<CharacterEntity>,
     private readonly lorebooks: LorebooksService,
+    private readonly characterFolders: CharacterFoldersService,
   ) {}
 
   async findAll(): Promise<CharacterListItem[]> {
@@ -196,6 +198,7 @@ export class CharactersService {
   async remove(id: string): Promise<void> {
     const row = await this.requireRow(id);
     await this.lorebooks.unlinkCharacter(id);
+    await this.characterFolders.unlinkCharacter(id);
     await deleteAvatarFile(id);
     await this.characters.delete({ id: row.id });
   }

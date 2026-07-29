@@ -47,6 +47,7 @@ import { useAutonomousMessaging } from "./useAutonomousMessaging";
 import {
   chatKeys,
   useDeleteChatMessage,
+  useGenerateChatImage,
   useGetOrCreateCharacterDm,
   useUpdateChatMessage,
 } from "./queries";
@@ -67,6 +68,7 @@ export function ChatSession({
   const queryClient = useQueryClient();
   const updateMessage = useUpdateChatMessage();
   const deleteMessage = useDeleteChatMessage();
+  const generateImageMutation = useGenerateChatImage();
   const openDmMutation = useGetOrCreateCharacterDm();
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
@@ -686,6 +688,29 @@ export function ChatSession({
     await regenerateInBackground(chat.id, targetId);
   }
 
+  function handleGenerateImage(messageId: string) {
+    if (streaming || generateImageMutation.isPending) return;
+    generateImageMutation.mutate(
+      { id: chat.id, input: { messageId } },
+      {
+        onSuccess: () => {
+          notifications.show({
+            title: "Image generated",
+            message: "Attached to the message.",
+            color: "green",
+          });
+        },
+        onError: (error) => {
+          notifications.show({
+            title: "Image generation failed",
+            message: error instanceof Error ? error.message : "Unknown error",
+            color: "red",
+          });
+        },
+      },
+    );
+  }
+
   function handleStop() {
     stopGeneration(chat.id);
   }
@@ -905,7 +930,7 @@ export function ChatSession({
                   dialogueColor={colors.dialogueColor}
                   avatarUrl={resolvedAvatar}
                   macroValues={macroValues}
-                  disabled={streaming}
+                  disabled={streaming || generateImageMutation.isPending}
                   onSwipe={
                     showMessageActions &&
                     (message.role === "assistant" || message.role === "user")
@@ -921,6 +946,13 @@ export function ChatSession({
                     showMessageActions &&
                     (message.role === "assistant" || message.role === "user")
                       ? () => void handleRegenerate(message.id)
+                      : undefined
+                  }
+                  onGenerateImage={
+                    showMessageActions &&
+                    chat.mode === "conversation" &&
+                    message.role === "assistant"
+                      ? () => handleGenerateImage(message.id)
                       : undefined
                   }
                   onPeekPrompt={

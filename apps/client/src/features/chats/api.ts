@@ -6,6 +6,7 @@ import type {
   CreateChatInput,
   CreateChatMessageInput,
   GenerateChatInput,
+  GenerateChatImageInput,
   PeekPromptResult,
   UpdateChatInput,
   UpdateChatMessageInput,
@@ -109,6 +110,14 @@ export async function peekChatPrompt(
   const { data } = await api.get<PeekPromptResult>(`/chats/${id}/peek-prompt`, {
     params: messageId ? { messageId } : undefined,
   });
+  return data;
+}
+
+export async function generateChatImage(
+  id: string,
+  input: GenerateChatImageInput = {},
+): Promise<Chat> {
+  const { data } = await api.post<Chat>(`/chats/${id}/generate-image`, input);
   return data;
 }
 

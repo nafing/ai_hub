@@ -39,6 +39,10 @@ export type ChatMessageAttachment = {
   url: string;
   name: string;
   size?: number;
+  /** Final prompt sent to the image model (generated attachments). */
+  prompt?: string;
+  /** Original `[send_image:…]` tag that produced this attachment. */
+  source_command?: string;
 };
 
 /**
@@ -85,6 +89,11 @@ export type ChatMessage = {
    * when `attachments_by_swipe` is absent.
    */
   attachments?: ChatMessageAttachment[];
+  /**
+   * Raw conversation command tags stripped from visible text, per swipe.
+   * Shown in Peek Prompt — not injected into LLM history.
+   */
+  command_tags_by_swipe?: string[][];
 };
 
 export const GROUP_CHAT_MODES = ["merged", "individual"] as const;

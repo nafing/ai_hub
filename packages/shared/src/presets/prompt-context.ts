@@ -24,8 +24,7 @@ export function formatCharacterInfoMarker(
     /** When true, omit scenario (used for group cast + shared scenario). */
     omitScenario?: boolean;
     /**
-     * Image presets: lead with Appearance and skip personality/scenario so the
-     * visual prompt stays focused on look.
+     * Image presets: Appearance only (no description / personality / scenario).
      */
     forImage?: boolean;
     /**
@@ -36,15 +35,9 @@ export function formatCharacterInfoMarker(
 ): string {
   const { data } = character;
   if (options.forImage) {
-    const appearance = data.appearance?.trim() || "";
     return joinBlocks([
       { label: "Name", value: data.name },
-      { label: "Appearance", value: appearance || data.description },
-      // Keep description as supporting lore only when Appearance is filled separately.
-      {
-        label: "Description",
-        value: appearance ? data.description : null,
-      },
+      { label: "Appearance", value: data.appearance },
     ]);
   }
   if (options.omitScenario || options.forConversation) {
@@ -170,7 +163,7 @@ export type BuildPresetPromptContextOptions = {
   scenarioOverride?: string | null;
   /**
    * How to format Character Info / Persona for image prompt presets.
-   * Prefer Appearance and expose {{char_appearance}} / {{user_appearance}}.
+   * Appearance only — expose {{char_appearance}} / {{user_appearance}}.
    */
   characterInfoMode?: "default" | "image" | "conversation";
 };
@@ -205,14 +198,7 @@ export function buildPresetPromptContext(
     const personaText = forImage
       ? joinBlocks([
           { label: "Name", value: options.persona.name },
-          {
-            label: "Appearance",
-            value: appearance || options.persona.description,
-          },
-          {
-            label: "Description",
-            value: appearance ? options.persona.description : null,
-          },
+          { label: "Appearance", value: appearance },
         ])
       : formatPersonaMarker(options.persona);
     if (personaText) markers.persona = personaText;

@@ -21,6 +21,8 @@ import {
 } from "@ai-hub/shared";
 import { ActionIcon, Button, MultiSelect, NumberInput, Select, Textarea, TextInput, Switch, RuntimeText } from "@/components/ui";
 import { characterAvatarSrc } from "@/features/characters/avatar-url";
+import { CharacterFolderQuickPick } from "@/features/characters/CharacterFolderQuickPick";
+import { useCharacterFolders } from "@/features/characters/foldersQueries";
 import { useAgents } from "@/features/agents/queries";
 import { useCharacters } from "@/features/characters/queries";
 import { useConnectionSelectOptions } from "@/features/connections/queries";
@@ -92,6 +94,7 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
   const connectionsQuery = useConnectionSelectOptions("llm");
   const presetsQuery = usePresets();
   const charactersQuery = useCharacters();
+  const foldersQuery = useCharacterFolders();
   const personasQuery = usePersonas();
   const lorebooksQuery = useLorebooks();
   const agentsQuery = useAgents();
@@ -321,6 +324,19 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
           searchable
           clearable
           placeholder={chat.mode === "roleplay" ? "Required" : "Optional"}
+        />
+        <CharacterFolderQuickPick
+          folders={foldersQuery.data ?? []}
+          selectedIds={chat.settings.character_ids}
+          onChange={(value) =>
+            patchSettings({
+              character_ids: value,
+              inactive_character_ids: normalizeInactiveCharacterIds(
+                value,
+                chat.settings.inactive_character_ids,
+              ),
+            })
+          }
         />
         {isGroup && rosterCharacters.length > 0 ? (
           <ul className={classes.memberList}>

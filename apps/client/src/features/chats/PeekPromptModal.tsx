@@ -64,6 +64,41 @@ export function PeekPromptModal({
       ) : result ? (
         <div className={classes.scroll}>
           <div className={classes.stack}>
+            {(result.command_tags?.length ?? 0) > 0 ||
+            (result.image_prompts?.length ?? 0) > 0 ? (
+              <section className={classes.loreSection}>
+                <div className={classes.loreHeader}>
+                  <p className={classes.role}>Conversation commands</p>
+                </div>
+                {(result.command_tags ?? []).length > 0 ? (
+                  <ul className={classes.loreList}>
+                    {(result.command_tags ?? []).map((tag, index) => (
+                      <li key={`${tag}-${index}`} className={classes.loreItem}>
+                        <pre className={classes.code}>{tag}</pre>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {(result.image_prompts ?? []).map((item, index) => (
+                  <div
+                    key={`${item.name}-${index}`}
+                    className={classes.loreItem}
+                  >
+                    <div className={classes.loreItemTop}>
+                      <span className={classes.loreName}>{item.name}</span>
+                      <span className={classes.loreSource}>image</span>
+                    </div>
+                    {item.command ? (
+                      <pre className={classes.lorePreview}>{item.command}</pre>
+                    ) : null}
+                    {item.prompt ? (
+                      <pre className={classes.code}>{item.prompt}</pre>
+                    ) : null}
+                  </div>
+                ))}
+              </section>
+            ) : null}
+
             <section className={classes.loreSection}>
               <div className={classes.loreHeader}>
                 <p className={classes.role}>Lore retrieval</p>

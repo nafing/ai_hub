@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
   IconCopy,
+  IconFolder,
   IconPlus,
   IconRefresh,
   IconTrash,
@@ -21,8 +22,10 @@ import {
 } from "@/components/ui";
 import { CreateCharacterModal } from "@/features/characters/CreateCharacterModal";
 import { ImportCharacterModal } from "@/features/characters/ImportCharacterModal";
+import { ManageCharacterFoldersModal } from "@/features/characters/ManageCharacterFoldersModal";
 import { RegenerateCharactersModal } from "@/features/characters/RegenerateCharactersModal";
 import { characterAvatarSrc } from "@/features/characters/avatar-url";
+import { useCharacterFolders } from "@/features/characters/foldersQueries";
 import {
   useCharacters,
   useDeleteCharacter,
@@ -43,13 +46,18 @@ function RouteComponent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
+  const [foldersOpen, setFoldersOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [folderFilter, setFolderFilter] = useState<string[]>([]);
 
   const { data, isLoading, isError } = useCharacters();
+  const foldersQuery = useCharacterFolders();
   const deleteMutation = useDeleteCharacter();
   const duplicateMutation = useDuplicateCharacter();
+
+  const folders = foldersQuery.data ?? [];
 
   const tagOptions = useMemo(() => {
     const tags = new Set<string>();
@@ -63,11 +71,36 @@ function RouteComponent() {
       .map((tag) => ({ value: tag, label: tag }));
   }, [data]);
 
-  const hasActiveFilters = query.trim().length > 0 || tagFilter.length > 0;
+  const folderOptions = useMemo(
+    () =>
+      folders.map((folder) => ({
+        value: folder.id,
+        label: `${folder.name} (${folder.character_ids.length})`,
+      })),
+    [folders],
+  );
+
+  const folderMemberIds = useMemo(() => {
+    if (folderFilter.length === 0) return null;
+    const ids = new Set<string>();
+    for (const folder of folders) {
+      if (!folderFilter.includes(folder.id)) continue;
+      for (const id of folder.character_ids) ids.add(id);
+    }
+    return ids;
+  }, [folders, folderFilter]);
+
+  const hasActiveFilters =
+    query.trim().length > 0 ||
+    tagFilter.length > 0 ||
+    folderFilter.length > 0;
 
   const filteredCharacters = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return (data ?? []).filter((character) => {
+      if (folderMemberIds && !folderMemberIds.has(character.id)) {
+        return false;
+      }
       if (
         tagFilter.length > 0 &&
         !tagFilter.some((tag) => character.tags.includes(tag))
@@ -79,14 +112,17 @@ function RouteComponent() {
         character.name.toLowerCase().includes(normalizedQuery) ||
         character.description.toLowerCase().includes(normalizedQuery) ||
         character.creator.toLowerCase().includes(normalizedQuery) ||
-        character.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery))
+        character.tags.some((tag) =>
+          tag.toLowerCase().includes(normalizedQuery),
+        )
       );
     });
-  }, [data, query, tagFilter]);
+  }, [data, query, tagFilter, folderMemberIds]);
 
   function clearFilters() {
     setQuery("");
     setTagFilter([]);
+    setFolderFilter([]);
   }
 
   function handleConfirmDelete() {
@@ -139,6 +175,14 @@ function RouteComponent() {
             <ActionIcon
               type="button"
               variant="default"
+              aria-label="Manage character folders"
+              onClick={() => setFoldersOpen(true)}
+            >
+              <IconFolder size={16} />
+            </ActionIcon>
+            <ActionIcon
+              type="button"
+              variant="default"
               aria-label="Regenerate characters"
               onClick={() => setRegenerateOpen(true)}
             >
@@ -164,6 +208,7 @@ function RouteComponent() {
         </div>
         <p className={classes.subtitle}>
           Characters. Create, edit, duplicate, regenerate, or import JSON/PNG.
+          Use folders to quickly add a cast to a chat.
           {!isLoading && !isError && hasActiveFilters
             ? ` Showing ${filteredCharacters.length} of ${data?.length ?? 0}.`
             : null}
@@ -179,6 +224,18 @@ function RouteComponent() {
             placeholder="Search name, description, creator, tags…"
             aria-label="Search characters"
           />
+          {folderOptions.length > 0 ? (
+            <MultiSelect
+              className={classes.categoryFilter}
+              searchable
+              clearable
+              data={folderOptions}
+              value={folderFilter}
+              onChange={setFolderFilter}
+              placeholder="All folders"
+              searchPlaceholder="Filter folders…"
+            />
+          ) : null}
           {tagOptions.length > 0 ? (
             <MultiSelect
               className={classes.categoryFilter}
@@ -264,6 +321,12 @@ function RouteComponent() {
         opened={regenerateOpen}
         onClose={() => setRegenerateOpen(false)}
       />
+      <ManageCharacterFoldersModal
+        opened={foldersOpen}
+        onClose={() => setFoldersOpen(false)}
+        folders={folders}
+        characters={data ?? []}
+      />
 
       <Modal
         opened={deleteTarget != null}
@@ -283,7 +346,11 @@ function RouteComponent() {
           >
             Cancel
           </Button>
-          <Button variant="dangerSolid" type="button" onClick={handleConfirmDelete}>
+          <Button
+            variant="dangerSolid"
+            type="button"
+            onClick={handleConfirmDelete}
+          >
             Delete
           </Button>
         </div>
