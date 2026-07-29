@@ -57,6 +57,13 @@
   line-height: 1.45;
 }
 
+.scenarioOverride {
+  width: 100%;
+  min-height: 5.5rem;
+  resize: vertical;
+  line-height: 1.45;
+}
+
 .memberList {
   display: flex;
   flex-direction: column;

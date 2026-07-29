@@ -35,9 +35,13 @@ import {
   buildPromptMessages,
   buildCharacterGreetingMessage,
   buildConversationCommandsReminder,
+  buildImpersonateInstruction,
   createChatMessage,
   defaultChatSettings,
   connectionWithChatParameters,
+  normalizeConnectedChatIds,
+  addConnectedChatId,
+  removeConnectedChatId,
   effectiveChatContextLimit,
   extractThinking,
   fallbackSpeakerId,
@@ -322,6 +326,7 @@ export class ChatsService {
       memory_chunks: [],
       agent_state: {},
       parent_chat_id: input.parent_chat_id?.trim() || null,
+      connected_chat_ids: [],
       connected_chat_id: null,
       created_at: now,
       updated_at: now,
@@ -374,14 +379,25 @@ export class ChatsService {
     if (row.parent_chat_id) {
       await this.unlinkCharacterDm(row.parent_chat_id, id);
     }
-    if (row.connected_chat_id) {
-      await this.disconnectChat(id);
+    const linkedIds = this.connectedIdsOf(row);
+    for (const partnerId of linkedIds) {
+      await this.disconnectChat(id, partnerId);
     }
     await this.chats.delete({ id });
   }
 
+  private connectedIdsOf(row: ChatEntity): string[] {
+    return normalizeConnectedChatIds(row.connected_chat_ids, row.connected_chat_id);
+  }
+
+  private writeConnectedIds(row: ChatEntity, ids: string[]): void {
+    row.connected_chat_ids = normalizeConnectedChatIds(ids);
+    // Clear legacy single-id column once migrated.
+    row.connected_chat_id = null;
+  }
+
   /**
-   * Bidirectional Conversation ↔ Roleplay link (one-to-one).
+   * Bidirectional Conversation ↔ Roleplay link (many partners allowed).
    */
   async connectChats(chatId: string, targetChatId: string): Promise<Chat> {
     if (chatId === targetChatId) {
@@ -401,32 +417,31 @@ export class ChatsService {
       );
     }
 
-    if (a.connected_chat_id && a.connected_chat_id !== b.id) {
-      throw new BadRequestException("This chat is already linked to another chat");
-    }
-    if (b.connected_chat_id && b.connected_chat_id !== a.id) {
-      throw new BadRequestException("Target chat is already linked to another chat");
-    }
-
     const now = new Date().toISOString();
-    a.connected_chat_id = b.id;
-    b.connected_chat_id = a.id;
+    this.writeConnectedIds(a, addConnectedChatId(this.connectedIdsOf(a), b.id));
+    this.writeConnectedIds(b, addConnectedChatId(this.connectedIdsOf(b), a.id));
     a.updated_at = now;
     b.updated_at = now;
     await this.chats.save([a, b]);
     return this.toChat(a);
   }
 
-  async disconnectChat(chatId: string): Promise<Chat> {
+  async disconnectChat(chatId: string, targetChatId?: string): Promise<Chat> {
     const row = await this.requireRow(chatId);
-    const partnerId = row.connected_chat_id;
-    if (!partnerId) return this.toChat(row);
+    const linkedIds = this.connectedIdsOf(row);
+    if (!linkedIds.length) return this.toChat(row);
+
+    const partnerId = targetChatId?.trim() || linkedIds[0];
+    if (!partnerId || !linkedIds.includes(partnerId)) {
+      throw new BadRequestException("Target chat is not linked to this chat");
+    }
 
     const now = new Date().toISOString();
     const partner = await this.chats.findOneBy({ id: partnerId });
 
-    const clearBridgeSettings = (entity: typeof row) => {
+    const clearBridgeIfUnlinked = (entity: ChatEntity) => {
       if (entity.mode !== "roleplay") return;
+      if (this.connectedIdsOf(entity).length > 0) return;
       entity.settings = defaultChatSettings({
         ...entity.settings,
         connected_pending_influences: [],
@@ -434,16 +449,17 @@ export class ChatsService {
       });
     };
 
-    row.connected_chat_id = null;
+    this.writeConnectedIds(row, removeConnectedChatId(linkedIds, partnerId));
     row.updated_at = now;
-    clearBridgeSettings(row);
+    clearBridgeIfUnlinked(row);
 
     if (partner) {
-      if (partner.connected_chat_id === chatId) {
-        partner.connected_chat_id = null;
-      }
+      this.writeConnectedIds(
+        partner,
+        removeConnectedChatId(this.connectedIdsOf(partner), chatId),
+      );
       partner.updated_at = now;
-      clearBridgeSettings(partner);
+      clearBridgeIfUnlinked(partner);
       await this.chats.save([row, partner]);
     } else {
       await this.chats.save(row);
@@ -861,10 +877,8 @@ export class ChatsService {
     {
       const side = parseConnectedSideEffectTags(content);
       content = side.cleanContent;
-      if (
-        input.row.connected_chat_id &&
-        (side.influences.length || side.notes.length)
-      ) {
+      const linkedIds = this.connectedIdsOf(input.row);
+      if (linkedIds.length && (side.influences.length || side.notes.length)) {
         const toggles = settings.conversation_command_toggles;
         const influenceOn = isConversationCommandEnabled(toggles, "influence");
         const noteOn = isConversationCommandEnabled(toggles, "note");
@@ -872,9 +886,10 @@ export class ChatsService {
           (influenceOn && side.influences.length) ||
           (noteOn && side.notes.length)
         ) {
-          try {
-            const linked = await this.requireRow(input.row.connected_chat_id);
-            if (linked.mode === "roleplay") {
+          for (const linkedId of linkedIds) {
+            try {
+              const linked = await this.requireRow(linkedId);
+              if (linked.mode !== "roleplay") continue;
               const linkedSettings = defaultChatSettings(linked.settings);
               if (influenceOn && side.influences.length) {
                 linkedSettings.connected_pending_influences = [
@@ -909,13 +924,13 @@ export class ChatsService {
               linked.settings = linkedSettings;
               linked.updated_at = new Date().toISOString();
               await this.chats.save(linked);
+            } catch (error) {
+              this.logger.warn(
+                `Failed to apply connected influence/note for ${input.row.id} → ${linkedId}: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              );
             }
-          } catch (error) {
-            this.logger.warn(
-              `Failed to apply connected influence/note for ${input.row.id}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            );
           }
         }
       }
@@ -1379,7 +1394,9 @@ export class ChatsService {
 
     const rawUserText = input.userMessage?.trim() ?? "";
     const attachments = await this.resolveAttachments(id, input.attachments);
-    if (rawUserText || attachments.length > 0) {
+    const impersonate = Boolean(input.impersonate);
+    // Impersonate direction is ephemeral guidance — do not store it as a user turn.
+    if (!impersonate && (rawUserText || attachments.length > 0)) {
       const { command, rest } = parseSlashCommand(rawUserText);
       const storedContent = command
         ? rest.trim() || `/${command}`
@@ -1406,7 +1423,8 @@ export class ChatsService {
       forCharacterId: input.forCharacterId,
       queueUserMessage: rawUserText || null,
       generationGuide: input.generationGuide?.trim() || undefined,
-      impersonate: Boolean(input.impersonate),
+      impersonate,
+      impersonateDirection: impersonate ? rawUserText || undefined : undefined,
       runDirector: Boolean(input.runDirector),
       autonomous: Boolean(input.autonomous),
       autonomousIntentKey: input.autonomous_intent_key,
@@ -1578,7 +1596,7 @@ export class ChatsService {
       historyMessages,
       chatSummary: row.summary,
       parentChatId: row.parent_chat_id,
-      connectedChatId: row.connected_chat_id,
+      connectedChatIds: this.connectedIdsOf(row),
       chatHistoryOverride,
       conversationMemory,
       chatId: row.id,
@@ -1621,6 +1639,7 @@ export class ChatsService {
       queueUserMessage?: string | null;
       generationGuide?: string;
       impersonate?: boolean;
+      impersonateDirection?: string;
       runDirector?: boolean;
       autonomous?: boolean;
       autonomousIntentKey?: string;
@@ -1635,8 +1654,12 @@ export class ChatsService {
         ? await this.applyConversationPresenceFilter(storedSettings)
         : storedSettings;
 
-    const connection = promptSettings.connection_id
-      ? await this.connections.findOne(promptSettings.connection_id)
+    const connectionId =
+      options.impersonate && promptSettings.impersonate_connection_id
+        ? promptSettings.impersonate_connection_id
+        : promptSettings.connection_id;
+    const connection = connectionId
+      ? await this.connections.findOne(connectionId)
       : await this.connections.findDefault("llm");
 
     if (!connection.api_key.trim()) {
@@ -1650,8 +1673,12 @@ export class ChatsService {
       );
     }
 
-    const preset = promptSettings.preset_id
-      ? await this.presets.findOne(promptSettings.preset_id)
+    const presetId =
+      options.impersonate && promptSettings.impersonate_preset_id
+        ? promptSettings.impersonate_preset_id
+        : promptSettings.preset_id;
+    const preset = presetId
+      ? await this.presets.findOne(presetId)
       : await this.presets.findDefault(row.mode);
 
     const includeCharacterIds: string[] = [];
@@ -1704,6 +1731,7 @@ export class ChatsService {
         ),
         regenerateIndex: options.targetIndex,
         generationGuide: options.generationGuide,
+        impersonateDirection: options.impersonateDirection,
         runDirector: options.runDirector,
         promptSettings,
         autonomous: options.autonomous,
@@ -1738,6 +1766,7 @@ export class ChatsService {
         turn,
         historyMessages: promptVisibleChatMessages(row.messages),
         generationGuide: options.generationGuide,
+        impersonateDirection: options.impersonateDirection,
         runDirector: options.runDirector,
         promptSettings,
         autonomous: options.autonomous,
@@ -1857,6 +1886,7 @@ export class ChatsService {
     historyMessages: ChatMessage[];
     regenerateIndex?: number;
     generationGuide?: string;
+    impersonateDirection?: string;
     runDirector?: boolean;
     promptSettings?: ChatSettings;
     autonomous?: boolean;
@@ -1875,6 +1905,7 @@ export class ChatsService {
       historyMessages,
       regenerateIndex,
       generationGuide,
+      impersonateDirection,
       runDirector,
       promptSettings,
       autonomous,
@@ -1882,13 +1913,18 @@ export class ChatsService {
     } = input;
     const settings = promptSettings ?? defaultChatSettings(row.settings);
 
-    const selectedAgents = await this.agentRunner.loadSelectedAgents({
-      settings,
-      mode: row.mode,
-      historyMessages,
-      runDirector,
-      parentChatId: row.parent_chat_id,
-    });
+    const skipAgents =
+      turn.kind === "impersonate" && settings.impersonate_skip_agents === true;
+
+    const selectedAgents = skipAgents
+      ? []
+      : await this.agentRunner.loadSelectedAgents({
+          settings,
+          mode: row.mode,
+          historyMessages,
+          runDirector,
+          parentChatId: row.parent_chat_id,
+        });
 
     const mutable = {
       summary: row.summary,
@@ -1976,9 +2012,10 @@ export class ChatsService {
       historyMessages,
       chatSummary: row.summary,
       generationGuide,
+      impersonateDirection,
       agentInjectTexts: pre.injectTexts,
       parentChatId: row.parent_chat_id,
-      connectedChatId: row.connected_chat_id,
+      connectedChatIds: this.connectedIdsOf(row),
       chatHistoryOverride,
       conversationMemory,
       chatId: row.id,
@@ -2075,24 +2112,28 @@ export class ChatsService {
 
       if (
         row.mode === "roleplay" &&
-        row.connected_chat_id &&
         turn.kind !== "impersonate"
       ) {
-        const ooc = parseOocTags(content);
-        content = ooc.cleanContent;
-        for (const body of ooc.oocBodies) {
-          try {
-            await this.appendChatMessage(row.connected_chat_id, {
-              role: "assistant",
-              content: body,
-              character_id: characterId,
-            });
-          } catch (error) {
-            this.logger.warn(
-              `Failed to post OOC to linked conversation ${row.connected_chat_id}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            );
+        const linkedConversationIds = this.connectedIdsOf(row);
+        if (linkedConversationIds.length) {
+          const ooc = parseOocTags(content);
+          content = ooc.cleanContent;
+          for (const body of ooc.oocBodies) {
+            for (const linkedId of linkedConversationIds) {
+              try {
+                await this.appendChatMessage(linkedId, {
+                  role: "assistant",
+                  content: body,
+                  character_id: characterId,
+                });
+              } catch (error) {
+                this.logger.warn(
+                  `Failed to post OOC to linked conversation ${linkedId}: ${
+                    error instanceof Error ? error.message : String(error)
+                  }`,
+                );
+              }
+            }
           }
         }
       }
@@ -2265,9 +2306,10 @@ export class ChatsService {
     historyMessages: ChatMessage[];
     chatSummary: string;
     generationGuide?: string;
+    impersonateDirection?: string;
     agentInjectTexts?: string[];
     parentChatId?: string | null;
-    connectedChatId?: string | null;
+    connectedChatIds?: string[];
     chatHistoryOverride?: string;
     conversationMemory?: string;
     chatId?: string;
@@ -2296,9 +2338,10 @@ export class ChatsService {
       historyMessages: rawHistory,
       chatSummary,
       generationGuide,
+      impersonateDirection,
       agentInjectTexts,
       parentChatId,
-      connectedChatId,
+      connectedChatIds = [],
       chatHistoryOverride,
       conversationMemory,
       chatId,
@@ -2324,8 +2367,20 @@ export class ChatsService {
       characterId = null;
       characterName = persona?.name?.trim() || "User";
       role = "user";
+      const personaDescription = [
+        persona?.description?.trim(),
+        persona?.personality?.trim(),
+        persona?.appearance?.trim(),
+      ]
+        .filter(Boolean)
+        .join("\n\n");
       extraSystemParts.push(
-        `Write the next message as ${characterName} (the user persona). Do not write as any other character.`,
+        buildImpersonateInstruction({
+          customPrompt: settings.impersonate_prompt_template,
+          direction: impersonateDirection,
+          personaName: characterName,
+          personaDescription,
+        }),
       );
     } else if (turn.kind === "merged") {
       characterId = primary?.id ?? null;
@@ -2452,10 +2507,11 @@ export class ChatsService {
       }
     }
 
-    if (mode === "conversation" && connectedChatId) {
-      try {
-        const linkedRow = await this.chats.findOneBy({ id: connectedChatId });
-        if (linkedRow?.mode === "roleplay") {
+    if (mode === "conversation" && connectedChatIds.length) {
+      for (const linkedId of connectedChatIds) {
+        try {
+          const linkedRow = await this.chats.findOneBy({ id: linkedId });
+          if (linkedRow?.mode !== "roleplay") continue;
           const linkedChat = this.toChat(linkedRow);
           const linkedNameById = new Map(nameByCharacterId);
           for (const id of linkedChat.settings.character_ids) {
@@ -2491,17 +2547,17 @@ export class ChatsService {
             });
             if (instructions) extraSystemParts.push(instructions);
           }
+        } catch (error) {
+          this.logger.warn(
+            `Failed to inject linked roleplay context for ${linkedId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
         }
-      } catch (error) {
-        this.logger.warn(
-          `Failed to inject linked roleplay context for ${connectedChatId}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
       }
     }
 
-    if (mode === "roleplay" && connectedChatId) {
+    if (mode === "roleplay" && connectedChatIds.length) {
       const influences = settings.connected_pending_influences ?? [];
       const notes = settings.connected_notes ?? [];
       const influenceBlock = buildConnectedInfluencesBlock(influences);
@@ -2913,7 +2969,7 @@ export class ChatsService {
       memory_chunks: normalizeChatMemoryChunks(row.memory_chunks),
       agent_state: row.agent_state ?? {},
       parent_chat_id: row.parent_chat_id ?? null,
-      connected_chat_id: row.connected_chat_id ?? null,
+      connected_chat_ids: this.connectedIdsOf(row),
       created_at: row.created_at,
       updated_at: row.updated_at,
     };
@@ -3065,7 +3121,7 @@ export class ChatsService {
       updated_at: row.updated_at,
       message_count: messages.length,
       preview: last ? activeMessageText(last).slice(0, 160) : null,
-      connected_chat_id: row.connected_chat_id ?? null,
+      connected_chat_ids: this.connectedIdsOf(row),
       parent_chat_id: row.parent_chat_id ?? null,
     };
   }

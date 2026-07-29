@@ -530,6 +530,15 @@ export type {
   EffectiveChatGenerationParameters,
 } from "./chats/generation-parameters";
 export {
+  DEFAULT_IMPERSONATE_PROMPT,
+  buildImpersonateInstruction,
+} from "./chats/impersonate";
+export {
+  normalizeConnectedChatIds,
+  addConnectedChatId,
+  removeConnectedChatId,
+} from "./chats/connected-chat-ids";
+export {
   MEMORY_CHUNK_SIZE,
   normalizeChatMemoryChunks,
   appendPendingMemoryChunks,

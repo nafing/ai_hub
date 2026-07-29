@@ -131,6 +131,28 @@ export function defaultChatSettings(
         ? overrides.image_captioning_connection_id.trim()
         : null,
     chat_parameters: normalizeChatGenerationParameters(overrides.chat_parameters),
+    impersonate_prompt_template:
+      typeof overrides.impersonate_prompt_template === "string"
+        ? overrides.impersonate_prompt_template
+        : "",
+    impersonate_preset_id:
+      typeof overrides.impersonate_preset_id === "string" &&
+      overrides.impersonate_preset_id.trim()
+        ? overrides.impersonate_preset_id.trim()
+        : null,
+    impersonate_connection_id:
+      typeof overrides.impersonate_connection_id === "string" &&
+      overrides.impersonate_connection_id.trim()
+        ? overrides.impersonate_connection_id.trim()
+        : null,
+    impersonate_skip_agents:
+      typeof overrides.impersonate_skip_agents === "boolean"
+        ? overrides.impersonate_skip_agents
+        : false,
+    impersonate_cyoa_as_direction:
+      typeof overrides.impersonate_cyoa_as_direction === "boolean"
+        ? overrides.impersonate_cyoa_as_direction
+        : false,
     enable_agents:
       typeof overrides.enable_agents === "boolean"
         ? overrides.enable_agents

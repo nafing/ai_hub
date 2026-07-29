@@ -49,7 +49,16 @@ export class ChatEntity {
   @Column("text", { nullable: true })
   parent_chat_id!: string | null;
 
-  /** Bidirectional Conversation ↔ Roleplay link; null when unlinked. */
+  /**
+   * Bidirectional Conversation ↔ Roleplay partner ids.
+   * Replaces legacy single `connected_chat_id`.
+   */
+  @Column("simple-json", { default: [] })
+  connected_chat_ids!: string[];
+
+  /**
+   * @deprecated Prefer `connected_chat_ids`. Kept for migrate-on-read.
+   */
   @Column("text", { nullable: true })
   connected_chat_id!: string | null;
 

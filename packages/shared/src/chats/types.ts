@@ -207,6 +207,19 @@ export type ChatSettings = {
    * Empty = use the chat connection as-is.
    */
   chat_parameters: ChatGenerationParameters;
+  /**
+   * Impersonate prompt template. Empty = built-in default.
+   * Macros: {{user}}, {{persona_description}}, {{impersonate_direction}}.
+   */
+  impersonate_prompt_template: string;
+  /** Preset for impersonate turns; null → chat preset. */
+  impersonate_preset_id: string | null;
+  /** Connection for impersonate turns; null → chat connection. */
+  impersonate_connection_id: string | null;
+  /** Skip agent pipeline during impersonate generations. */
+  impersonate_skip_agents: boolean;
+  /** CYOA choice clicks run as impersonate direction instead of a user message. */
+  impersonate_cyoa_as_direction: boolean;
   /** Master switch for the pre/parallel/post agent pipeline (roleplay). */
   enable_agents: boolean;
   /**
@@ -338,10 +351,9 @@ export type Chat = {
   /** Parent roleplay/group chat when this is a character DM; null for root chats. */
   parent_chat_id: string | null;
   /**
-   * Bidirectional Conversation ↔ Roleplay link (one-to-one).
-   * Null when this chat is not linked.
+   * Bidirectional Conversation ↔ Roleplay links (many-to-many list of partner ids).
    */
-  connected_chat_id: string | null;
+  connected_chat_ids: string[];
   created_at: string;
   updated_at: string;
 };

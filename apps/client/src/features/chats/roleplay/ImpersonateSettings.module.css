@@ -1,0 +1,108 @@
+.promptBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.promptLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.promptLabel {
+  font-size: var(--field-label-size, 0.6875rem);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.promptHint {
+  margin: 0;
+  color: var(--color-text-dimmed);
+  font-size: var(--field-hint-size, 0.625rem);
+  line-height: 1.4;
+}
+
+.statusChip {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface-hover) 70%, transparent);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text-dimmed);
+  font-size: 0.5625rem;
+  font-weight: 600;
+}
+
+.defaultRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.defaultToggle,
+.resetButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.35rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-dimmed);
+  background: transparent;
+  font-size: 0.625rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.defaultToggle:hover,
+.resetButton:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.resetButton {
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.defaultPreview {
+  margin: 0;
+  max-height: 10rem;
+  overflow: auto;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-hover) 40%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text-dimmed);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.625rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.overridesCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-hover) 35%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.overridesGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+@media (max-width: 520px) {
+  .overridesGrid {
+    grid-template-columns: 1fr;
+  }
+}

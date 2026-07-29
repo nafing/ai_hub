@@ -78,8 +78,12 @@ export class ChatsController {
   }
 
   @Post(":id/disconnect")
-  disconnect(@Param("id") id: string): Promise<Chat> {
-    return this.chatsService.disconnectChat(id);
+  disconnect(
+    @Param("id") id: string,
+    @Body() body: { target_chat_id?: string },
+  ): Promise<Chat> {
+    const target = body?.target_chat_id?.trim();
+    return this.chatsService.disconnectChat(id, target || undefined);
   }
 
   @Patch(":id")

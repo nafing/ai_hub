@@ -57,8 +57,13 @@ export async function connectChats(
   return data;
 }
 
-export async function disconnectChat(chatId: string): Promise<Chat> {
-  const { data } = await api.post<Chat>(`/chats/${chatId}/disconnect`);
+export async function disconnectChat(
+  chatId: string,
+  targetChatId: string,
+): Promise<Chat> {
+  const { data } = await api.post<Chat>(`/chats/${chatId}/disconnect`, {
+    target_chat_id: targetChatId,
+  });
   return data;
 }
 

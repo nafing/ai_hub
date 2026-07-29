@@ -18,6 +18,7 @@ import {
   defaultChatSettings,
   formatRoleplaySummaryChatLog,
   normalizeChatSummaryEntries,
+  normalizeConnectedChatIds,
   normalizeConversationSummaryFailures,
   normalizeDaySummaries,
   normalizeSummaryTailMessages,
@@ -473,7 +474,10 @@ export class ChatSummaryService {
       memory_chunks: Array.isArray(row.memory_chunks) ? row.memory_chunks : [],
       agent_state: row.agent_state ?? {},
       parent_chat_id: row.parent_chat_id ?? null,
-      connected_chat_id: row.connected_chat_id ?? null,
+      connected_chat_ids: normalizeConnectedChatIds(
+        row.connected_chat_ids,
+        row.connected_chat_id,
+      ),
       created_at: row.created_at,
       updated_at: row.updated_at,
     };

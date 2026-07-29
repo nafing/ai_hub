@@ -25,31 +25,35 @@ export function ConnectedChatsSettings({
   const disconnectMutation = useDisconnectChat();
   const [pickerId, setPickerId] = useState<string | null>(null);
 
-  const linkedId = chat.connected_chat_id;
+  const linkedIds = chat.connected_chat_ids ?? [];
   const chats = chatsQuery.data ?? [];
-  const linkedChat = linkedId
-    ? chats.find((item) => item.id === linkedId) ?? null
-    : null;
+  const linkedChats = useMemo(
+    () =>
+      linkedIds.map((id) => ({
+        id,
+        item: chats.find((entry) => entry.id === id) ?? null,
+      })),
+    [linkedIds, chats],
+  );
 
   const linkCandidates = useMemo(() => {
     const wantMode = isConversation ? "roleplay" : "conversation";
+    const linkedSet = new Set(linkedIds);
     return chats
       .filter((item) => {
         if (item.id === chat.id) return false;
         if (item.mode !== wantMode) return false;
         if (item.parent_chat_id) return false;
-        if (item.connected_chat_id && item.connected_chat_id !== chat.id) {
-          return false;
-        }
+        if (linkedSet.has(item.id)) return false;
         return true;
       })
       .map((item) => ({
         value: item.id,
         label: item.title || (item.mode === "roleplay" ? "Roleplay" : "Conversation"),
       }));
-  }, [chats, chat.id, isConversation]);
+  }, [chats, chat.id, isConversation, linkedIds]);
 
-  const canLink = !chat.parent_chat_id && !linkedId;
+  const canLink = !chat.parent_chat_id;
   const busy = connectMutation.isPending || disconnectMutation.isPending;
 
   return (
@@ -68,33 +72,46 @@ export function ConnectedChatsSettings({
 
       {!chat.parent_chat_id ? (
         <div className={classes.linkBlock}>
-          <span className={classes.linkLabel}>Linked chat</span>
-          {linkedId ? (
-            <div className={classes.linkedRow}>
-              <div className={classes.linkedMeta}>
-                <IconLink size={14} className={classes.linkIcon} />
-                <div className={classes.linkedText}>
-                  <span className={classes.linkedTitle}>
-                    {linkedChat?.title ||
-                      (isConversation ? "Linked roleplay" : "Linked conversation")}
-                  </span>
-                  <span className={classes.linkedHint}>
-                    {isConversation
-                      ? "Conversation pulls story context; characters can send influences and notes."
-                      : "Roleplay receives influences/notes; replies may post OOC into the conversation."}
-                  </span>
+          <span className={classes.linkLabel}>Linked chats</span>
+          {linkedChats.length > 0 ? (
+            <div className={classes.linkedList}>
+              {linkedChats.map(({ id, item }) => (
+                <div key={id} className={classes.linkedRow}>
+                  <div className={classes.linkedMeta}>
+                    <IconLink size={14} className={classes.linkIcon} />
+                    <div className={classes.linkedText}>
+                      <span className={classes.linkedTitle}>
+                        {item?.title ||
+                          (isConversation
+                            ? "Linked roleplay"
+                            : "Linked conversation")}
+                      </span>
+                      <span className={classes.linkedHint}>
+                        {isConversation
+                          ? "Conversation pulls story context; characters can send influences and notes."
+                          : "Roleplay receives influences/notes; replies may post OOC into the conversation."}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={classes.unlinkButton}
+                    disabled={busy}
+                    onClick={() =>
+                      disconnectMutation.mutate({
+                        chatId: chat.id,
+                        targetChatId: id,
+                      })
+                    }
+                  >
+                    <IconUnlink size={12} /> Unlink
+                  </button>
                 </div>
-              </div>
-              <button
-                type="button"
-                className={classes.unlinkButton}
-                disabled={busy}
-                onClick={() => disconnectMutation.mutate(chat.id)}
-              >
-                <IconUnlink size={12} /> Unlink
-              </button>
+              ))}
             </div>
-          ) : (
+          ) : null}
+
+          {canLink ? (
             <div className={classes.pickerRow}>
               <Select
                 data={linkCandidates}
@@ -104,10 +121,10 @@ export function ConnectedChatsSettings({
                 clearable
                 placeholder={
                   isConversation
-                    ? "Choose a roleplay chat…"
-                    : "Choose a conversation…"
+                    ? "Add a roleplay chat…"
+                    : "Add a conversation…"
                 }
-                disabled={!canLink || busy || chatsQuery.isLoading}
+                disabled={busy || chatsQuery.isLoading || linkCandidates.length === 0}
               />
               <button
                 type="button"
@@ -124,12 +141,17 @@ export function ConnectedChatsSettings({
                 <IconLink size={12} /> Link
               </button>
             </div>
-          )}
+          ) : null}
+
           {canLink && linkCandidates.length === 0 && !chatsQuery.isLoading ? (
             <p className={classes.emptyHint}>
-              {isConversation
-                ? "No free roleplay chats to link. Create one or unlink another pair first."
-                : "No free conversation chats to link."}
+              {linkedIds.length > 0
+                ? isConversation
+                  ? "No more roleplay chats to link."
+                  : "No more conversation chats to link."
+                : isConversation
+                  ? "No roleplay chats to link. Create one first."
+                  : "No conversation chats to link."}
             </p>
           ) : null}
         </div>

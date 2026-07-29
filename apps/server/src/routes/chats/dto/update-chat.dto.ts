@@ -285,6 +285,26 @@ class UpdateChatSettingsDto {
   chat_parameters?: Record<string, unknown>;
 
   @IsOptional()
+  @IsString()
+  impersonate_prompt_template?: string;
+
+  @IsOptional()
+  @IsString()
+  impersonate_preset_id?: string | null;
+
+  @IsOptional()
+  @IsString()
+  impersonate_connection_id?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  impersonate_skip_agents?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  impersonate_cyoa_as_direction?: boolean;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   connected_pending_influences?: string[];

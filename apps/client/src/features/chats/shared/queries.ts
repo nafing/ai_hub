@@ -87,9 +87,9 @@ export function useConnectChat() {
     onSuccess: (chat, variables) => {
       void queryClient.invalidateQueries({ queryKey: chatKeys.all });
       void queryClient.setQueryData(chatKeys.detail(chat.id), chat);
-      if (chat.connected_chat_id) {
+      for (const linkedId of chat.connected_chat_ids ?? []) {
         void queryClient.invalidateQueries({
-          queryKey: chatKeys.detail(chat.connected_chat_id),
+          queryKey: chatKeys.detail(linkedId),
         });
       }
       void queryClient.invalidateQueries({
@@ -102,10 +102,19 @@ export function useConnectChat() {
 export function useDisconnectChat() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (chatId: string) => disconnectChat(chatId),
-    onSuccess: (chat) => {
+    mutationFn: ({
+      chatId,
+      targetChatId,
+    }: {
+      chatId: string;
+      targetChatId: string;
+    }) => disconnectChat(chatId, targetChatId),
+    onSuccess: (chat, variables) => {
       void queryClient.invalidateQueries({ queryKey: chatKeys.all });
       void queryClient.setQueryData(chatKeys.detail(chat.id), chat);
+      void queryClient.invalidateQueries({
+        queryKey: chatKeys.detail(variables.targetChatId),
+      });
     },
   });
 }

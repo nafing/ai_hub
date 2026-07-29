@@ -11,6 +11,12 @@
   color: var(--color-text);
 }
 
+.linkedList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
 .linkedRow {
   display: flex;
   align-items: flex-start;

@@ -19,6 +19,7 @@ import {
   Button,
   MultiSelect,
   Select,
+  Textarea,
   TextInput,
   Switch,
   RuntimeText,
@@ -385,11 +386,7 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
                     patchSettings({ add_turn_to_prompt: checked })
                   }
                   label="Add Turn To Prompt"
-                  description={
-                    chat.settings.add_turn_to_prompt !== false
-                      ? "Each individual turn includes a short responding-character instruction."
-                      : "Individual turns rely on context without adding a turn instruction."
-                  }
+                  description="Each individual turn includes a short responding-character instruction."
                 />
                 {isRoleplay ? (
                   <Switch
@@ -400,8 +397,8 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
                         group_speaker_names_in_history: checked,
                       })
                     }
-                    label="Name prefix history"
-                    description="Send chat history turns as Name: message before role merging."
+                    label="Name Prefix History"
+                    description="History turns keep their stored text before role merging."
                   />
                 ) : null}
               </>
@@ -415,7 +412,7 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
                     patchSettings({ group_speaker_tags: checked })
                   }
                   label="Color Dialogues"
-                  description='Wrap each character line in <speaker="name"> tags so dialogue can be split and styled per character.'
+                  description="Color character dialogues differently using the special tags. The colors are assigned based on what you chose in the Color tab for your Character."
                 />
               ) : (
                 <p className={classes.fieldHint}>
@@ -423,6 +420,22 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
                   conversation.
                 </p>
               )
+            ) : null}
+            {isRoleplay ? (
+              <Field label="Scenario Override">
+                <Textarea
+                  className={classes.scenarioOverride}
+                  defaultValue={chat.settings.scenario_override}
+                  key={`scenario-override-${chat.id}-${chat.updated_at}`}
+                  placeholder="Replace individual character scenarios with a shared scenario for this group chat or leave empty to keep them…"
+                  onBlur={(event) => {
+                    const scenario_override = event.currentTarget.value;
+                    if (scenario_override !== chat.settings.scenario_override) {
+                      patchSettings({ scenario_override });
+                    }
+                  }}
+                />
+              </Field>
             ) : null}
           </SettingsSection>
         ) : null}
@@ -557,6 +570,7 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
             chat={chat}
             agentOptions={agentOptions}
             connectionOptions={connectionOptions}
+            presetOptions={presetOptions}
             patchSettings={patchSettings}
           />
         ) : (

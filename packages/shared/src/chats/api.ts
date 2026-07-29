@@ -96,7 +96,12 @@ export type GenerateChatImageInput = {
 
 export type ChatListItem = Pick<
   Chat,
-  "id" | "title" | "mode" | "created_at" | "updated_at" | "connected_chat_id"
+  | "id"
+  | "title"
+  | "mode"
+  | "created_at"
+  | "updated_at"
+  | "connected_chat_ids"
 > & {
   message_count: number;
   preview: string | null;

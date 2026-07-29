@@ -7,22 +7,32 @@ import {
 } from "../shared/chatSettingsUi";
 import { FunctionCallingSettings } from "../shared/FunctionCallingSettings";
 import { MemoryRecallSettings } from "../shared/MemoryRecallSettings";
-import classes from "../shared/ChatSettingsPanel.module.css";
+import { ImpersonateSettings } from "./ImpersonateSettings";
 
 type ChatSettingsRoleplayProps = {
   chat: Chat;
   agentOptions: { value: string; label: string }[];
   connectionOptions: { value: string; label: string }[];
+  presetOptions: { value: string; label: string }[];
   patchSettings: PatchChatSettings;
 };
 
 export function ChatSettingsRoleplay({
   chat,
   agentOptions,
+  connectionOptions,
+  presetOptions,
   patchSettings,
 }: ChatSettingsRoleplayProps) {
   return (
     <>
+      <ImpersonateSettings
+        chat={chat}
+        presetOptions={presetOptions}
+        connectionOptions={connectionOptions}
+        patchSettings={patchSettings}
+      />
+
       <SettingsSection value="agents" label="Agents">
         <Switch
           variant="card"
@@ -71,13 +81,6 @@ export function ChatSettingsRoleplay({
         settings={chat.settings}
         patchSettings={patchSettings}
       />
-
-      <SettingsSection value="summary" label="Summary">
-        <p className={classes.summaryHint}>
-          Use the scroll icon in the chat header to generate rolling summaries,
-          manage entries, and configure automatic updates.
-        </p>
-      </SettingsSection>
     </>
   );
 }

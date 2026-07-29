@@ -1098,6 +1098,10 @@ export function ChatSession({
         disabled={streaming}
         agentStatus={agentStatus}
         onSendChoice={(text) => {
+          if (chat.settings.impersonate_cyoa_as_direction) {
+            void runGenerate({ impersonate: true, userMessage: text });
+            return;
+          }
           void runGenerate({ userMessage: text });
         }}
         onRunDirector={() => {
