@@ -45,4 +45,9 @@ packages/android-app/dist/ai-hub-<version>.apk
 packages/android-app/dist/ai-hub-latest.apk
 ```
 
-APK-i są w `.gitignore`. Lokalna dystrybucja z `dist/`; opcjonalnie GitHub Release przez `pnpm release:android` (wymaga `gh`).
+APK-i są w `.gitignore`. Lokalna dystrybucja z `dist/`; CI publikuje GitHub Release.
+
+## CI
+
+Automatyczny workflow: [`.github/workflows/release-android.yml`](../../.github/workflows/release-android.yml)  
+Szczegóły: [README główny](../../README.md#ci--github-actions).

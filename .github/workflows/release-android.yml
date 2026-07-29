@@ -1,0 +1,115 @@
+name: Release Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump patch version before build"
+        type: boolean
+        default: true
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/client/**"
+      - "packages/android-app/**"
+      - "packages/shared/**"
+      - ".github/workflows/release-android.yml"
+      - "pnpm-lock.yaml"
+      - "package.json"
+    tags:
+      - "android-v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build Android APK
+        id: build
+        run: |
+          BUMP=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.bump }}" = "true" ]; then
+            BUMP=true
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            BUMP=true
+          fi
+
+          if [ "$BUMP" = "true" ]; then
+            pnpm --filter @ai-hub/android-app release -- --no-publish
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+          else
+            pnpm --filter @ai-hub/android-app build -- --no-publish
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Read version
+        id: version
+        run: echo "value=$(node -p "require('./packages/android-app/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Commit version bump
+        if: steps.build.outputs.bumped == 'true' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/android-app/package.json apps/client/android/app/version.properties
+          if git diff --cached --quiet; then
+            echo "No version files to commit"
+            exit 0
+          fi
+          git commit -m "chore(android): bump to ${{ steps.version.outputs.value }}"
+          git push
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-hub-android-${{ steps.version.outputs.value }}
+          path: packages/android-app/dist/ai-hub-*.apk
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.value }}"
+          TAG="android-v${VERSION}"
+          APK="packages/android-app/dist/ai-hub-${VERSION}.apk"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --title "Android ${VERSION}" \
+              --notes "AI Hub Android WebView build ${VERSION}"
+          fi

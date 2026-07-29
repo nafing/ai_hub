@@ -39,7 +39,11 @@ packages/android-app # wersjonowanie i artefakty APK
 
 | Komenda | Opis |
 |---------|------|
-| `pnpm dev` | Client + server równolegle |
+| `pnpm dev` | Client + server równolegle (watch) |
+| `pnpm dev:server` | Tylko server w trybie watch |
+| `pnpm build:server` | Build `shared` + `server` |
+| `pnpm start` | Build servera + start produkcyjny |
+| `pnpm start:server` | Start servera (wymaga wcześniejszego buildu) |
 | `pnpm build` | Build shared/server + Android APK |
 | `pnpm build:web` | Build paczek web (bez wymuszania APK) |
 | `pnpm build:android` / `pnpm android` | Build APK bieżącej wersji → `packages/android-app/dist/` |
@@ -102,6 +106,18 @@ Wymaga [GitHub CLI](https://cli.github.com/) (`gh auth login`), żeby utworzyć 
 1. `pnpm dev` (serwer + Vite na LAN)
 2. `pnpm android:dev`
 3. Na telefonie w Settings ustaw API na `http://<IP-PC>:5174/v1/api`
+
+### CI / GitHub Actions
+
+Workflow: [`.github/workflows/release-android.yml`](.github/workflows/release-android.yml)
+
+Uruchamia się:
+
+- przy pushu na `main` (zmiany w client / android-app / shared / workflow)
+- ręcznie: **Actions → Release Android APK → Run workflow**
+- przy tagu `android-v*`
+
+Efekt: bump wersji (na `main`), APK jako artifact + GitHub Release.
 
 Więcej: [`packages/android-app/README.md`](packages/android-app/README.md).
 
