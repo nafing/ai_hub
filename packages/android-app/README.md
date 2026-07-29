@@ -1,18 +1,48 @@
-# AI Hub — Android APK
+# `@ai-hub/android-app`
 
-Wersja źródłowa dla buildów Capacitor (`versionName` / `versionCode`).
+Pakiet wersji i artefaktów APK (Capacitor WebView).
 
-## Skrypty (z roota)
+## Wersjonowanie
+
+Źródło prawdy: `package.json` → pole `version` (semver).
+
+Przy buildzie synchronizowane do:
+
+- `apps/client/android/app/version.properties` (`versionName` / `versionCode`)
+- `versionCode = major*10000 + minor*100 + patch`
+
+## Komendy
+
+Z **roota** monorepo:
 
 ```bash
-pnpm android              # build APK bieżącej wersji → packages/android-app/dist/
-pnpm release:android      # bump patch + build + GitHub Release (jeśli gh)
+pnpm android              # build bieżącej wersji
+pnpm release:android      # bump patch + build + GitHub Release (gh)
+pnpm android:dev          # live reload
+pnpm android:open         # Android Studio
+pnpm android:sync         # vite build + cap sync
 ```
+
+Bezpośrednio w paczce:
+
+```bash
+pnpm --filter @ai-hub/android-app build     # bez bumpa
+pnpm --filter @ai-hub/android-app release   # z bumpem (+ publish jeśli gh)
+```
+
+Flagi skryptu `scripts/release.mjs`:
+
+| Flaga | Znaczenie |
+|-------|-----------|
+| `--bump` | Podbij patch w `package.json` |
+| `--publish` | Wymuś GitHub Release |
+| `--no-publish` | Pomiń GitHub Release |
 
 ## Artefakty
 
 ```
 packages/android-app/dist/ai-hub-<version>.apk
+packages/android-app/dist/ai-hub-latest.apk
 ```
 
-Publikacja: GitHub Release `android-v<version>` z załączonym APK.
+APK-i są w `.gitignore`. Lokalna dystrybucja z `dist/`; opcjonalnie GitHub Release przez `pnpm release:android` (wymaga `gh`).

@@ -9,8 +9,14 @@ export async function initCapacitor(): Promise<void> {
   document.documentElement.dataset.platform = Capacitor.getPlatform();
 
   try {
+    await StatusBar.setOverlaysWebView({ overlay: true });
+  } catch {
+    // overlaysWebView is a no-op on Android 15+; safe to ignore.
+  }
+
+  try {
     await StatusBar.setStyle({ style: Style.Dark });
-    await StatusBar.setBackgroundColor({ color: "#000000" });
+    await StatusBar.hide();
   } catch {
     // Status bar plugin may be unavailable on some devices.
   }
