@@ -5,6 +5,7 @@ export { RegexesModule } from "./regexes/regexes.module";
 export { ToolsModule } from "./tools/tools.module";
 export { AgentsModule } from "./agents/agents.module";
 export { CharactersModule } from "./characters/characters.module";
+export { BotbooruModule } from "./botbooru/botbooru.module";
 export { CharacterFoldersModule } from "./character-folders/character-folders.module";
 export { LorebooksModule } from "./lorebooks/lorebooks.module";
 export { PersonasModule } from "./personas/personas.module";

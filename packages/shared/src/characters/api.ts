@@ -29,4 +29,6 @@ export type CharacterListItem = {
   name_color?: string | null;
   dialogue_color?: string | null;
   message_box_color?: string | null;
+  /** Set when imported from Botbooru. */
+  botbooru_post_id?: number | null;
 };

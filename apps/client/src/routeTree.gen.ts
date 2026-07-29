@@ -36,9 +36,11 @@ import { Route as AppPresetsPresetIdIndexRouteImport } from './routes/_app/prese
 import { Route as AppPersonasPersonaIdIndexRouteImport } from './routes/_app/personas/$personaId/index'
 import { Route as AppLorebooksLorebookIdIndexRouteImport } from './routes/_app/lorebooks/$lorebookId/index'
 import { Route as AppConnectionsConnectionIdIndexRouteImport } from './routes/_app/connections/$connectionId/index'
+import { Route as AppCharactersImportIndexRouteImport } from './routes/_app/characters/import/index'
 import { Route as AppCharactersCharacterIdIndexRouteImport } from './routes/_app/characters/$characterId/index'
 import { Route as AppAgentsAgentIdIndexRouteImport } from './routes/_app/agents/$agentId/index'
 import { Route as TwatterTwatterProfileAccountIdRouteImport } from './routes/_twatter/twatter/profile/$accountId'
+import { Route as AppCharactersImportCardIdIndexRouteImport } from './routes/_app/characters/import/$cardId/index'
 
 const TwatterRouteRoute = TwatterRouteRouteImport.update({
   id: '/_twatter',
@@ -177,6 +179,12 @@ const AppConnectionsConnectionIdIndexRoute =
     path: '/connections/$connectionId/',
     getParentRoute: () => AppRouteRoute,
   } as any)
+const AppCharactersImportIndexRoute =
+  AppCharactersImportIndexRouteImport.update({
+    id: '/characters/import/',
+    path: '/characters/import/',
+    getParentRoute: () => AppRouteRoute,
+  } as any)
 const AppCharactersCharacterIdIndexRoute =
   AppCharactersCharacterIdIndexRouteImport.update({
     id: '/characters/$characterId/',
@@ -193,6 +201,12 @@ const TwatterTwatterProfileAccountIdRoute =
     id: '/twatter/profile/$accountId',
     path: '/twatter/profile/$accountId',
     getParentRoute: () => TwatterRouteRoute,
+  } as any)
+const AppCharactersImportCardIdIndexRoute =
+  AppCharactersImportCardIdIndexRouteImport.update({
+    id: '/characters/import/$cardId/',
+    path: '/characters/import/$cardId/',
+    getParentRoute: () => AppRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -215,6 +229,7 @@ export interface FileRoutesByFullPath {
   '/twatter/profile/$accountId': typeof TwatterTwatterProfileAccountIdRoute
   '/agents/$agentId/': typeof AppAgentsAgentIdIndexRoute
   '/characters/$characterId/': typeof AppCharactersCharacterIdIndexRoute
+  '/characters/import/': typeof AppCharactersImportIndexRoute
   '/connections/$connectionId/': typeof AppConnectionsConnectionIdIndexRoute
   '/lorebooks/$lorebookId/': typeof AppLorebooksLorebookIdIndexRoute
   '/personas/$personaId/': typeof AppPersonasPersonaIdIndexRoute
@@ -223,6 +238,7 @@ export interface FileRoutesByFullPath {
   '/tools/$toolId/': typeof AppToolsToolIdIndexRoute
   '/chats/$chatId/': typeof ChatChatsChatIdIndexRoute
   '/twatter/profile/': typeof TwatterTwatterProfileIndexRoute
+  '/characters/import/$cardId/': typeof AppCharactersImportCardIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
@@ -244,6 +260,7 @@ export interface FileRoutesByTo {
   '/twatter/profile/$accountId': typeof TwatterTwatterProfileAccountIdRoute
   '/agents/$agentId': typeof AppAgentsAgentIdIndexRoute
   '/characters/$characterId': typeof AppCharactersCharacterIdIndexRoute
+  '/characters/import': typeof AppCharactersImportIndexRoute
   '/connections/$connectionId': typeof AppConnectionsConnectionIdIndexRoute
   '/lorebooks/$lorebookId': typeof AppLorebooksLorebookIdIndexRoute
   '/personas/$personaId': typeof AppPersonasPersonaIdIndexRoute
@@ -252,6 +269,7 @@ export interface FileRoutesByTo {
   '/tools/$toolId': typeof AppToolsToolIdIndexRoute
   '/chats/$chatId': typeof ChatChatsChatIdIndexRoute
   '/twatter/profile': typeof TwatterTwatterProfileIndexRoute
+  '/characters/import/$cardId': typeof AppCharactersImportCardIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -277,6 +295,7 @@ export interface FileRoutesById {
   '/_twatter/twatter/profile/$accountId': typeof TwatterTwatterProfileAccountIdRoute
   '/_app/agents/$agentId/': typeof AppAgentsAgentIdIndexRoute
   '/_app/characters/$characterId/': typeof AppCharactersCharacterIdIndexRoute
+  '/_app/characters/import/': typeof AppCharactersImportIndexRoute
   '/_app/connections/$connectionId/': typeof AppConnectionsConnectionIdIndexRoute
   '/_app/lorebooks/$lorebookId/': typeof AppLorebooksLorebookIdIndexRoute
   '/_app/personas/$personaId/': typeof AppPersonasPersonaIdIndexRoute
@@ -285,6 +304,7 @@ export interface FileRoutesById {
   '/_app/tools/$toolId/': typeof AppToolsToolIdIndexRoute
   '/_chat/chats/$chatId/': typeof ChatChatsChatIdIndexRoute
   '/_twatter/twatter/profile/': typeof TwatterTwatterProfileIndexRoute
+  '/_app/characters/import/$cardId/': typeof AppCharactersImportCardIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -308,6 +328,7 @@ export interface FileRouteTypes {
     | '/twatter/profile/$accountId'
     | '/agents/$agentId/'
     | '/characters/$characterId/'
+    | '/characters/import/'
     | '/connections/$connectionId/'
     | '/lorebooks/$lorebookId/'
     | '/personas/$personaId/'
@@ -316,6 +337,7 @@ export interface FileRouteTypes {
     | '/tools/$toolId/'
     | '/chats/$chatId/'
     | '/twatter/profile/'
+    | '/characters/import/$cardId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -337,6 +359,7 @@ export interface FileRouteTypes {
     | '/twatter/profile/$accountId'
     | '/agents/$agentId'
     | '/characters/$characterId'
+    | '/characters/import'
     | '/connections/$connectionId'
     | '/lorebooks/$lorebookId'
     | '/personas/$personaId'
@@ -345,6 +368,7 @@ export interface FileRouteTypes {
     | '/tools/$toolId'
     | '/chats/$chatId'
     | '/twatter/profile'
+    | '/characters/import/$cardId'
   id:
     | '__root__'
     | '/_app'
@@ -369,6 +393,7 @@ export interface FileRouteTypes {
     | '/_twatter/twatter/profile/$accountId'
     | '/_app/agents/$agentId/'
     | '/_app/characters/$characterId/'
+    | '/_app/characters/import/'
     | '/_app/connections/$connectionId/'
     | '/_app/lorebooks/$lorebookId/'
     | '/_app/personas/$personaId/'
@@ -377,6 +402,7 @@ export interface FileRouteTypes {
     | '/_app/tools/$toolId/'
     | '/_chat/chats/$chatId/'
     | '/_twatter/twatter/profile/'
+    | '/_app/characters/import/$cardId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -576,6 +602,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppConnectionsConnectionIdIndexRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_app/characters/import/': {
+      id: '/_app/characters/import/'
+      path: '/characters/import'
+      fullPath: '/characters/import/'
+      preLoaderRoute: typeof AppCharactersImportIndexRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/_app/characters/$characterId/': {
       id: '/_app/characters/$characterId/'
       path: '/characters/$characterId'
@@ -597,6 +630,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TwatterTwatterProfileAccountIdRouteImport
       parentRoute: typeof TwatterRouteRoute
     }
+    '/_app/characters/import/$cardId/': {
+      id: '/_app/characters/import/$cardId/'
+      path: '/characters/import/$cardId'
+      fullPath: '/characters/import/$cardId/'
+      preLoaderRoute: typeof AppCharactersImportCardIdIndexRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
   }
 }
 
@@ -615,12 +655,14 @@ interface AppRouteRouteChildren {
   AppToolsIndexRoute: typeof AppToolsIndexRoute
   AppAgentsAgentIdIndexRoute: typeof AppAgentsAgentIdIndexRoute
   AppCharactersCharacterIdIndexRoute: typeof AppCharactersCharacterIdIndexRoute
+  AppCharactersImportIndexRoute: typeof AppCharactersImportIndexRoute
   AppConnectionsConnectionIdIndexRoute: typeof AppConnectionsConnectionIdIndexRoute
   AppLorebooksLorebookIdIndexRoute: typeof AppLorebooksLorebookIdIndexRoute
   AppPersonasPersonaIdIndexRoute: typeof AppPersonasPersonaIdIndexRoute
   AppPresetsPresetIdIndexRoute: typeof AppPresetsPresetIdIndexRoute
   AppRegexesRegexIdIndexRoute: typeof AppRegexesRegexIdIndexRoute
   AppToolsToolIdIndexRoute: typeof AppToolsToolIdIndexRoute
+  AppCharactersImportCardIdIndexRoute: typeof AppCharactersImportCardIdIndexRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
@@ -638,12 +680,14 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppToolsIndexRoute: AppToolsIndexRoute,
   AppAgentsAgentIdIndexRoute: AppAgentsAgentIdIndexRoute,
   AppCharactersCharacterIdIndexRoute: AppCharactersCharacterIdIndexRoute,
+  AppCharactersImportIndexRoute: AppCharactersImportIndexRoute,
   AppConnectionsConnectionIdIndexRoute: AppConnectionsConnectionIdIndexRoute,
   AppLorebooksLorebookIdIndexRoute: AppLorebooksLorebookIdIndexRoute,
   AppPersonasPersonaIdIndexRoute: AppPersonasPersonaIdIndexRoute,
   AppPresetsPresetIdIndexRoute: AppPresetsPresetIdIndexRoute,
   AppRegexesRegexIdIndexRoute: AppRegexesRegexIdIndexRoute,
   AppToolsToolIdIndexRoute: AppToolsToolIdIndexRoute,
+  AppCharactersImportCardIdIndexRoute: AppCharactersImportCardIdIndexRoute,
 }
 
 const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(

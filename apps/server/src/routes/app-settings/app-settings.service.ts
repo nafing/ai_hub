@@ -22,4 +22,8 @@ export class AppSettingsService {
       updated_at: new Date().toISOString(),
     });
   }
+
+  async delete(key: string): Promise<void> {
+    await this.settings.delete({ key });
+  }
 }

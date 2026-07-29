@@ -54,8 +54,6 @@ export type CharacterImportSession = {
 };
 
 type StartAiImportInput = {
-  sessionId: string;
-  jobId: string;
   preview: CharacterImportPreview;
   connectionId: string;
   preset: Preset;
@@ -70,7 +68,9 @@ function hasCharacterBook(
   return Boolean(book && typeof book === "object" && !Array.isArray(book));
 }
 
-async function runAiImport(input: StartAiImportInput): Promise<{
+async function runAiImport(
+  input: StartAiImportInput & { sessionId: string; jobId: string },
+): Promise<{
   cards: CharacterCardData[];
   context: ImportAiReviewContext;
 }> {
@@ -311,9 +311,17 @@ export const useCharacterImportSessionStore = create<CharacterImportSessionStore
       const embeddedBook = preview.card.data.character_book;
       const createdList = [];
 
+      const botbooruPostId = preview.card.data.botbooru_post_id ?? null;
+
       for (let index = 0; index < cardsToCreate.length; index += 1) {
+        const cardData = cardsToCreate[index]!;
         let created = await createCharacter(
-          defaultCharacter({ data: cardsToCreate[index]! }),
+          defaultCharacter({
+            data:
+              botbooruPostId != null
+                ? { ...cardData, botbooru_post_id: botbooruPostId }
+                : cardData,
+          }),
         );
         if (index === 0 && preview.avatarFile) {
           created = await uploadCharacterAvatar(

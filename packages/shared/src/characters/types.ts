@@ -95,6 +95,10 @@ export type CharacterCardData = {
   convo_behavior: string;
   /** Where to inject `convo_behavior` relative to the character card. */
   convo_behavior_insertion: CharacterConvoBehaviorInsertion;
+  /**
+   * Botbooru post id when this character was imported from Botbooru (hub field).
+   */
+  botbooru_post_id: number | null;
 };
 
 /** Insertion mode for conversation behavior text. */

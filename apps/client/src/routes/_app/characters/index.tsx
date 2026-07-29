@@ -7,8 +7,9 @@ import {
   IconRefresh,
   IconTrash,
   IconUpload,
+  IconWorldDownload,
 } from "@tabler/icons-react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import type { CharacterListItem } from "@ai-hub/shared";
 import { api } from "@/lib/api";
 import {
@@ -43,6 +44,7 @@ type DeleteTarget = {
 };
 
 function RouteComponent() {
+  const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
@@ -191,6 +193,14 @@ function RouteComponent() {
             <ActionIcon
               type="button"
               variant="default"
+              aria-label="Import from website"
+              onClick={() => void navigate({ to: "/characters/import" })}
+            >
+              <IconWorldDownload size={16} />
+            </ActionIcon>
+            <ActionIcon
+              type="button"
+              variant="default"
               aria-label="Import character card"
               onClick={() => setImportOpen(true)}
             >
@@ -207,8 +217,8 @@ function RouteComponent() {
           </div>
         </div>
         <p className={classes.subtitle}>
-          Characters. Create, edit, duplicate, regenerate, or import JSON/PNG.
-          Use folders to quickly add a cast to a chat.
+          Characters. Create, edit, duplicate, regenerate, or import JSON/PNG /
+          Botbooru. Use folders to quickly add a cast to a chat.
           {!isLoading && !isError && hasActiveFilters
             ? ` Showing ${filteredCharacters.length} of ${data?.length ?? 0}.`
             : null}

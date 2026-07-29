@@ -110,6 +110,10 @@ export class CharacterCardDataDto implements CharacterCardData {
     "marker_only",
   ])
   convo_behavior_insertion!: CharacterConvoBehaviorInsertion;
+
+  @IsOptional()
+  @IsNumber()
+  botbooru_post_id!: number | null;
 }
 
 export class CreateCharacterDto {

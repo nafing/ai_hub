@@ -103,10 +103,25 @@ export function defaultCharacterBookEntry(): CharacterBookEntry {
 }
 
 /** Blank `data` payload for a new card. */
+function normalizeBotbooruPostId(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    const parsed = Number(value.trim());
+    return parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
 export function defaultCharacterCardData(
   overrides: Partial<CharacterCardData> = {},
 ): CharacterCardData {
-  const { talkativeness: talkOverride, ...rest } = overrides;
+  const {
+    talkativeness: talkOverride,
+    botbooru_post_id: botbooruOverride,
+    ...rest
+  } = overrides;
   return {
     name: "",
     description: "",
@@ -145,6 +160,7 @@ export function defaultCharacterCardData(
     talkativeness: normalizeTalkativeness(
       talkOverride ?? DEFAULT_TALKATIVENESS,
     ),
+    botbooru_post_id: normalizeBotbooruPostId(botbooruOverride),
   };
 }
 
@@ -280,6 +296,9 @@ export function normalizeCharacterCardData(
     convo_behavior_insertion: normalizeConvoBehaviorInsertion(
       input.convo_behavior_insertion ?? legacyExtensions?.convoBehaviorInsertion,
     ),
+    botbooru_post_id: normalizeBotbooruPostId(
+      input.botbooru_post_id ?? legacyExtensions?.ai_hub_botbooru_post_id,
+    ),
   };
 
   if (
@@ -350,14 +369,19 @@ export function toCharacterCardV2(
   character: Pick<Character, "spec" | "spec_version" | "data">,
 ) {
   const data = normalizeCharacterCardData(character.data);
-  const { talkativeness, ...cardFields } = data;
+  const { talkativeness, botbooru_post_id, ...cardFields } = data;
   return {
     spec: CHARA_CARD_SPEC,
     spec_version: CHARA_CARD_SPEC_VERSION,
     data: {
       ...cardFields,
-      // Spec requires `data.extensions`; map hub talkativeness for ST compatibility.
-      extensions: { talkativeness },
+      // Spec requires `data.extensions`; map hub fields for ST compatibility.
+      extensions: {
+        talkativeness,
+        ...(botbooru_post_id != null
+          ? { ai_hub_botbooru_post_id: botbooru_post_id }
+          : {}),
+      },
     },
   };
 }

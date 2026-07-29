@@ -460,6 +460,7 @@ export class CharactersService {
       name_color: normalized.data.name_color ?? null,
       dialogue_color: normalized.data.dialogue_color ?? null,
       message_box_color: normalized.data.message_box_color ?? null,
+      botbooru_post_id: normalized.data.botbooru_post_id ?? null,
     };
   }
 }
