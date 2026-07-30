@@ -289,11 +289,15 @@ export const useChatGenerationStore = create<ChatGenerationStore>((_set, get) =>
       abortController: controller,
     });
 
+    let settled = false;
     try {
       await streamGenerate(
         chatId,
         input,
-        (event) => applyStreamEvent(chatId, event),
+        (event) => {
+          if (event.type === "done") settled = true;
+          applyStreamEvent(chatId, event);
+        },
         controller.signal,
       );
       return "ok";
@@ -313,6 +317,13 @@ export const useChatGenerationStore = create<ChatGenerationStore>((_set, get) =>
       return "error";
     } finally {
       clearStreamFields(chatId);
+      // Server may have persisted messages even when the SSE body never
+      // reached JS (common with CapacitorHttp buffering / timeouts).
+      if (!settled) {
+        void queryClient.invalidateQueries({
+          queryKey: chatKeys.detail(chatId),
+        });
+      }
     }
   },
 
@@ -330,10 +341,14 @@ export const useChatGenerationStore = create<ChatGenerationStore>((_set, get) =>
       abortController: controller,
     });
 
+    let settled = false;
     try {
       await streamRegenerate(
         chatId,
-        (event) => applyStreamEvent(chatId, event),
+        (event) => {
+          if (event.type === "done") settled = true;
+          applyStreamEvent(chatId, event);
+        },
         controller.signal,
         messageId,
       );
@@ -354,6 +369,11 @@ export const useChatGenerationStore = create<ChatGenerationStore>((_set, get) =>
       return "error";
     } finally {
       clearStreamFields(chatId);
+      if (!settled) {
+        void queryClient.invalidateQueries({
+          queryKey: chatKeys.detail(chatId),
+        });
+      }
     }
   },
 }));

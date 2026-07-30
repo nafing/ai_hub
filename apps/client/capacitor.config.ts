@@ -14,6 +14,8 @@ const config: CapacitorConfig = {
   },
   plugins: {
     // Native HTTP bypasses WebView CORS (fixes DELETE/PUT from Capacitor).
+    // Chat SSE must NOT use this path — see streamingFetch() in chats/api.ts
+    // (CapacitorHttp buffers the full body and breaks text/event-stream).
     CapacitorHttp: {
       enabled: true,
     },

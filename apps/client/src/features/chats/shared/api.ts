@@ -247,6 +247,23 @@ function apiBaseUrl(): string {
   return base.replace(/\/$/, "");
 }
 
+/**
+ * CapacitorHttp patches `window.fetch` and buffers the full response body
+ * before returning — which breaks chat SSE (no live deltas; long generations
+ * often time out and never apply `done`). Prefer the original WebView fetch.
+ */
+function streamingFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const webFetch = (
+    typeof window !== "undefined"
+      ? (window as Window & { CapacitorWebFetch?: typeof fetch }).CapacitorWebFetch
+      : undefined
+  );
+  return (webFetch ?? fetch)(input, init);
+}
+
 async function readSseStream(
   response: Response,
   onEvent: (event: ChatStreamEvent) => void,
@@ -323,7 +340,7 @@ export async function streamGenerate(
   signal?: AbortSignal,
 ): Promise<void> {
   await withPresetVariableRetry(async () => {
-    const response = await fetch(`${apiBaseUrl()}/chats/${id}/generate`, {
+    const response = await streamingFetch(`${apiBaseUrl()}/chats/${id}/generate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -343,15 +360,18 @@ export async function streamRegenerate(
   messageId?: string,
 ): Promise<void> {
   await withPresetVariableRetry(async () => {
-    const response = await fetch(`${apiBaseUrl()}/chats/${id}/regenerate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
+    const response = await streamingFetch(
+      `${apiBaseUrl()}/chats/${id}/regenerate`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify(messageId ? { messageId } : {}),
+        signal,
       },
-      body: JSON.stringify(messageId ? { messageId } : {}),
-      signal,
-    });
+    );
     return readSseStream(response, onEvent);
   });
 }
