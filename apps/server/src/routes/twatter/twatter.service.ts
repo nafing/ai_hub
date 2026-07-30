@@ -2,10 +2,8 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  StreamableFile,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { createReadStream } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { In, Repository } from "typeorm";
 import {
@@ -54,11 +52,9 @@ import { TwatterDigestEntity } from "./twatter-digest.entity";
 import { TwatterInteractionEntity } from "./twatter-interaction.entity";
 import {
   normalizeTwatterPostImageInput,
-  twatterImageExists,
-  twatterImageFilePath,
   twatterPostImagePublicUrl,
   writeTwatterPostImage,
-} from "./twatter-image-storage";
+} from "../images/storage/twatter-posts";
 import { TwatterPostEntity } from "./twatter-post.entity";
 import { TwatterSettingsEntity } from "./twatter-settings.entity";
 
@@ -583,18 +579,6 @@ export class TwatterService {
     };
     row.updated_at = new Date().toISOString();
     return this.toAccount(await this.accounts.save(row));
-  }
-
-  async getPostImage(postId: string): Promise<StreamableFile> {
-    const ext = await twatterImageExists(postId);
-    if (!ext) {
-      throw new NotFoundException(`Image for post ${postId} not found`);
-    }
-    const mime = ext === "png" ? "image/png" : "image/jpeg";
-    return new StreamableFile(createReadStream(twatterImageFilePath(postId, ext)), {
-      type: mime,
-      disposition: "inline",
-    });
   }
 
   async listOptedInChats(): Promise<ChatEntity[]> {

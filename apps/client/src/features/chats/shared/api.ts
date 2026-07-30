@@ -12,6 +12,7 @@ import type {
   UpdateChatMessageInput,
   Variable,
 } from "@ai-hub/shared";
+import { imageApiPaths } from "@ai-hub/shared";
 import { promptPresetVariables } from "@/features/presets/PresetCommandBridge";
 import { api } from "@/lib/api";
 
@@ -114,7 +115,7 @@ export async function uploadChatAttachment(
   const form = new FormData();
   form.append("file", file, file.name);
   const { data } = await api.post<ChatMessageAttachment>(
-    `/chats/${chatId}/attachments`,
+    imageApiPaths.chatAttachments(chatId),
     form,
   );
   return data;

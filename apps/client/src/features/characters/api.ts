@@ -4,6 +4,7 @@ import type {
   CreateCharacterInput,
   UpdateCharacterInput,
 } from "@ai-hub/shared";
+import { imageApiPaths } from "@ai-hub/shared";
 import { api } from "@/lib/api";
 
 export async function listCharacters(): Promise<CharacterListItem[]> {
@@ -57,12 +58,17 @@ export async function uploadCharacterAvatar(
 ): Promise<Character> {
   const form = new FormData();
   form.append("file", file, fileName);
-  const { data } = await api.put<Character>(`/characters/${id}/avatar`, form);
+  const { data } = await api.put<Character>(
+    imageApiPaths.characterAvatar(id),
+    form,
+  );
   return data;
 }
 
 export async function deleteCharacterAvatar(id: string): Promise<Character> {
-  const { data } = await api.delete<Character>(`/characters/${id}/avatar`);
+  const { data } = await api.delete<Character>(
+    imageApiPaths.characterAvatar(id),
+  );
   return data;
 }
 
@@ -73,7 +79,10 @@ export async function uploadCharacterGalleryImage(
 ): Promise<Character> {
   const form = new FormData();
   form.append("file", file, fileName);
-  const { data } = await api.post<Character>(`/characters/${id}/gallery`, form);
+  const { data } = await api.post<Character>(
+    imageApiPaths.characterGalleryCollection(id),
+    form,
+  );
   return data;
 }
 
@@ -82,7 +91,7 @@ export async function deleteCharacterGalleryImage(
   imageId: string,
 ): Promise<Character> {
   const { data } = await api.delete<Character>(
-    `/characters/${id}/gallery/${imageId}`,
+    imageApiPaths.characterGallery(id, imageId),
   );
   return data;
 }

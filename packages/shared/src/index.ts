@@ -589,6 +589,7 @@ export {
   removeChatMessageSubtree,
 } from "./chats/branches";
 export { buildCharacterGreetingMessage } from "./chats/seed-messages";
+export { imageApiPaths } from "./images/paths";
 export {
   parseMentions,
   parseSlashCommand,

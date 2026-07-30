@@ -2,8 +2,6 @@
   --shell-header-h: var(--header-height);
   --shell-navbar-w: var(--navbar-width);
   --twatter-right-w: 20rem;
-  --twatter-center-max: 42rem;
-
   display: grid;
   grid-template-columns: var(--shell-navbar-w) minmax(0, 1fr);
   grid-template-rows: var(--shell-header-h) minmax(0, 1fr);
@@ -317,13 +315,6 @@
   background: var(--color-bg);
 }
 
-.centerColumn {
-  width: 100%;
-  max-width: var(--twatter-center-max);
-  margin-inline: auto;
-  min-width: 0;
-}
-
 .rightSidebar {
   display: flex;
   flex-direction: column;
@@ -569,7 +560,4 @@
     display: none !important;
   }
 
-  .centerColumn {
-    max-width: none;
-  }
 }

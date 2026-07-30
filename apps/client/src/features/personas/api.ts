@@ -4,6 +4,7 @@ import type {
   PersonaListItem,
   UpdatePersonaInput,
 } from "@ai-hub/shared";
+import { imageApiPaths } from "@ai-hub/shared";
 import { api } from "@/lib/api";
 
 export async function listPersonas(): Promise<PersonaListItem[]> {
@@ -47,11 +48,16 @@ export async function uploadPersonaAvatar(
 ): Promise<Persona> {
   const form = new FormData();
   form.append("file", file, fileName);
-  const { data } = await api.put<Persona>(`/personas/${id}/avatar`, form);
+  const { data } = await api.put<Persona>(
+    imageApiPaths.personaAvatar(id),
+    form,
+  );
   return data;
 }
 
 export async function deletePersonaAvatar(id: string): Promise<Persona> {
-  const { data } = await api.delete<Persona>(`/personas/${id}/avatar`);
+  const { data } = await api.delete<Persona>(
+    imageApiPaths.personaAvatar(id),
+  );
   return data;
 }

@@ -1,33 +1,18 @@
 import { createReadStream } from "node:fs";
-import { access, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import type { ChatMessageAttachment } from "@ai-hub/shared";
+import {
+  attachmentKindForMime,
+  extensionForMime,
+  normalizeMime,
+} from "../../../utils/mime";
+import { imageApiPaths, uploadsPath } from "../paths";
 
-const IMAGE_MIMES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/jpg",
-  "image/webp",
-  "image/gif",
-]);
-
-const EXT_BY_MIME: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/jpg": "jpg",
-  "image/webp": "webp",
-  "image/gif": "gif",
-  "application/pdf": "pdf",
-  "text/plain": "txt",
-  "text/markdown": "md",
-  "application/json": "json",
-};
-
-export function getChatAttachmentsDir(chatId: string): string {
+function getChatAttachmentsDir(chatId: string): string {
   const root =
-    process.env.SERVER_CHAT_ATTACHMENTS_DIR ??
-    path.resolve(__dirname, "../../../uploads/chats");
+    process.env.SERVER_CHAT_ATTACHMENTS_DIR ?? uploadsPath("chats");
   return path.join(root, chatId);
 }
 
@@ -39,43 +24,12 @@ export function chatAttachmentFilePath(
   return path.join(getChatAttachmentsDir(chatId), `${attachmentId}.${ext}`);
 }
 
-export function chatAttachmentMetaPath(
-  chatId: string,
-  attachmentId: string,
-): string {
+function chatAttachmentMetaPath(chatId: string, attachmentId: string): string {
   return path.join(getChatAttachmentsDir(chatId), `${attachmentId}.json`);
 }
 
-export async function ensureChatAttachmentsDir(chatId: string): Promise<void> {
+async function ensureChatAttachmentsDir(chatId: string): Promise<void> {
   await mkdir(getChatAttachmentsDir(chatId), { recursive: true });
-}
-
-export function attachmentKindForMime(mime: string): "image" | "file" {
-  const normalized = normalizeMime(mime);
-  return IMAGE_MIMES.has(normalized) ? "image" : "file";
-}
-
-export function normalizeMime(mime: string): string {
-  const value = mime.trim().toLowerCase();
-  if (value === "image/jpg") return "image/jpeg";
-  return value || "application/octet-stream";
-}
-
-export function extensionForMime(mime: string, fileName?: string): string {
-  const normalized = normalizeMime(mime);
-  if (EXT_BY_MIME[normalized]) return EXT_BY_MIME[normalized]!;
-  const fromName = fileName?.includes(".")
-    ? fileName.split(".").pop()?.toLowerCase()
-    : undefined;
-  if (fromName && /^[a-z0-9]{1,8}$/.test(fromName)) return fromName;
-  return "bin";
-}
-
-export function chatAttachmentPublicUrl(
-  chatId: string,
-  attachmentId: string,
-): string {
-  return `/chats/${chatId}/attachments/${attachmentId}`;
 }
 
 type AttachmentMeta = {
@@ -120,7 +74,7 @@ export async function writeChatAttachment(input: {
     id: input.attachmentId,
     kind,
     mime,
-    url: chatAttachmentPublicUrl(input.chatId, input.attachmentId),
+    url: imageApiPaths.chatAttachment(input.chatId, input.attachmentId),
     name: meta.name,
     size: meta.size,
   };
@@ -166,28 +120,4 @@ export function openChatAttachmentStream(
   ext: string,
 ) {
   return createReadStream(chatAttachmentFilePath(chatId, attachmentId, ext));
-}
-
-export async function deleteChatAttachmentFiles(
-  chatId: string,
-  attachmentId: string,
-): Promise<void> {
-  const meta = await readChatAttachmentMeta(chatId, attachmentId);
-  const targets = [
-    chatAttachmentMetaPath(chatId, attachmentId),
-    ...(meta
-      ? [chatAttachmentFilePath(chatId, attachmentId, meta.ext)]
-      : []),
-  ];
-  for (const target of targets) {
-    try {
-      await unlink(target);
-    } catch (error) {
-      const code =
-        error && typeof error === "object" && "code" in error
-          ? (error as { code?: string }).code
-          : undefined;
-      if (code !== "ENOENT") throw error;
-    }
-  }
 }

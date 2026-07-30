@@ -48,7 +48,7 @@ export type ChatMessageAttachment = {
   /** `image` when mime is an image/* the UI can preview; otherwise `file`. */
   kind: "image" | "file";
   mime: string;
-  /** Public API path, e.g. `/chats/:chatId/attachments/:id`. */
+  /** Public API path, e.g. `/images/chat-attachments/:chatId/:id`. */
   url: string;
   name: string;
   size?: number;
@@ -311,7 +311,7 @@ export type ChatSettings = {
   image_resolution: string;
   /**
    * Chat stage background — API path to a character gallery image
-   * (e.g. `/characters/{id}/gallery/{imageId}`), or null for default stage.
+   * (e.g. `/images/character-gallery/{characterId}/{imageId}`), or null for default stage.
    */
   background_image_url: string | null;
   /**

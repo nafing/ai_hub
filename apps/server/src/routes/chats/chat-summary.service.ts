@@ -31,7 +31,6 @@ import {
   visibleChatMessages,
   type Chat,
   type ChatMessage,
-  type ChatSummaryEntry,
   type GenerateChatSummaryInput,
   type SummaryEntriesPatchBody,
 } from "@ai-hub/shared";

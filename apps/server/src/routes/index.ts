@@ -13,3 +13,4 @@ export { ChatsModule } from "./chats/chats.module";
 export { TwatterModule } from "./twatter/twatter.module";
 export { AppSettingsModule } from "./app-settings/app-settings.module";
 export { ConversationModule } from "./conversation/conversation.module";
+export { ImagesModule } from "./images/images.module";

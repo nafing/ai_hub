@@ -4,7 +4,6 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  StreamableFile,
   forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -98,7 +97,6 @@ import {
   type ChatMode,
   type ChatSettings,
   type ChatStreamEvent,
-  type ConversationCommandKey,
   type ConversationPresenceStatus,
   type CreateChatInput,
   type CreateChatMessageInput,
@@ -112,12 +110,13 @@ import {
   type UpdateChatInput,
   type UpdateChatMessageInput,
 } from "@ai-hub/shared";
-import { LoreRetrievalService } from "../../lore/lore-retrieval.service";
+import { LoreRetrievalService } from "../lorebooks/lore-retrieval.service";
 import {
   completeWithConnection,
   completeWithConnectionAndPreset,
   openRouterGenerateImage,
 } from "../../utils/openrouter";
+import { escapeQuotesForAttribute } from "../../utils/prompt/escape";
 import { AgentRunnerService } from "../agents/agent-runner.service";
 import { CharactersService } from "../characters/characters.service";
 import { ConnectionsService } from "../connections/connections.service";
@@ -127,13 +126,13 @@ import { PersonasService } from "../personas/personas.service";
 import { PresetsService } from "../presets/presets.service";
 import { RegexesService } from "../regexes/regexes.service";
 import { TwatterService } from "../twatter/twatter.service";
-import { ChatEntity } from "./chat.entity";
+import { imageApiPaths } from "../images/paths";
 import {
   chatAttachmentExists,
-  openChatAttachmentStream,
   readChatAttachmentMeta,
   writeChatAttachment,
-} from "./chat-attachment-storage";
+} from "../images/storage/chat-attachments";
+import { ChatEntity } from "./chat.entity";
 import { ChatSummaryService } from "./chat-summary.service";
 import { ConversationSummaryService } from "./conversation-summary.service";
 
@@ -1146,7 +1145,7 @@ export class ChatsService {
     const brief =
       input.prompt?.trim() ||
       "Casual phone selfie matching the chat vibe.";
-    const sourceCommand = `[send_image: prompt="${brief.replace(/"/g, "'")}"]`;
+    const sourceCommand = `[send_image: prompt="${escapeQuotesForAttribute(brief)}"]`;
 
     const attachment = await this.generateConversationImageAttachment({
       chatId: row.id,
@@ -2885,25 +2884,6 @@ export class ChatsService {
     }
   }
 
-  async getAttachmentStream(
-    chatId: string,
-    attachmentId: string,
-  ): Promise<StreamableFile> {
-    await this.requireRow(chatId);
-    const meta = await readChatAttachmentMeta(chatId, attachmentId);
-    if (!meta || !(await chatAttachmentExists(chatId, attachmentId))) {
-      throw new NotFoundException(`Attachment ${attachmentId} not found`);
-    }
-    const safeName = meta.name.replace(/[\r\n"]/g, "_");
-    return new StreamableFile(
-      openChatAttachmentStream(chatId, attachmentId, meta.ext),
-      {
-        type: meta.mime,
-        disposition: `inline; filename="${safeName}"`,
-      },
-    );
-  }
-
   private async resolveAttachments(
     chatId: string,
     attachments: ChatMessageAttachment[] | undefined,
@@ -2914,7 +2894,7 @@ export class ChatsService {
       if (!item?.id || typeof item.id !== "string") {
         throw new BadRequestException("Invalid attachment id");
       }
-      const expectedUrl = `/chats/${chatId}/attachments/${item.id}`;
+      const expectedUrl = imageApiPaths.chatAttachment(chatId, item.id);
       if (item.url !== expectedUrl) {
         throw new BadRequestException(
           `Attachment ${item.id} does not belong to this chat`,

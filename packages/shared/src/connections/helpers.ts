@@ -1,5 +1,4 @@
 import type { ConnectionKind } from "./constants";
-import { CONNECTION_KINDS, CONNECTION_KIND_LABELS } from "./constants";
 
 export function connectionKind(input: { kind?: ConnectionKind }): ConnectionKind {
   return input.kind ?? "llm";

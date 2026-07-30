@@ -2,8 +2,6 @@ import path from "node:path";
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { LoreModule } from "./lore/lore.module";
-import { LlmModule } from "./llm/llm.module";
 import {
   ConnectionsModule,
   PresetsModule,
@@ -18,8 +16,8 @@ import {
   PersonasModule,
   ChatsModule,
   TwatterModule,
-  AppSettingsModule,
   ConversationModule,
+  ImagesModule,
 } from "./routes";
 
 @Module({
@@ -48,12 +46,10 @@ import {
     CharacterFoldersModule,
     LorebooksModule,
     PersonasModule,
-    LoreModule,
     ChatsModule,
     TwatterModule,
-    AppSettingsModule,
     ConversationModule,
-    LlmModule,
+    ImagesModule,
   ],
   controllers: [],
   providers: [],

@@ -16,9 +16,12 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "check-types": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo \"no lint\""
+    "lint": "eslint . --max-warnings 0"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "@eslint/js": "^9.28.0",
+    "eslint": "^9.28.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.33.0"
   }
 }

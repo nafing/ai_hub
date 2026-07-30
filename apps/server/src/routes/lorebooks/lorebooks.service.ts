@@ -9,7 +9,7 @@ import {
   type LorebookListItem,
   type UpdateLorebookInput,
 } from "@ai-hub/shared";
-import { LoreRetrievalService } from "../../lore/lore-retrieval.service";
+import { LoreRetrievalService } from "./lore-retrieval.service";
 import { CharacterEntity } from "../characters/character.entity";
 import { PersonaEntity } from "../personas/persona.entity";
 import { LorebookEntity } from "./lorebook.entity";

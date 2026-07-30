@@ -246,9 +246,7 @@ function TwatterShellInner() {
 
       <div className={classes.mainArea}>
         <main className={classes.main}>
-          <div className={classes.centerColumn}>
-            <Outlet />
-          </div>
+          <Outlet />
         </main>
 
         <aside className={classes.rightSidebar} aria-label="Twatter widgets">

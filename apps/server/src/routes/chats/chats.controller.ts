@@ -15,7 +15,6 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type {
   Chat,
   ChatListItem,
-  ChatMessageAttachment,
   ChatStreamEvent,
   ConversationSummariesPatchBody,
   ConversationSummaryBackfillInput,
@@ -106,31 +105,6 @@ export class ChatsController {
     @Body() body: CreateChatMessageDto,
   ): Promise<Chat> {
     return this.chatsService.addMessage(id, body);
-  }
-
-  @Post(":id/attachments")
-  async uploadAttachment(
-    @Param("id") id: string,
-    @Req() req: FastifyRequest,
-  ): Promise<ChatMessageAttachment> {
-    const file = await req.file();
-    if (!file) {
-      throw new BadRequestException("Expected multipart file field");
-    }
-    const buffer = await file.toBuffer();
-    return this.chatsService.uploadAttachment(id, {
-      buffer,
-      mime: file.mimetype || "application/octet-stream",
-      name: file.filename || "attachment",
-    });
-  }
-
-  @Get(":id/attachments/:attachmentId")
-  getAttachment(
-    @Param("id") id: string,
-    @Param("attachmentId") attachmentId: string,
-  ) {
-    return this.chatsService.getAttachmentStream(id, attachmentId);
   }
 
   @Patch(":id/messages/:messageId")

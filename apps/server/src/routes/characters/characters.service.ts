@@ -2,10 +2,8 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  StreamableFile,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { createReadStream } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { Repository } from "typeorm";
 import {
@@ -25,24 +23,23 @@ import {
 import { CharacterFoldersService } from "../character-folders/character-folders.service";
 import { LorebooksService } from "../lorebooks/lorebooks.service";
 import { CharacterEntity } from "./character.entity";
+import { imageApiPaths } from "../images/paths";
 import {
-  avatarExists,
-  avatarFilePath,
-  copyAvatarFile,
-  deleteAvatarFile,
-  writeAvatarPng,
-} from "./avatar-storage";
+  characterAvatarExists,
+  copyCharacterAvatarFile,
+  deleteCharacterAvatarFile,
+  writeCharacterAvatarPng,
+} from "../images/storage/character-avatars";
 import {
   characterGalleryImageExists,
   copyCharacterGallery,
   deleteCharacterGalleryDir,
   deleteCharacterGalleryImageFile,
   normalizeGalleryRecords,
-  openCharacterGalleryImageStream,
   toPublicGalleryImage,
   writeCharacterGalleryImage,
   type CharacterGalleryImageRecord,
-} from "./gallery-storage";
+} from "../images/storage/character-gallery";
 
 @Injectable()
 export class CharactersService {
@@ -213,7 +210,7 @@ export class CharactersService {
     const row = await this.requireRow(id);
     await this.lorebooks.unlinkCharacter(id);
     await this.characterFolders.unlinkCharacter(id);
-    await deleteAvatarFile(id);
+    await deleteCharacterAvatarFile(id);
     await deleteCharacterGalleryDir(id);
     await this.characters.delete({ id: row.id });
   }
@@ -258,7 +255,7 @@ export class CharactersService {
     });
     await this.characters.save(entity);
 
-    if (await copyAvatarFile(id, createdId)) {
+    if (await copyCharacterAvatarFile(id, createdId)) {
       await this.characters.update(
         { id: createdId },
         { avatar: this.avatarRelativePath(createdId) },
@@ -267,21 +264,10 @@ export class CharactersService {
     return this.findOne(createdId);
   }
 
-  async getAvatarStream(id: string): Promise<StreamableFile> {
-    await this.requireRow(id);
-    if (!(await avatarExists(id))) {
-      throw new NotFoundException(`Avatar for character ${id} not found`);
-    }
-    return new StreamableFile(createReadStream(avatarFilePath(id)), {
-      type: "image/png",
-      disposition: `inline; filename="${id}.png"`,
-    });
-  }
-
   async setAvatar(id: string, buffer: Buffer): Promise<Character> {
     const row = await this.requireRow(id);
     try {
-      await writeAvatarPng(id, buffer);
+      await writeCharacterAvatarPng(id, buffer);
     } catch (error) {
       throw new BadRequestException(
         error instanceof Error ? error.message : "Invalid avatar PNG",
@@ -294,7 +280,7 @@ export class CharactersService {
 
   async clearAvatar(id: string): Promise<Character> {
     const row = await this.requireRow(id);
-    await deleteAvatarFile(id);
+    await deleteCharacterAvatarFile(id);
     row.avatar = null;
     const saved = await this.characters.save(row);
     return this.toCharacter(saved);
@@ -303,28 +289,6 @@ export class CharactersService {
   async listGallery(id: string): Promise<CharacterGalleryImage[]> {
     const row = await this.requireRow(id);
     return this.publicGallery(row);
-  }
-
-  async getGalleryImageStream(
-    id: string,
-    imageId: string,
-  ): Promise<StreamableFile> {
-    const row = await this.requireRow(id);
-    const record = normalizeGalleryRecords(row.gallery).find(
-      (item) => item.id === imageId,
-    );
-    if (!record || !(await characterGalleryImageExists(id, record))) {
-      throw new NotFoundException(
-        `Gallery image ${imageId} for character ${id} not found`,
-      );
-    }
-    return new StreamableFile(
-      openCharacterGalleryImageStream(id, record.id, record.ext),
-      {
-        type: record.mime,
-        disposition: `inline; filename="${record.name.replace(/"/g, "")}"`,
-      },
-    );
   }
 
   async addGalleryImage(
@@ -385,7 +349,7 @@ export class CharactersService {
 
   /** Public API path used by clients for <img src>. */
   private avatarPublicUrl(characterId: string): string {
-    return `/characters/${characterId}/avatar`;
+    return imageApiPaths.characterAvatar(characterId);
   }
 
   private avatarRelativePath(characterId: string): string {
@@ -429,7 +393,7 @@ export class CharactersService {
       await this.characters.save(row);
     }
 
-    const hasAvatar = await avatarExists(row.id);
+    const hasAvatar = await characterAvatarExists(row.id);
     return {
       id: row.id,
       avatar: hasAvatar ? this.avatarPublicUrl(row.id) : null,
@@ -443,7 +407,7 @@ export class CharactersService {
   }
 
   private async toListItem(row: CharacterEntity): Promise<CharacterListItem> {
-    const hasAvatar = await avatarExists(row.id);
+    const hasAvatar = await characterAvatarExists(row.id);
     const normalized = normalizeCharacterVersions({
       data: row.data ?? {},
       versions: row.versions,

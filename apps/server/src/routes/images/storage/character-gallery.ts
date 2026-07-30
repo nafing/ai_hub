@@ -3,8 +3,6 @@ import {
   access,
   copyFile,
   mkdir,
-  readdir,
-  readFile,
   rm,
   unlink,
   writeFile,
@@ -15,22 +13,13 @@ import type {
   CharacterGalleryImage,
   CharacterGalleryImageSource,
 } from "@ai-hub/shared";
-
-const IMAGE_MIMES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/jpg",
-  "image/webp",
-  "image/gif",
-]);
-
-const EXT_BY_MIME: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/jpg": "jpg",
-  "image/webp": "webp",
-  "image/gif": "gif",
-};
+import { ignoreEnoent } from "../../../utils/fs";
+import {
+  assertImageMime,
+  extensionForMime,
+  normalizeMime,
+} from "../../../utils/mime";
+import { imageApiPaths, uploadsPath } from "../paths";
 
 /** Stored on the character row (URLs rewritten for the API response). */
 export type CharacterGalleryImageRecord = {
@@ -44,10 +33,9 @@ export type CharacterGalleryImageRecord = {
   prompt?: string;
 };
 
-export function getCharacterGalleryDir(characterId: string): string {
+function getCharacterGalleryDir(characterId: string): string {
   const root =
-    process.env.SERVER_CHARACTER_GALLERY_DIR ??
-    path.resolve(__dirname, "../../../uploads/characters");
+    process.env.SERVER_CHARACTER_GALLERY_DIR ?? uploadsPath("characters");
   return path.join(root, characterId, "gallery");
 }
 
@@ -59,44 +47,8 @@ export function characterGalleryFilePath(
   return path.join(getCharacterGalleryDir(characterId), `${imageId}.${ext}`);
 }
 
-export async function ensureCharacterGalleryDir(
-  characterId: string,
-): Promise<void> {
+async function ensureCharacterGalleryDir(characterId: string): Promise<void> {
   await mkdir(getCharacterGalleryDir(characterId), { recursive: true });
-}
-
-export function normalizeGalleryMime(mime: string): string {
-  const value = mime.trim().toLowerCase();
-  if (value === "image/jpg") return "image/jpeg";
-  return value || "application/octet-stream";
-}
-
-export function assertGalleryImageMime(mime: string): string {
-  const normalized = normalizeGalleryMime(mime);
-  if (!IMAGE_MIMES.has(normalized)) {
-    throw new Error("Gallery image must be PNG, JPEG, WebP, or GIF");
-  }
-  return normalized;
-}
-
-export function extensionForGalleryMime(
-  mime: string,
-  fileName?: string,
-): string {
-  const normalized = normalizeGalleryMime(mime);
-  if (EXT_BY_MIME[normalized]) return EXT_BY_MIME[normalized]!;
-  const fromName = fileName?.includes(".")
-    ? fileName.split(".").pop()?.toLowerCase()
-    : undefined;
-  if (fromName && /^[a-z0-9]{1,8}$/.test(fromName)) return fromName;
-  return "bin";
-}
-
-export function characterGalleryPublicUrl(
-  characterId: string,
-  imageId: string,
-): string {
-  return `/characters/${characterId}/gallery/${imageId}`;
 }
 
 export function toPublicGalleryImage(
@@ -105,7 +57,7 @@ export function toPublicGalleryImage(
 ): CharacterGalleryImage {
   return {
     id: record.id,
-    url: characterGalleryPublicUrl(characterId, record.id),
+    url: imageApiPaths.characterGallery(characterId, record.id),
     mime: record.mime,
     name: record.name,
     size: record.size,
@@ -130,7 +82,7 @@ export function normalizeGalleryRecords(
         : "upload";
     out.push({
       id: String(row.id),
-      mime: normalizeGalleryMime(String(row.mime)),
+      mime: normalizeMime(String(row.mime)),
       name: String(row.name || `image.${row.ext}`),
       size: typeof row.size === "number" ? row.size : 0,
       ext: String(row.ext),
@@ -153,8 +105,11 @@ export async function writeCharacterGalleryImage(input: {
   source?: CharacterGalleryImageSource;
   prompt?: string;
 }): Promise<CharacterGalleryImageRecord> {
-  const mime = assertGalleryImageMime(input.mime);
-  const ext = extensionForGalleryMime(mime, input.name);
+  const mime = assertImageMime(
+    input.mime,
+    "Gallery image must be PNG, JPEG, WebP, or GIF",
+  );
+  const ext = extensionForMime(mime, input.name);
   await ensureCharacterGalleryDir(input.characterId);
 
   const record: CharacterGalleryImageRecord = {
@@ -204,34 +159,20 @@ export async function deleteCharacterGalleryImageFile(
   characterId: string,
   record: CharacterGalleryImageRecord,
 ): Promise<void> {
-  try {
-    await unlink(
-      characterGalleryFilePath(characterId, record.id, record.ext),
-    );
-  } catch (error) {
-    const code =
-      error && typeof error === "object" && "code" in error
-        ? (error as { code?: string }).code
-        : undefined;
-    if (code !== "ENOENT") throw error;
-  }
+  await ignoreEnoent(() =>
+    unlink(characterGalleryFilePath(characterId, record.id, record.ext)),
+  );
 }
 
 export async function deleteCharacterGalleryDir(
   characterId: string,
 ): Promise<void> {
-  try {
-    await rm(getCharacterGalleryDir(characterId), {
+  await ignoreEnoent(() =>
+    rm(getCharacterGalleryDir(characterId), {
       recursive: true,
       force: true,
-    });
-  } catch (error) {
-    const code =
-      error && typeof error === "object" && "code" in error
-        ? (error as { code?: string }).code
-        : undefined;
-    if (code !== "ENOENT") throw error;
-  }
+    }),
+  );
 }
 
 export async function copyCharacterGallery(
@@ -251,38 +192,4 @@ export async function copyCharacterGallery(
     copied.push({ ...record });
   }
   return copied;
-}
-
-/** Best-effort prune of orphaned files not referenced by gallery records. */
-export async function pruneOrphanGalleryFiles(
-  characterId: string,
-  records: CharacterGalleryImageRecord[],
-): Promise<void> {
-  const dir = getCharacterGalleryDir(characterId);
-  let entries: string[];
-  try {
-    entries = await readdir(dir);
-  } catch {
-    return;
-  }
-  const keep = new Set(
-    records.map((record) => `${record.id}.${record.ext}`),
-  );
-  for (const entry of entries) {
-    if (keep.has(entry)) continue;
-    try {
-      await unlink(path.join(dir, entry));
-    } catch {
-      // ignore
-    }
-  }
-}
-
-export async function readGalleryFileBuffer(
-  characterId: string,
-  record: CharacterGalleryImageRecord,
-): Promise<Buffer> {
-  return readFile(
-    characterGalleryFilePath(characterId, record.id, record.ext),
-  );
 }

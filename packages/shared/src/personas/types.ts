@@ -1,6 +1,6 @@
 /**
  * Player persona — substitutes `{{user}}` in prompts.
- * `avatar` is an API path to the stored PNG (e.g. `/personas/{id}/avatar`), or null.
+ * `avatar` is an API path to the stored PNG (e.g. `/images/persona-avatars/{id}`), or null.
  */
 export type Persona = {
   id: string;

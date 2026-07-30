@@ -1,7 +1,6 @@
 export {
   OPENROUTER_BASE,
   openRouterGetJson,
-  openRouterChatCompletion,
   openRouterGenerateImage,
   type OpenRouterChatChoice,
   type OpenRouterChatResponse,

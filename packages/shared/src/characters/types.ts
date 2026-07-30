@@ -121,7 +121,7 @@ export type CharacterCardV2 = {
 
 /**
  * Persisted hub character: card v2 + hub metadata.
- * `avatar` is an API path to the stored PNG (e.g. `/characters/{id}/avatar`), or null.
+ * `avatar` is an API path to the stored PNG (e.g. `/images/character-avatars/{id}`), or null.
  * `gallery` holds extra images (imports / generations) for backgrounds and reuse.
  * `data` always mirrors the active version snapshot (used by chats / export).
  */
@@ -130,7 +130,7 @@ export type CharacterGalleryImageSource = "upload" | "generated" | "import";
 /** One image in a character's gallery (not the primary avatar). */
 export type CharacterGalleryImage = {
   id: string;
-  /** Public API path, e.g. `/characters/{id}/gallery/{imageId}`. */
+  /** Public API path, e.g. `/images/character-gallery/{characterId}/{imageId}`. */
   url: string;
   mime: string;
   name: string;

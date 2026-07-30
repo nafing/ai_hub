@@ -11,7 +11,7 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-function windowFromUserText(text: string, now = Date.now()): number {
+function windowFromUserText(text: string, _now = Date.now()): number {
   const lower = text.toLowerCase();
   if (/\byesterday\b/.test(lower)) return 36 * 60 * 60 * 1000;
   if (/\btoday\b/.test(lower)) return 18 * 60 * 60 * 1000;

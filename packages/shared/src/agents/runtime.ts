@@ -1,5 +1,5 @@
 import type { ChatAgentSettingsMap } from "../chats/types";
-import type { Agent, AgentPhase } from "./types";
+import type { Agent } from "./types";
 import type { ChatMessage } from "../chats/types";
 import { substituteVariables } from "../presets/build-prompt";
 

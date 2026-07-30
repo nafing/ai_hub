@@ -1,7 +1,6 @@
 import type {
   TwatterAccount,
   TwatterBootstrap,
-  TwatterDigestEntry,
   TwatterInteraction,
   TwatterNotification,
   TwatterPost,

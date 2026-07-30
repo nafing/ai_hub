@@ -1,4 +1,4 @@
-import type { Character, CharacterCardData, CharacterVersion } from "./types";
+import type { Character } from "./types";
 
 /** Create payload — avatar/gallery are uploaded separately. */
 export type CreateCharacterInput = Omit<

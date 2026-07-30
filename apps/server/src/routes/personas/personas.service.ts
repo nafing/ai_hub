@@ -2,10 +2,8 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  StreamableFile,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { createReadStream } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { Repository } from "typeorm";
 import {
@@ -17,13 +15,13 @@ import {
 } from "@ai-hub/shared";
 import { LorebooksService } from "../lorebooks/lorebooks.service";
 import { PersonaEntity } from "./persona.entity";
+import { imageApiPaths } from "../images/paths";
 import {
-  avatarExists,
-  avatarFilePath,
-  copyAvatarFile,
-  deleteAvatarFile,
-  writeAvatarPng,
-} from "./avatar-storage";
+  copyPersonaAvatarFile,
+  deletePersonaAvatarFile,
+  personaAvatarExists,
+  writePersonaAvatarPng,
+} from "../images/storage/persona-avatars";
 
 @Injectable()
 export class PersonasService {
@@ -99,7 +97,7 @@ export class PersonasService {
       throw new NotFoundException(`Persona ${id} not found`);
     }
     await this.lorebooks.unlinkPersona(id);
-    await deleteAvatarFile(id);
+    await deletePersonaAvatarFile(id);
     await this.personas.delete({ id });
   }
 
@@ -111,7 +109,7 @@ export class PersonasService {
       name: `${source.name || "Persona"} (copy)`,
       is_default: false,
     });
-    if (await copyAvatarFile(id, created.id)) {
+    if (await copyPersonaAvatarFile(id, created.id)) {
       await this.personas.update(
         { id: created.id },
         { avatar: this.avatarRelativePath(created.id) },
@@ -120,27 +118,13 @@ export class PersonasService {
     return this.findOne(created.id);
   }
 
-  async getAvatarStream(id: string): Promise<StreamableFile> {
-    const row = await this.personas.findOneBy({ id });
-    if (!row) {
-      throw new NotFoundException(`Persona ${id} not found`);
-    }
-    if (!(await avatarExists(id))) {
-      throw new NotFoundException(`Avatar for persona ${id} not found`);
-    }
-    return new StreamableFile(createReadStream(avatarFilePath(id)), {
-      type: "image/png",
-      disposition: `inline; filename="${id}.png"`,
-    });
-  }
-
   async setAvatar(id: string, buffer: Buffer): Promise<Persona> {
     const row = await this.personas.findOneBy({ id });
     if (!row) {
       throw new NotFoundException(`Persona ${id} not found`);
     }
     try {
-      await writeAvatarPng(id, buffer);
+      await writePersonaAvatarPng(id, buffer);
     } catch (error) {
       throw new BadRequestException(
         error instanceof Error ? error.message : "Invalid avatar PNG",
@@ -156,14 +140,14 @@ export class PersonasService {
     if (!row) {
       throw new NotFoundException(`Persona ${id} not found`);
     }
-    await deleteAvatarFile(id);
+    await deletePersonaAvatarFile(id);
     row.avatar = null;
     const saved = await this.personas.save(row);
     return this.toPersona(saved);
   }
 
   private avatarPublicUrl(personaId: string): string {
-    return `/personas/${personaId}/avatar`;
+    return imageApiPaths.personaAvatar(personaId);
   }
 
   private avatarRelativePath(personaId: string): string {
@@ -180,7 +164,7 @@ export class PersonasService {
   }
 
   private async toPersona(row: PersonaEntity): Promise<Persona> {
-    const hasAvatar = await avatarExists(row.id);
+    const hasAvatar = await personaAvatarExists(row.id);
     return {
       id: row.id,
       avatar: hasAvatar ? this.avatarPublicUrl(row.id) : null,

@@ -49,7 +49,6 @@ export function buildTwatterNotifications(input: {
     }
 
     if (interaction.type === "reply") {
-      const post = posts.find((item) => item.id === interaction.post_id);
       const mentionsPersona = twatterTextMentionsHandle(
         interaction.content,
         personaHandle,

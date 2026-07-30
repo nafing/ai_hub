@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@ai-hub/shared";
+import { escapePromptAttribute } from "../../utils/prompt/escape";
 import { ChatEntity } from "../chats/chat.entity";
 
 export const TWATTER_CHAT_CONTEXT_MESSAGE_LIMIT = 12;
@@ -19,10 +20,6 @@ function messageContent(message: ChatMessage): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 900);
-}
-
-function escapePromptAttribute(value: string): string {
-  return value.replace(/"/g, "'").replace(/[<>]/g, "");
 }
 
 export async function buildOptedInChatContext(input: {
@@ -47,7 +44,6 @@ export async function buildOptedInChatContext(input: {
   }
 
   const characterNameCache = new Map<string, string>();
-  const personaNameCache = new Map<string, string>();
   const blocks: string[] = [];
 
   for (const chat of relevant) {

@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,11 +6,7 @@ import {
   Param,
   Patch,
   Post,
-  Put,
-  Req,
-  StreamableFile,
 } from "@nestjs/common";
-import type { FastifyRequest } from "fastify";
 import type { Persona, PersonaListItem } from "@ai-hub/shared";
 import { PersonasService } from "./personas.service";
 import { CreatePersonaDto } from "./dto/create-persona.dto";
@@ -24,29 +19,6 @@ export class PersonasController {
   @Get()
   findAll(): Promise<PersonaListItem[]> {
     return this.personasService.findAll();
-  }
-
-  @Get(":id/avatar")
-  getAvatar(@Param("id") id: string): Promise<StreamableFile> {
-    return this.personasService.getAvatarStream(id);
-  }
-
-  @Put(":id/avatar")
-  async uploadAvatar(
-    @Param("id") id: string,
-    @Req() req: FastifyRequest,
-  ): Promise<Persona> {
-    const file = await req.file();
-    if (!file) {
-      throw new BadRequestException("Expected multipart file field");
-    }
-    const buffer = await file.toBuffer();
-    return this.personasService.setAvatar(id, buffer);
-  }
-
-  @Delete(":id/avatar")
-  clearAvatar(@Param("id") id: string): Promise<Persona> {
-    return this.personasService.clearAvatar(id);
   }
 
   @Get(":id")

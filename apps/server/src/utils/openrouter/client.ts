@@ -3,6 +3,8 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { OpenRouterChatBody } from "@ai-hub/shared";
+import { decodeImageDataUrl } from "../images/data-url";
+import { inferImageMimeFromContentType } from "../mime";
 
 export const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
@@ -753,27 +755,14 @@ function decodeImageBase64(
   buffer: Buffer;
   mime: "image/png" | "image/jpeg" | "image/webp";
 } {
-  const dataUrl = /^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/i.exec(
-    value,
-  );
-  if (dataUrl) {
-    const mimeRaw = dataUrl[1]!.toLowerCase();
-    const mime =
-      mimeRaw === "image/jpg" || mimeRaw === "image/jpeg"
-        ? "image/jpeg"
-        : mimeRaw === "image/webp"
-          ? "image/webp"
-          : "image/png";
-    return { buffer: Buffer.from(dataUrl[2]!, "base64"), mime };
+  if (value.trim().startsWith("data:")) {
+    const decoded = decodeImageDataUrl(value);
+    return { buffer: decoded.buffer, mime: decoded.mime };
   }
-  const fromHeader = (mediaType || "").toLowerCase();
-  const mime =
-    fromHeader.includes("jpeg") || fromHeader.includes("jpg")
-      ? "image/jpeg"
-      : fromHeader.includes("webp")
-        ? "image/webp"
-        : "image/png";
-  return { buffer: Buffer.from(value, "base64"), mime };
+  return {
+    buffer: Buffer.from(value, "base64"),
+    mime: inferImageMimeFromContentType(mediaType),
+  };
 }
 async function downloadImageUrl(
   url: string,
@@ -785,13 +774,8 @@ async function downloadImageUrl(
       `Failed to download generated image (${response.status})`,
     );
   }
-  const contentType = (response.headers.get("content-type") || "").toLowerCase();
-  const mime =
-    contentType.includes("jpeg") || contentType.includes("jpg")
-      ? "image/jpeg"
-      : contentType.includes("webp")
-        ? "image/webp"
-        : "image/png";
+  const contentType = response.headers.get("content-type");
+  const mime = inferImageMimeFromContentType(contentType);
   const arrayBuffer = await response.arrayBuffer();
   return { buffer: Buffer.from(arrayBuffer), mime };
 }

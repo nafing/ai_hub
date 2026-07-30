@@ -17,10 +17,6 @@ export type PersistedTwatterRefreshSchedule = {
   last_error: string | null;
 };
 
-function isIsoTimestamp(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && Number.isFinite(Date.parse(value));
-}
-
 export function localScheduleDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");

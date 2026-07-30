@@ -16,7 +16,7 @@ export type GalleryBackgroundOption = {
 
 type ChatBackgroundPickerProps = {
   characterIds: string[];
-  /** Stored API path, e.g. `/characters/{id}/gallery/{imageId}`. */
+  /** Stored API path, e.g. `/images/character-gallery/{characterId}/{imageId}`. */
   value: string | null;
   onChange: (url: string | null) => void;
 };

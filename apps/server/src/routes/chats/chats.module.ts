@@ -1,6 +1,5 @@
 import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { LoreModule } from "../../lore/lore.module";
 import { AgentsModule } from "../agents/agents.module";
 import { CharactersModule } from "../characters/characters.module";
 import { ConnectionsModule } from "../connections/connections.module";
@@ -24,7 +23,6 @@ import { ConversationSummaryService } from "./conversation-summary.service";
     CharactersModule,
     PersonasModule,
     LorebooksModule,
-    LoreModule,
     AgentsModule,
     RegexesModule,
     TwatterModule,
