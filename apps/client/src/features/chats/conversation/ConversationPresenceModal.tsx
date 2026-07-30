@@ -17,7 +17,7 @@ export function ConversationPresenceModal({
 
   return (
     <Modal opened={opened} onClose={onClose} title="Presence" size="md">
-      <ConversationPresenceCard chat={chat} active={opened} embedded />
+      <ConversationPresenceCard chat={chat} active={opened} />
     </Modal>
   );
 }

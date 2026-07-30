@@ -577,7 +577,6 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
           <ChatSettingsConversation
             chat={chat}
             isGroup={isGroup}
-            connectionOptions={connectionOptions}
             patchSettings={patchSettings}
             onEditSummaries={() => setSummariesOpen(true)}
           />

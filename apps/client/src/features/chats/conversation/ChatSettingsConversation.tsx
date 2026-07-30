@@ -20,7 +20,6 @@ const DAY_ROLLOVER_OPTIONS = Array.from({ length: 12 }, (_, hour) => ({
 type ChatSettingsConversationProps = {
   chat: Chat;
   isGroup: boolean;
-  connectionOptions: { value: string; label: string }[];
   patchSettings: PatchChatSettings;
   onEditSummaries: () => void;
 };

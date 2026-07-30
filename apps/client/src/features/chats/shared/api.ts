@@ -194,13 +194,6 @@ export async function backfillConversationSummaries(
   return data;
 }
 
-export async function listChatMemories(
-  id: string,
-): Promise<import("@ai-hub/shared").ChatMemoryChunk[]> {
-  const { data } = await api.get(`/chats/${id}/memories`);
-  return data;
-}
-
 export async function rebuildChatMemories(id: string): Promise<Chat> {
   const { data } = await api.post<Chat>(`/chats/${id}/memories/rebuild`);
   return data;

@@ -1,8 +1,5 @@
 import type { ReactNode } from "react";
-import {
-  type Chat,
-  type ChatSettings,
-} from "@ai-hub/shared";
+import type { ChatSettings } from "@ai-hub/shared";
 import { Accordion } from "@/components/ui";
 import classes from "./ChatSettingsPanel.module.css";
 

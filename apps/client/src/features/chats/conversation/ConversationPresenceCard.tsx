@@ -23,8 +23,6 @@ type ConversationPresenceCardProps = {
   chat: Chat;
   /** When false, skip polling (e.g. modal closed). Default true. */
   active?: boolean;
-  /** Drop outer card chrome when nested in a Modal. */
-  embedded?: boolean;
 };
 
 const STATUS_OPTIONS = [
@@ -37,7 +35,6 @@ const STATUS_OPTIONS = [
 export function ConversationPresenceCard({
   chat,
   active = true,
-  embedded = false,
 }: ConversationPresenceCardProps) {
   const queryClient = useQueryClient();
   const [data, setData] = useState<StatusResponse | null>(null);
@@ -94,20 +91,8 @@ export function ConversationPresenceCard({
     : null;
 
   return (
-    <div
-      className={[classes.card, embedded ? classes.cardEmbedded : ""]
-        .filter(Boolean)
-        .join(" ")}
-      {...(!embedded ? { "data-glass-surface": true } : {})}
-    >
-      {!embedded ? (
-        <div className={classes.header}>
-          <p className={classes.title}>Presence</p>
-          {data?.timezone ? (
-            <span className={classes.tz}>{data.timezone}</span>
-          ) : null}
-        </div>
-      ) : data?.timezone ? (
+    <div className={classes.root}>
+      {data?.timezone ? (
         <p className={classes.tzLine}>Timezone · {data.timezone}</p>
       ) : null}
 
