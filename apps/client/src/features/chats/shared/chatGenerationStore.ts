@@ -89,6 +89,28 @@ function clearStreamFields(chatId: string) {
   });
 }
 
+/** Pull latest chat when SSE never delivered `done` (Capacitor / dropped stream). */
+async function reconcileChatAfterIncompleteStream(chatId: string) {
+  await queryClient.invalidateQueries({ queryKey: chatKeys.detail(chatId) });
+
+  // Server may still be generating after the client lost the SSE body.
+  for (const delayMs of [1500, 3500, 7000]) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    if (useChatGenerationStore.getState().isStreaming(chatId)) return;
+
+    const before = queryClient.getQueryData<Chat>(chatKeys.detail(chatId));
+    await queryClient.refetchQueries({ queryKey: chatKeys.detail(chatId) });
+    const after = queryClient.getQueryData<Chat>(chatKeys.detail(chatId));
+    if (
+      after &&
+      before &&
+      after.messages.length > before.messages.length
+    ) {
+      return;
+    }
+  }
+}
+
 function appendMessageToCache(chatId: string, message: ChatMessage) {
   queryClient.setQueryData<Chat>(chatKeys.detail(chatId), (current) => {
     if (!current) return current;
@@ -320,9 +342,7 @@ export const useChatGenerationStore = create<ChatGenerationStore>((_set, get) =>
       // Server may have persisted messages even when the SSE body never
       // reached JS (common with CapacitorHttp buffering / timeouts).
       if (!settled) {
-        void queryClient.invalidateQueries({
-          queryKey: chatKeys.detail(chatId),
-        });
+        void reconcileChatAfterIncompleteStream(chatId);
       }
     }
   },
@@ -370,9 +390,7 @@ export const useChatGenerationStore = create<ChatGenerationStore>((_set, get) =>
     } finally {
       clearStreamFields(chatId);
       if (!settled) {
-        void queryClient.invalidateQueries({
-          queryKey: chatKeys.detail(chatId),
-        });
+        void reconcileChatAfterIncompleteStream(chatId);
       }
     }
   },

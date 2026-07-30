@@ -154,9 +154,10 @@ export class ChatsController {
   async generate(
     @Param("id") id: string,
     @Body() body: GenerateChatDto,
+    @Req() request: FastifyRequest,
     @Res() reply: FastifyReply,
   ): Promise<void> {
-    await this.stream(reply, (emit) =>
+    await this.stream(request, reply, (emit) =>
       this.chatsService.generate(id, body, emit),
     );
   }
@@ -165,9 +166,10 @@ export class ChatsController {
   async regenerate(
     @Param("id") id: string,
     @Body() body: RegenerateChatDto,
+    @Req() request: FastifyRequest,
     @Res() reply: FastifyReply,
   ): Promise<void> {
-    await this.stream(reply, (emit) =>
+    await this.stream(request, reply, (emit) =>
       this.chatsService.regenerate(id, emit, body.messageId),
     );
   }
@@ -285,14 +287,35 @@ export class ChatsController {
   }
 
   private async stream(
+    request: FastifyRequest,
     reply: FastifyReply,
     run: (emit: (event: ChatStreamEvent) => void) => Promise<void>,
   ): Promise<void> {
-    reply.raw.writeHead(200, {
+    // reply.raw bypasses @fastify/cors — Capacitor WebView fetch needs these.
+    reply.hijack();
+
+    const originHeader = request.headers.origin;
+    const origin =
+      typeof originHeader === "string" && originHeader.trim()
+        ? originHeader
+        : "*";
+
+    const headers: Record<string, number | string | string[]> = {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
-    });
+      "X-Accel-Buffering": "no",
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Headers":
+        "Content-Type, Accept, Authorization, X-Requested-With, Origin",
+      "Access-Control-Expose-Headers": "Content-Disposition",
+    };
+    if (origin !== "*") {
+      headers["Access-Control-Allow-Credentials"] = "true";
+      headers.Vary = "Origin";
+    }
+
+    reply.raw.writeHead(200, headers);
 
     const emit = (event: ChatStreamEvent) => {
       reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
