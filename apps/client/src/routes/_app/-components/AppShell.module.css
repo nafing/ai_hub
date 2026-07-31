@@ -272,6 +272,16 @@
   border-radius: var(--radius-md);
   background: var(--color-surface);
   cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.burgerOpen {
+  border-color: var(--color-text-dimmed);
+  background: color-mix(in srgb, var(--color-surface-hover) 70%, transparent);
+  color: var(--color-text);
 }
 
 .overlay {

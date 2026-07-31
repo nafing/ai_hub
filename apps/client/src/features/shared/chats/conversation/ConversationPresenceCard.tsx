@@ -81,7 +81,7 @@ export function ConversationPresenceCard({
     return <p className={classes.empty}>No characters in this chat.</p>;
   }
 
-  const entries = Object.entries(data?.statuses ?? []);
+  const entries = Object.entries(data?.statuses ?? {});
   const editingId = scheduleCharacterId;
   const editingName = editingId
     ? (data?.statuses[editingId]?.characterName ?? "Character")
