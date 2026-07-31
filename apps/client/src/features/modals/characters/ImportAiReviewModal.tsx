@@ -18,9 +18,9 @@ import {
   notifications,
   TagsInput,
 } from "@/components/ui";
-import { getCharacter } from "@/features/characters/api";
-import { getPersona } from "@/features/personas/api";
-import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
+import { getCharacter } from "@/features/api-queries/characters/api";
+import { getPersona } from "@/features/api-queries/personas/api";
+import { useGeneratorJobsStore } from "@/features/shared/generators/generatorJobsStore";
 import {
   extractFullCards,
   extractedToCardData,
@@ -30,8 +30,8 @@ import {
   withImportedCardVariables,
   stripCodeFence,
   type ExtractedCharacterCard,
-} from "./characterGenerateShared";
-import { AlternateGreetingsEditor } from "./AlternateGreetingsEditor";
+} from "@/features/shared/characters/characterGenerateShared";
+import { AlternateGreetingsEditor } from "@/features/shared/characters/AlternateGreetingsEditor";
 import classes from "./ImportAiReviewModal.module.css";
 
 export type ImportAiReviewContext = {
@@ -233,10 +233,7 @@ export function ImportAiReviewModal({
           ...cards.map((data) => ({ data })),
         ],
         variables: {
-          ...withImportedCardVariables(
-            context.presetVariables,
-            context.sourceCard,
-          ),
+          ...withImportedCardVariables(context.presetVariables),
           generation_mode: "rebuild",
           rebuild_scope: "concept_batch",
           rebuild_notes: note,
@@ -335,10 +332,7 @@ export function ImportAiReviewModal({
           { data: card },
         ],
         variables: {
-          ...withImportedCardVariables(
-            context.presetVariables,
-            context.sourceCard,
-          ),
+          ...withImportedCardVariables(context.presetVariables),
           generation_mode: "rebuild",
           rebuild_scope: rebuildScope,
           rebuild_notes: note,

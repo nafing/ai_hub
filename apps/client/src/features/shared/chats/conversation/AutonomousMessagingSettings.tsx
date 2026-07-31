@@ -11,12 +11,12 @@ import {
   type WeekSchedule,
 } from "@ai-hub/shared";
 import { Button, NumberInput, Select, Switch, notifications } from "@/components/ui";
-import { useCharacters } from "@/features/characters/queries";
+import { useCharacters } from "@/features/api-queries/characters/queries";
 import { api } from "@/lib/api";
-import { chatKeys } from "../shared/queries";
+import { chatKeys } from "@/features/api-queries/chats/queries";
 import { Field } from "../shared/chatSettingsUi";
 import type { PatchChatSettings } from "../shared/chatSettingsUi";
-import { CharacterScheduleEditorModal } from "./CharacterScheduleEditorModal";
+import { CharacterScheduleEditorModal } from "@/features/modals/chats/CharacterScheduleEditorModal";
 import {
   detectConversationTimeZone,
   formatConversationTimeZone,

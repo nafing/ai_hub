@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { TwatterSubpageHeader } from "@/features/twatter/TwatterSubpageHeader";
-import { TwatterSearch } from "@/features/twatter/TwatterSearch";
-import { useTwatterPersona } from "@/features/twatter/TwatterPersonaContext";
-import { useTwatterBootstrap } from "@/features/twatter/queries";
+import { TwatterSubpageHeader } from "@/features/shared/twatter/TwatterSubpageHeader";
+import { TwatterSearch } from "@/features/shared/twatter/TwatterSearch";
+import { useTwatterPersona } from "@/features/shared/twatter/TwatterPersonaContext";
+import { useTwatterBootstrap } from "@/features/api-queries/twatter/queries";
 
 export const Route = createFileRoute("/_twatter/twatter/search")({
   component: RouteComponent,

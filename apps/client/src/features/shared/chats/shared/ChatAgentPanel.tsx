@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import type { Chat, ChatAgentSettingsMap } from "@ai-hub/shared";
 import { Button, Modal, Select, TextInput, notifications } from "@/components/ui";
-import { useAgents } from "@/features/agents/queries";
+import { useAgents } from "@/features/api-queries/agents/queries";
 import {
   applyAgentProposal,
   dismissAgentProposal,
   updateChat,
-} from "./api";
-import { chatKeys } from "./queries";
+} from "@/features/api-queries/chats/api";
+import { chatKeys } from "@/features/api-queries/chats/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import classes from "./ChatAgentPanel.module.css";
 

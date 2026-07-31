@@ -18,7 +18,7 @@ import type {
   ListBotbooruPostsParams,
   ListBotbooruRelatedTagsParams,
   ListBotbooruTagsParams,
-} from "@/features/characters/botbooru/types";
+} from "@/features/shared/characters/botbooru/types";
 
 export const botbooruKeys = {
   all: ["botbooru"] as const,

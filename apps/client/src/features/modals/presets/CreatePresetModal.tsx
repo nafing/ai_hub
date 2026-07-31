@@ -7,7 +7,7 @@ import {
   type PresetCategory,
 } from "@ai-hub/shared";
 import { Button, Modal, Select, TextInput, notifications } from "@/components/ui";
-import { useCreatePreset } from "./queries";
+import { useCreatePreset } from "@/features/api-queries/presets/queries";
 import classes from "./CreatePresetModal.module.css";
 
 type CreatePresetModalProps = {

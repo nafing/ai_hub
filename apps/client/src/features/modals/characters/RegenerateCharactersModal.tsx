@@ -13,23 +13,23 @@ import { Button, Textarea,
   RuntimeText,
   Select,
 } from "@/components/ui";
-import { useConnectionSelectOptions } from "@/features/connections/queries";
-import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
-import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
-import { getPersona } from "@/features/personas/api";
-import { usePersonas } from "@/features/personas/queries";
-import { getCharacter, updateCharacter } from "./api";
+import { useConnectionSelectOptions } from "@/features/api-queries/connections/queries";
+import { useGeneratorJobsStore } from "@/features/shared/generators/generatorJobsStore";
+import { useGeneratorPresetSelection } from "@/features/shared/generator-presets/useGeneratorPresetSelection";
+import { getPersona } from "@/features/api-queries/personas/api";
+import { usePersonas } from "@/features/api-queries/personas/queries";
+import { getCharacter, updateCharacter } from "@/features/api-queries/characters/api";
 import {
   extractFullCards,
   mergeExtractedIntoCardData,
   resolvePresetVariables,
   type ExtractedCharacterCard,
-} from "./characterGenerateShared";
+} from "@/features/shared/characters/characterGenerateShared";
 import {
   ImportAiReviewModal,
   type ImportAiReviewContext,
 } from "./ImportAiReviewModal";
-import { characterKeys, useCharacters } from "./queries";
+import { characterKeys, useCharacters } from "@/features/api-queries/characters/queries";
 import classes from "./RegenerateCharactersModal.module.css";
 
 type RegenerateScope = "concept" | "all";

@@ -26,8 +26,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   backfillConversationSummaries,
   patchConversationSummaries,
-} from "../shared/api";
-import { chatKeys } from "../shared/queries";
+} from "@/features/api-queries/chats/api";
+import { chatKeys } from "@/features/api-queries/chats/queries";
 import classes from "./SummariesEditorModal.module.css";
 
 type SummariesEditorModalProps = {

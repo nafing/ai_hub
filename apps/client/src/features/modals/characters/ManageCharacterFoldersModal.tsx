@@ -13,7 +13,7 @@ import {
   useCreateCharacterFolder,
   useDeleteCharacterFolder,
   useUpdateCharacterFolder,
-} from "./foldersQueries";
+} from "@/features/api-queries/characters/foldersQueries";
 import classes from "./ManageCharacterFoldersModal.module.css";
 
 type ManageCharacterFoldersModalProps = {

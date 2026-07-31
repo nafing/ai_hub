@@ -13,7 +13,7 @@ import type {
   Variable,
 } from "@ai-hub/shared";
 import { imageApiPaths } from "@ai-hub/shared";
-import { promptPresetVariables } from "@/features/presets/PresetCommandBridge";
+import { promptPresetVariables } from "@/features/shared/presets/PresetCommandBridge";
 import { api } from "@/lib/api";
 
 export class PresetVariablesCancelledError extends Error {

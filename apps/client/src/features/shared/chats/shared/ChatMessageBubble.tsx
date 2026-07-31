@@ -27,7 +27,7 @@ import {
 } from "./attachment-url";
 import { formatChatText } from "./formatChatText";
 import { useChatTextFormat } from "./useChatTextFormat";
-import { nameColorStyle } from "@/features/characters/characterColors";
+import { nameColorStyle } from "@/features/shared/characters/characterColors";
 import classes from "./ChatMessageBubble.module.css";
 
 const QUICK_REACTIONS = [

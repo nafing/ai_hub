@@ -5,7 +5,7 @@ import {
   type ApplyRegexScriptsOptions,
   type RegexApplyMessage,
 } from "@ai-hub/shared";
-import { useRegexes } from "./queries";
+import { useRegexes } from "@/features/api-queries/regexes/queries";
 
 type UseApplyRegexOptions = {
   /** When false, skip fetching (e.g. chat not ready). Default true. */

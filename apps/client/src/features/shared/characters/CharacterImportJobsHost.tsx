@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { notifications } from "@/components/ui";
-import { ImportLorebookModal } from "@/features/lorebooks/ImportLorebookModal";
+import { ImportLorebookModal } from "@/features/modals/lorebooks/ImportLorebookModal";
 import {
   ImportAiReviewModal,
-} from "./ImportAiReviewModal";
+} from "@/features/modals/characters/ImportAiReviewModal";
 import { useCharacterImportSessionStore } from "./characterImportSessionStore";
 
 export function CharacterImportJobsHost() {

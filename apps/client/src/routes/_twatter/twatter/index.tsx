@@ -1,13 +1,13 @@
 import { useState } from "react";
 import type { TwatterPost, TwatterTimelineTab } from "@ai-hub/shared";
 import { createFileRoute } from "@tanstack/react-router";
-import { ComposePost, useFilteredTwatterPosts } from "@/features/twatter/ComposePost";
-import { PostCard } from "@/features/twatter/PostCard";
-import { TwatterPageHeader } from "@/features/twatter/TwatterPageHeader";
-import { TwatterRefreshTimeline } from "@/features/twatter/TwatterRefreshTimeline";
-import { useTwatterPersona } from "@/features/twatter/TwatterPersonaContext";
-import { useTwatterBootstrap } from "@/features/twatter/queries";
-import classes from "@/features/twatter/TwatterFeed.module.css";
+import { ComposePost, useFilteredTwatterPosts } from "@/features/shared/twatter/ComposePost";
+import { PostCard } from "@/features/shared/twatter/PostCard";
+import { TwatterPageHeader } from "@/features/shared/twatter/TwatterPageHeader";
+import { TwatterRefreshTimeline } from "@/features/shared/twatter/TwatterRefreshTimeline";
+import { useTwatterPersona } from "@/features/shared/twatter/TwatterPersonaContext";
+import { useTwatterBootstrap } from "@/features/api-queries/twatter/queries";
+import classes from "@/features/shared/twatter/TwatterFeed.module.css";
 
 export const Route = createFileRoute("/_twatter/twatter/")({
   component: RouteComponent,

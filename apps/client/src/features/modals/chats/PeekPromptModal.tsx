@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { PeekPromptResult } from "@ai-hub/shared";
 import { Modal, RuntimeText } from "@/components/ui";
-import { peekChatPrompt } from "./api";
+import { peekChatPrompt } from "@/features/api-queries/chats/api";
 import classes from "./PeekPromptModal.module.css";
 
 type PeekPromptModalProps = {

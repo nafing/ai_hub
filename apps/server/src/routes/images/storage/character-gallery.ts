@@ -74,18 +74,25 @@ export function normalizeGalleryRecords(
   const out: CharacterGalleryImageRecord[] = [];
   for (const item of value) {
     if (!item || typeof item !== "object") continue;
-    const row = item as Partial<CharacterGalleryImageRecord>;
-    if (!row.id || !row.mime || !row.ext || !row.created_at) continue;
+    const row = item as Partial<CharacterGalleryImageRecord> & {
+      url?: string;
+    };
+    if (!row.id || !row.mime || !row.created_at) continue;
+    const mime = normalizeMime(String(row.mime));
+    // Public API gallery omits `ext`; derive it so stream lookups still work.
+    const ext = row.ext
+      ? String(row.ext)
+      : extensionForMime(mime, row.name ? String(row.name) : undefined);
     const source =
       row.source === "generated" || row.source === "import"
         ? row.source
         : "upload";
     out.push({
       id: String(row.id),
-      mime: normalizeMime(String(row.mime)),
-      name: String(row.name || `image.${row.ext}`),
+      mime,
+      name: String(row.name || `image.${ext}`),
       size: typeof row.size === "number" ? row.size : 0,
-      ext: String(row.ext),
+      ext,
       source,
       created_at: String(row.created_at),
       ...(typeof row.prompt === "string" && row.prompt.trim()

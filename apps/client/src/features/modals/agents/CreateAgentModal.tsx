@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { defaultAgent, slugifyAgentName } from "@ai-hub/shared";
 import { Button, Modal, TextInput, notifications } from "@/components/ui";
-import { useCreateAgent } from "./queries";
+import { useCreateAgent } from "@/features/api-queries/agents/queries";
 import classes from "./CreateAgentModal.module.css";
 
 type CreateAgentModalProps = {

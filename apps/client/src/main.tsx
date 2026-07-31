@@ -7,8 +7,8 @@ import "./index.css";
 import { routeTree } from "./routeTree.gen";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { NotificationsProvider } from "@/components/ui";
-import { PresetCommandBridge } from "@/features/presets/PresetCommandBridge";
-import { ThemeSync } from "@/features/theme/ThemeSync";
+import { PresetCommandBridge } from "@/features/shared/presets/PresetCommandBridge";
+import { ThemeSync } from "@/features/shared/theme/ThemeSync";
 import { initCapacitor } from "@/lib/capacitor";
 import { queryClient } from "@/lib/queryClient";
 

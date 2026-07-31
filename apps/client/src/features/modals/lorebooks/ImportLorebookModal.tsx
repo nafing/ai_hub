@@ -9,8 +9,8 @@ import {
   type Lorebook,
 } from "@ai-hub/shared";
 import { Button, Modal, notifications } from "@/components/ui";
-import { createLorebook } from "./api";
-import { lorebookKeys } from "./queries";
+import { createLorebook } from "@/features/api-queries/lorebooks/api";
+import { lorebookKeys } from "@/features/api-queries/lorebooks/queries";
 import classes from "./ImportLorebookModal.module.css";
 
 type ImportLorebookModalProps = {

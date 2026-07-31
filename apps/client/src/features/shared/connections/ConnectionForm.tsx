@@ -15,7 +15,7 @@ import {
   Switch,
   RuntimeText,
 } from "@/components/ui";
-import { useOpenRouterEndpoints, useOpenRouterModels } from "./queries";
+import { useOpenRouterEndpoints, useOpenRouterModels } from "@/features/api-queries/connections/queries";
 import classes from "./ConnectionForm.module.css";
 
 export type ConnectionFormValues = CreateConnectionInput;

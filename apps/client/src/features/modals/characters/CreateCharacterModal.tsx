@@ -18,25 +18,25 @@ import { Button, Textarea,
   Select,
   Switch,
 } from "@/components/ui";
-import { useConnectionSelectOptions } from "@/features/connections/queries";
-import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
-import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
-import { getPersona } from "@/features/personas/api";
-import { usePersonas } from "@/features/personas/queries";
-import { SetupVariablesModal } from "@/features/presets/SetupVariablesModal";
-import { persistPresetVariableSelection } from "@/features/presets/persistPresetVariableSelection";
-import { presetKeys } from "@/features/presets/queries";
-import { createCharacter, getCharacter } from "./api";
+import { useConnectionSelectOptions } from "@/features/api-queries/connections/queries";
+import { useGeneratorJobsStore } from "@/features/shared/generators/generatorJobsStore";
+import { useGeneratorPresetSelection } from "@/features/shared/generator-presets/useGeneratorPresetSelection";
+import { getPersona } from "@/features/api-queries/personas/api";
+import { usePersonas } from "@/features/api-queries/personas/queries";
+import { SetupVariablesModal } from "@/features/modals/presets/SetupVariablesModal";
+import { persistPresetVariableSelection } from "@/features/shared/presets/persistPresetVariableSelection";
+import { presetKeys } from "@/features/api-queries/presets/queries";
+import { createCharacter, getCharacter } from "@/features/api-queries/characters/api";
 import {
   extractFullCards,
   extractedToCardData,
   resolvePresetVariables,
-} from "./characterGenerateShared";
+} from "@/features/shared/characters/characterGenerateShared";
 import {
   ImportAiReviewModal,
   type ImportAiReviewContext,
 } from "./ImportAiReviewModal";
-import { characterKeys, useCharacters, useCreateCharacter } from "./queries";
+import { characterKeys, useCharacters, useCreateCharacter } from "@/features/api-queries/characters/queries";
 import classes from "./CreateCharacterModal.module.css";
 
 type CreateCharacterModalProps = {

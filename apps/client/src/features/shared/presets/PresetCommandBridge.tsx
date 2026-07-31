@@ -14,8 +14,8 @@ import {
 } from "@ai-hub/shared";
 import { notifications } from "@/components/ui";
 import { persistPresetVariableSelection } from "./persistPresetVariableSelection";
-import { presetKeys } from "./queries";
-import { SetupVariablesModal } from "./SetupVariablesModal";
+import { presetKeys } from "@/features/api-queries/presets/queries";
+import { SetupVariablesModal } from "@/features/modals/presets/SetupVariablesModal";
 
 type PromptPresetVariables = (
   presetId: string,

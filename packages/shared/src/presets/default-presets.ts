@@ -436,7 +436,7 @@ Anything goes in this chat; both {{userName || the user}} and you are confirmed 
             part: "imported",
             label: "Imported card",
             value:
-              "Match the imported source card's genre, setting, era, and world. Source tags: {{source_tags || (none — infer from source card fields)}}. Preserve history, background, lore, and relationships unless the Generator Brief explicitly asks to change them. Do not relocate the character into a different genre.",
+              "Match the imported source card's genre, setting, era, and world — infer from description, scenario, and other card fields (never from tags). Preserve history, background, lore, and relationships unless the Generator Brief explicitly asks to change them. Do not relocate the character into a different genre.",
           },
           {
             part: "any",

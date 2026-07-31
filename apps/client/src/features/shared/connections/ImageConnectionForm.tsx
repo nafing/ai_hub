@@ -10,7 +10,7 @@ import {
 import {
   useOpenRouterImageEndpoints,
   useOpenRouterImageModels,
-} from "./queries";
+} from "@/features/api-queries/connections/queries";
 import classes from "./ConnectionForm.module.css";
 
 export type ImageConnectionFormValues = CreateConnectionInput;

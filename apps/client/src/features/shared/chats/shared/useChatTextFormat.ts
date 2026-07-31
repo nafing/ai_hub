@@ -1,5 +1,5 @@
-import { DEFAULT_PRESET } from "@/features/theme/presets";
-import { useThemeStore } from "@/features/theme/themeStore";
+import { DEFAULT_PRESET } from "@/features/shared/theme/presets";
+import { useThemeStore } from "@/features/shared/theme/themeStore";
 import { useChatFormatStore } from "./chatFormatStore";
 import type { FormatChatTextOptions } from "./formatChatText";
 

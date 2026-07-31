@@ -1,12 +1,12 @@
 import { useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { TwatterNotifications } from "@/features/twatter/TwatterNotifications";
-import { TwatterSubpageHeader } from "@/features/twatter/TwatterSubpageHeader";
-import { useTwatterPersona } from "@/features/twatter/TwatterPersonaContext";
+import { TwatterNotifications } from "@/features/shared/twatter/TwatterNotifications";
+import { TwatterSubpageHeader } from "@/features/shared/twatter/TwatterSubpageHeader";
+import { useTwatterPersona } from "@/features/shared/twatter/TwatterPersonaContext";
 import {
   useMarkTwatterNotificationsRead,
   useTwatterBootstrap,
-} from "@/features/twatter/queries";
+} from "@/features/api-queries/twatter/queries";
 
 export const Route = createFileRoute("/_twatter/twatter/notifications")({
   component: RouteComponent,

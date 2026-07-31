@@ -2,13 +2,13 @@ import { buildConnectionSelectOptions } from "@ai-hub/shared";
 import type { CharacterListItem, ConnectionListItem, TwatterBootstrap } from "@ai-hub/shared";
 import { useMemo } from "react";
 import { Button, Select, Switch } from "@/components/ui";
-import { usePresets } from "@/features/presets/queries";
+import { usePresets } from "@/features/api-queries/presets/queries";
 import {
   useInviteTwatterCharacter,
   useResetTwatterTimeline,
   useUninviteTwatterCharacter,
   useUpdateTwatterSettings,
-} from "./queries";
+} from "@/features/api-queries/twatter/queries";
 import classes from "./TwatterFeed.module.css";
 
 type TwatterSettingsPanelProps = {

@@ -13,11 +13,11 @@ import {
   Textarea,
   notifications,
 } from "@/components/ui";
-import { useConnectionSelectOptions } from "@/features/connections/queries";
-import { getCharacter } from "@/features/characters/api";
-import { useCharacters } from "@/features/characters/queries";
-import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
-import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
+import { useConnectionSelectOptions } from "@/features/api-queries/connections/queries";
+import { getCharacter } from "@/features/api-queries/characters/api";
+import { useCharacters } from "@/features/api-queries/characters/queries";
+import { useGeneratorJobsStore } from "@/features/shared/generators/generatorJobsStore";
+import { useGeneratorPresetSelection } from "@/features/shared/generator-presets/useGeneratorPresetSelection";
 import classes from "./PersonaGeneratePanel.module.css";
 
 type PersonaGeneratePanelProps = {

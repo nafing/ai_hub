@@ -6,7 +6,7 @@ import {
   type GeneratorCategory,
 } from "@ai-hub/shared";
 import { Select, Switch, Tabs, Textarea, TextInput } from "@/components/ui";
-import { usePresets } from "@/features/presets/queries";
+import { usePresets } from "@/features/api-queries/presets/queries";
 import classes from "./GeneratorPresetForm.module.css";
 
 export type GeneratorPresetFormValues = CreateGeneratorPresetInput;

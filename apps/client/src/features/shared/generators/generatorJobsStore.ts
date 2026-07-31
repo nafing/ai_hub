@@ -7,12 +7,12 @@ import type {
   PresetVariableValues,
 } from "@ai-hub/shared";
 import { notifications } from "@/components/ui";
-import { playAppSound } from "@/features/sounds";
+import { playAppSound } from "@/features/shared/sounds";
 import {
   runGenerator,
   type RunGeneratorInput,
   type RunGeneratorResult,
-} from "./api";
+} from "@/features/api-queries/generators/api";
 
 export type GeneratorJobStatus = "running" | "completed" | "failed";
 

@@ -1,5 +1,5 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
-import { useTwatterPersona } from "@/features/twatter/TwatterPersonaContext";
+import { useTwatterPersona } from "@/features/shared/twatter/TwatterPersonaContext";
 
 export const Route = createFileRoute("/_twatter/twatter/profile/")({
   component: RouteComponent,

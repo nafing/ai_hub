@@ -2,11 +2,11 @@ import { useRef } from "react";
 import type { CharacterGalleryImage } from "@ai-hub/shared";
 import { Button, notifications } from "@/components/ui";
 import { api } from "@/lib/api";
-import { characterAvatarSrc } from "./avatar-url";
+import { avatarSrc } from "@/lib/avatar-url";
 import {
   useDeleteCharacterGalleryImage,
   useUploadCharacterGalleryImage,
-} from "./queries";
+} from "@/features/api-queries/characters/queries";
 import classes from "./CharacterGalleryPanel.module.css";
 
 type CharacterGalleryPanelProps = {
@@ -156,7 +156,7 @@ export function CharacterGalleryPanel({
       ) : (
         <ul className={classes.grid}>
           {images.map((image) => {
-            const src = characterAvatarSrc(image.url, apiBase);
+            const src = avatarSrc(image.url, apiBase);
             return (
               <li key={image.id} className={classes.card}>
                 <div className={classes.thumb}>

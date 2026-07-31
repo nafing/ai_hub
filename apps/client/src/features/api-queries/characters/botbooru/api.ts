@@ -8,7 +8,7 @@ import type {
   ListBotbooruPostsParams,
   ListBotbooruRelatedTagsParams,
   ListBotbooruTagsParams,
-} from "@/features/characters/botbooru/types";
+} from "@/features/shared/characters/botbooru/types";
 
 function apiErrorMessage(error: unknown, fallback: string): Error {
   if (axios.isAxiosError(error)) {

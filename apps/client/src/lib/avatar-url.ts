@@ -1,5 +1,5 @@
-/** Resolve character avatar API path to a browser-usable URL. */
-export function characterAvatarSrc(
+/** Resolve avatar API path to a browser-usable URL. */
+export function avatarSrc(
   avatar: string | null | undefined,
   apiBaseUrl: string,
 ): string | null {

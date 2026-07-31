@@ -26,8 +26,8 @@ import {
   Switch,
   RuntimeText,
 } from "@/components/ui";
-import { useCharacters } from "@/features/characters/queries";
-import { usePersonas } from "@/features/personas/queries";
+import { useCharacters } from "@/features/api-queries/characters/queries";
+import { usePersonas } from "@/features/api-queries/personas/queries";
 import classes from "./LorebookForm.module.css";
 
 export type LorebookFormValues = CreateLorebookInput;

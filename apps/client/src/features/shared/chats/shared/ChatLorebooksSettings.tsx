@@ -4,7 +4,7 @@ import {
   type Chat,
 } from "@ai-hub/shared";
 import { MultiSelect, NumberInput } from "@/components/ui";
-import { useLorebooks } from "@/features/lorebooks/queries";
+import { useLorebooks } from "@/features/api-queries/lorebooks/queries";
 import {
   Field,
   SettingsSection,

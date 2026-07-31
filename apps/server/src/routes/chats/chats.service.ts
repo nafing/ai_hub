@@ -669,6 +669,8 @@ export class ChatsService {
   private async applyConversationCommands(input: {
     row: ChatEntity;
     content: string;
+    /** Reasoning channel — models often put command tags here instead of SMS text. */
+    thinking?: string | null;
     settings: ChatSettings;
     characterList: Character[];
     characterId: string | null;
@@ -676,16 +678,36 @@ export class ChatsService {
     emit: StreamEmit;
   }): Promise<{
     content: string;
+    thinking: string | null;
     attachments: ChatMessageAttachment[];
     commandTags: string[];
   }> {
-    const parsed = parseConversationCommands(input.content);
+    const contentParsed = parseConversationCommands(input.content);
+    const thinkingParsed = input.thinking?.trim()
+      ? parseConversationCommands(input.thinking)
+      : { cleanContent: input.thinking ?? "", commands: [] };
+
+    const seen = new Set<string>();
+    const mergedCommands = [
+      ...contentParsed.commands,
+      ...thinkingParsed.commands,
+    ].filter((command) => {
+      if (seen.has(command.raw)) return false;
+      seen.add(command.raw);
+      return true;
+    });
+
     const commands = filterEnabledConversationCommands(
-      parsed.commands,
+      mergedCommands,
       input.settings.conversation_command_toggles,
     );
 
-    let content = parsed.cleanContent || input.content;
+    let content = contentParsed.cleanContent || input.content;
+    let thinking = thinkingParsed.commands.length
+      ? thinkingParsed.cleanContent || null
+      : input.thinking?.trim()
+        ? input.thinking
+        : null;
     let settings = defaultChatSettings(input.settings);
     const messages = [...normalizeChatMessages(input.row.messages)];
     const attachments: ChatMessageAttachment[] = [];
@@ -823,7 +845,7 @@ export class ChatsService {
         if (targetChat) {
           await this.appendChatMessage(targetChat.id, {
             role: "assistant",
-            content: parsed.cleanContent || command.raw,
+            content: content || command.raw,
             character_id: input.characterId,
           });
           input.emit({
@@ -847,6 +869,12 @@ export class ChatsService {
             brief: command.prompt,
             sourceCommand: command.raw,
             character: speaker,
+            chatContext: this.buildConversationImageChatContext({
+              messages: input.historyMessages,
+              characterList: input.characterList,
+              characterId: input.characterId,
+              settings,
+            }),
             aspectRatio: settings.image_aspect_ratio,
             resolution: settings.image_resolution,
           });
@@ -945,7 +973,61 @@ export class ChatsService {
       .join("\n\n")
       .trim();
 
-    return { content: finalContent, attachments, commandTags };
+    return {
+      content: finalContent,
+      thinking: thinking?.trim() ? thinking.trim() : null,
+      attachments,
+      commandTags,
+    };
+  }
+
+  /**
+   * Recent chat + schedule activity so image prompts know what the character
+   * is doing, not only the short [send_image] brief.
+   */
+  private buildConversationImageChatContext(input: {
+    messages: ChatMessage[];
+    characterList: Character[];
+    characterId: string | null;
+    settings: ChatSettings;
+    userName?: string;
+  }): string {
+    const nameByCharacterId = new Map(
+      input.characterList.map((character) => [
+        character.id,
+        character.data.name,
+      ]),
+    );
+    const recent = formatRecentHistoryForSmart(
+      input.messages,
+      nameByCharacterId,
+      { userName: input.userName, limit: 8 },
+    );
+
+    let activityLine = "";
+    if (input.characterId) {
+      const timezone =
+        input.settings.conversation_timezone ?? input.settings.prompt_timezone;
+      const now = new Date();
+      const wall = toConversationScheduleWallClockDate(now, timezone);
+      const schedule = input.settings.conversation_schedules_enabled
+        ? input.settings.character_schedules[input.characterId]
+        : undefined;
+      const status = getEffectiveCurrentStatus(
+        schedule,
+        input.settings.conversation_status_overrides[input.characterId],
+        now,
+        "free time",
+        wall,
+      );
+      if (status.activity?.trim()) {
+        activityLine = `Current activity/status: ${status.status} — ${status.activity.trim()}`;
+      }
+    }
+
+    return [activityLine || null, recent ? `Recent chat:\n${recent}` : null]
+      .filter(Boolean)
+      .join("\n\n");
   }
 
   /** Expand a texting brief + character look into an OpenRouter image attachment. */
@@ -954,6 +1036,8 @@ export class ChatsService {
     brief: string;
     sourceCommand?: string;
     character: Character | null;
+    /** Recent chat / schedule context (what they are doing now). */
+    chatContext?: string;
     aspectRatio?: string;
     resolution?: string;
   }): Promise<ChatMessageAttachment> {
@@ -969,9 +1053,20 @@ export class ChatsService {
       throw new Error("Default image connection needs an API key and model.");
     }
 
-    const appearance =
-      input.character?.data.appearance?.trim() || "";
+    const appearance = input.character?.data.appearance?.trim() || "";
     const name = input.character?.data.name?.trim() || "Character";
+    const photoBrief = input.brief.trim();
+    const chatContext = input.chatContext?.trim() || "";
+    const situationBlock = [
+      chatContext
+        ? `Chat context (what is happening / what ${name} is doing — use for setting, pose, props):\n${chatContext}`
+        : null,
+      photoBrief
+        ? `Photo brief from character (shot intent only — do not redefine full appearance):\n${photoBrief}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
 
     let imagePresetVariables: ReturnType<typeof selectedVariableValues> = {};
     let styleLine = "";
@@ -998,14 +1093,22 @@ export class ChatsService {
       styleLine,
     );
 
+    const appearanceBlock = appearance
+      ? [
+          `Subject: ${name}`,
+          "Full appearance (use every trait; do not summarize, omit, or replace details):",
+          appearance,
+        ].join("\n")
+      : `Subject: ${name}`;
+
     let imagePrompt = [
       styleLine || null,
       framingLine || null,
       styleIsIllustrated
         ? `Casual selfie-pose portrait illustration of ${name}.`
         : `Phone photo / casual selfie of ${name}.`,
-      appearance ? `Appearance: ${appearance}` : null,
-      `Situation: ${input.brief.trim()}`,
+      appearanceBlock,
+      situationBlock || null,
       styleIsIllustrated
         ? "Keep the Style medium (anime/illustration) — not photorealistic, not a real camera photo."
         : styleIsPhoto
@@ -1013,14 +1116,14 @@ export class ChatsService {
           : null,
     ]
       .filter(Boolean)
-      .join(" ");
+      .join("\n\n");
 
     try {
       const llmConnection = await this.connections.findDefault("llm");
       const imagePreset = await this.presets.findDefault("image");
       const promptContext = buildPresetPromptContext({
         characters: input.character ? [input.character] : undefined,
-        generatorBrief: input.brief.trim(),
+        generatorBrief: situationBlock || photoBrief,
         characterInfoMode: "image",
         variables: {
           ...selectedVariableValues(imagePreset.variables),
@@ -1054,13 +1157,19 @@ export class ChatsService {
       );
     }
 
-    // Always pin Style/Framing onto the final model prompt so LLM drift or
-    // "selfie/photo" briefs cannot override the preset medium (e.g. anime).
-    imagePrompt = [styleLine, framingLine, imagePrompt]
+    // Pin Style/Framing + full appearance + chat situation so the expander
+    // cannot drop look or current-context details.
+    imagePrompt = [
+      styleLine,
+      framingLine,
+      appearanceBlock,
+      situationBlock || null,
+      imagePrompt,
+    ]
       .filter(Boolean)
-      .join("\n");
+      .join("\n\n");
     if (styleIsIllustrated) {
-      imagePrompt = `${imagePrompt}\nMedium lock: anime/illustration only — not photorealistic, not a real photograph.`;
+      imagePrompt = `${imagePrompt}\n\nMedium lock: anime/illustration only — not photorealistic, not a real photograph.`;
     }
 
     const custom = imageConnection.custom_parameters ?? {};
@@ -1083,17 +1192,38 @@ export class ChatsService {
       outputFormat: "png",
     });
 
-    return {
+    const fileName = `${name.replace(/[^\w.-]+/g, "_").slice(0, 40) || "photo"}.png`;
+    const attachment = {
       ...(await writeChatAttachment({
         chatId: input.chatId,
         attachmentId: randomUUID(),
         buffer: generated.buffer,
         mime: generated.mime,
-        name: `${name.replace(/[^\w.-]+/g, "_").slice(0, 40) || "photo"}.png`,
+        name: fileName,
       })),
       prompt: imagePrompt,
       source_command: input.sourceCommand,
     };
+
+    const characterId = input.character?.id?.trim();
+    if (characterId) {
+      try {
+        await this.characters.addGalleryImage(characterId, generated.buffer, {
+          mime: generated.mime,
+          name: fileName,
+          source: "generated",
+          prompt: imagePrompt,
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Failed to save chat image to character gallery ${characterId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    return attachment;
   }
 
   /**
@@ -1147,11 +1277,36 @@ export class ChatsService {
       "Casual phone selfie matching the chat vibe.";
     const sourceCommand = `[send_image: prompt="${escapeQuotesForAttribute(brief)}"]`;
 
+    let characterList: Character[] = [];
+    if (speaker) characterList = [speaker];
+    else if (settings.character_ids.length) {
+      try {
+        characterList = await this.loadPromptCharacters(settings);
+      } catch {
+        characterList = [];
+      }
+    }
+
+    let userName: string | undefined;
+    try {
+      const persona = await this.resolvePersona(settings.persona_id);
+      userName = persona?.name?.trim() || undefined;
+    } catch {
+      userName = undefined;
+    }
+
     const attachment = await this.generateConversationImageAttachment({
       chatId: row.id,
       brief,
       sourceCommand,
       character: speaker,
+      chatContext: this.buildConversationImageChatContext({
+        messages: visible,
+        characterList,
+        characterId: characterId ?? null,
+        settings,
+        userName,
+      }),
       aspectRatio: settings.image_aspect_ratio,
       resolution: settings.image_resolution,
     });
@@ -2059,7 +2214,7 @@ export class ChatsService {
     );
 
     let content = result.content;
-    let thinking = result.thinking;
+    let thinking: string | null = result.thinking;
     const parsed = extractThinking(
       result.reply,
       generationConnection.thinking_tag,
@@ -2149,6 +2304,7 @@ export class ChatsService {
         const commandResult = await this.applyConversationCommands({
           row,
           content,
+          thinking,
           settings: defaultChatSettings(row.settings),
           characterList,
           characterId,
@@ -2156,6 +2312,7 @@ export class ChatsService {
           emit,
         });
         content = commandResult.content;
+        thinking = commandResult.thinking;
         turnCommandAttachments = commandResult.attachments;
         turnCommandTags = commandResult.commandTags;
         const refreshed = await this.chats.findOneBy({ id: row.id });

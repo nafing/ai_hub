@@ -13,14 +13,14 @@ import {
   type ChatSummaryEntry,
 } from "@ai-hub/shared";
 import { Button, Modal, Select, Switch, Textarea, notifications } from "@/components/ui";
-import { useConnectionSelectOptions } from "@/features/connections/queries";
-import { usePresets } from "@/features/presets/queries";
+import { useConnectionSelectOptions } from "@/features/api-queries/connections/queries";
+import { usePresets } from "@/features/api-queries/presets/queries";
 import {
   useGenerateChatSummary,
   usePatchSummaryEntry,
   useUpdateChat,
   chatKeys,
-} from "../shared/queries";
+} from "@/features/api-queries/chats/queries";
 import { useRollingSummaryBackfill } from "./useRollingSummaryBackfill";
 import classes from "./SummaryPopover.module.css";
 

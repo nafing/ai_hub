@@ -1,6 +1,6 @@
 import { Modal } from "@/components/ui";
 import type { Chat } from "@ai-hub/shared";
-import { ConversationPresenceCard } from "./ConversationPresenceCard";
+import { ConversationPresenceCard } from "@/features/shared/chats/conversation/ConversationPresenceCard";
 
 type ConversationPresenceModalProps = {
   chat: Chat;

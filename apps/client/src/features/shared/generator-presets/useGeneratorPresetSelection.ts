@@ -4,12 +4,12 @@ import {
   useDefaultPreset,
   usePreset,
   usePresets,
-} from "@/features/presets/queries";
+} from "@/features/api-queries/presets/queries";
 import {
   useDefaultGeneratorPreset,
   useGeneratorPreset,
   useGeneratorPresets,
-} from "@/features/generator-presets/queries";
+} from "@/features/api-queries/generator-presets/queries";
 
 /**
  * Select a Generator Preset and resolve its linked structural Preset.

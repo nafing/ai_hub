@@ -6,7 +6,7 @@ import {
   type ConnectionKind,
 } from "@ai-hub/shared";
 import { Button, Modal, TextInput, notifications } from "@/components/ui";
-import { useCreateConnection } from "./queries";
+import { useCreateConnection } from "@/features/api-queries/connections/queries";
 import classes from "./CreateConnectionModal.module.css";
 
 type CreateConnectionModalProps = {

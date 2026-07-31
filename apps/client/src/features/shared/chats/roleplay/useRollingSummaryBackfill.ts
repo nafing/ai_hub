@@ -6,7 +6,7 @@ import {
   type ChatSummaryEntry,
   type GenerateChatSummaryInput,
 } from "@ai-hub/shared";
-import { generateChatSummary } from "../shared/api";
+import { generateChatSummary } from "@/features/api-queries/chats/api";
 
 export type RollingSummaryBackfillProgress = {
   status: "idle" | "running" | "done" | "error";

@@ -29,16 +29,16 @@ import {
   Switch,
   RuntimeText,
 } from "@/components/ui";
-import { useConnectionSelectOptions } from "@/features/connections/queries";
-import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
-import { usePersonas } from "@/features/personas/queries";
-import { SetupVariablesModal } from "@/features/presets/SetupVariablesModal";
-import { persistPresetVariableSelection } from "@/features/presets/persistPresetVariableSelection";
-import { presetKeys } from "@/features/presets/queries";
-import { createCharacter, uploadCharacterAvatar } from "./api";
-import { useCharacterImportSessionStore } from "./characterImportSessionStore";
-import { characterKeys, useCharacters } from "./queries";
-import { ImportLorebookModal } from "@/features/lorebooks/ImportLorebookModal";
+import { useConnectionSelectOptions } from "@/features/api-queries/connections/queries";
+import { useGeneratorPresetSelection } from "@/features/shared/generator-presets/useGeneratorPresetSelection";
+import { usePersonas } from "@/features/api-queries/personas/queries";
+import { SetupVariablesModal } from "@/features/modals/presets/SetupVariablesModal";
+import { persistPresetVariableSelection } from "@/features/shared/presets/persistPresetVariableSelection";
+import { presetKeys } from "@/features/api-queries/presets/queries";
+import { createCharacter, uploadCharacterAvatar } from "@/features/api-queries/characters/api";
+import { useCharacterImportSessionStore } from "@/features/shared/characters/characterImportSessionStore";
+import { characterKeys, useCharacters } from "@/features/api-queries/characters/queries";
+import { ImportLorebookModal } from "@/features/modals/lorebooks/ImportLorebookModal";
 import classes from "./ImportCharacterModal.module.css";
 
 type ImportCharacterModalProps = {

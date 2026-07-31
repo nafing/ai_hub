@@ -15,15 +15,14 @@ import {
 } from "@ai-hub/shared";
 import { ActionIcon } from "@/components/ui";
 import { api } from "@/lib/api";
-import { characterAvatarSrc } from "@/features/characters/avatar-url";
-import { personaAvatarSrc } from "@/features/personas/avatar-url";
+import { avatarSrc } from "@/lib/avatar-url";
 import { twatterPostImageSrc } from "./image-url";
 import { TwatterMentionText } from "./TwatterMentionText";
 import {
   useCreateTwatterInteraction,
   useDeleteTwatterPost,
   useRemoveTwatterInteraction,
-} from "./queries";
+} from "@/features/api-queries/twatter/queries";
 import classes from "./TwatterFeed.module.css";
 
 function formatRelativeTime(iso: string): string {
@@ -73,16 +72,16 @@ export function PostCard({
     post.author_snapshot ??
     accounts.find((account) => account.id === post.author_account_id);
 
-  const avatarSrc = useMemo(() => {
+  const avatarUrl = useMemo(() => {
     const base = String(api.defaults.baseURL);
     if (!author) return null;
     if (author.kind === "persona") {
       const account = accounts.find((item) => item.id === author.id);
-      return personaAvatarSrc(account?.avatar, base);
+      return avatarSrc(account?.avatar, base);
     }
     if (author.kind === "character") {
       const account = accounts.find((item) => item.id === author.id);
-      return characterAvatarSrc(account?.avatar, base);
+      return avatarSrc(account?.avatar, base);
     }
     return null;
   }, [author, accounts]);
@@ -162,10 +161,10 @@ export function PostCard({
           onClick={() => author && openProfile(author.id)}
           disabled={!author}
         >
-          {avatarSrc ? (
+          {avatarUrl ? (
             <img
               className={classes.avatar}
-              src={avatarSrc}
+              src={avatarUrl}
               alt=""
               width={40}
               height={40}

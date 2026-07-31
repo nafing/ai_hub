@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { defaultTool, type Tool } from "@ai-hub/shared";
 import { Button, Modal, TextInput, notifications } from "@/components/ui";
-import { useCreateTool } from "./queries";
+import { useCreateTool } from "@/features/api-queries/tools/queries";
 import classes from "./CreateToolModal.module.css";
 
 type CreateToolModalProps = {

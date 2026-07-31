@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { defaultLorebook } from "@ai-hub/shared";
 import { Button, Modal, TextInput, notifications } from "@/components/ui";
-import { useCreateLorebook } from "./queries";
+import { useCreateLorebook } from "@/features/api-queries/lorebooks/queries";
 import classes from "./CreateLorebookModal.module.css";
 
 type CreateLorebookModalProps = {

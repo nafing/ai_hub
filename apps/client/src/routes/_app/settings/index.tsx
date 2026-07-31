@@ -1,48 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Capacitor } from "@capacitor/core";
-import { ThemeSettings } from "@/features/theme/ThemeSettings";
-import { SoundSettings } from "@/features/sounds";
-import { TextFormatsSettings } from "@/features/chats/shared";
-import { ServerConnectionSettings } from "@/features/settings/ServerConnectionSettings";
-import classes from "./index.module.css";
+import { SettingsPage } from "./-components/SettingsPage";
 
 export const Route = createFileRoute("/_app/settings/")({
-  component: RouteComponent,
+  component: SettingsPage,
 });
-
-function RouteComponent() {
-  const showServer = Capacitor.isNativePlatform();
-
-  return (
-    <div className={classes.page}>
-      <header className={classes.header}>
-        <h2 className={classes.title}>Settings</h2>
-        <p className={classes.subtitle}>
-          Customize appearance and application preferences.
-        </p>
-      </header>
-
-      {showServer ? (
-        <section className={classes.card} data-glass-surface>
-          <h3 className={classes.cardTitle}>Server</h3>
-          <ServerConnectionSettings />
-        </section>
-      ) : null}
-
-      <section className={classes.card} data-glass-surface>
-        <h3 className={classes.cardTitle}>Sounds</h3>
-        <SoundSettings />
-      </section>
-
-      <section className={classes.card} data-glass-surface>
-        <h3 className={classes.cardTitle}>Text formats</h3>
-        <TextFormatsSettings />
-      </section>
-
-      <section className={classes.card} data-glass-surface>
-        <h3 className={classes.cardTitle}>Theme</h3>
-        <ThemeSettings />
-      </section>
-    </div>
-  );
-}

@@ -208,6 +208,7 @@ export function buildConversationCommandsReminder(input: {
     );
   }
   lines.push(
+    "Put command tags in the reply itself (SMS text), not only inside thinking/reasoning — otherwise they may be ignored.",
     "Do not quote these tags in visible chat text.",
     "</conversation_commands>",
   );

@@ -11,10 +11,10 @@ import {
 } from "@tabler/icons-react";
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button, Modal } from "@/components/ui";
-import { useLlmConnections } from "@/features/connections/queries";
-import { useCharacters } from "@/features/characters/queries";
-import { usePersonas } from "@/features/personas/queries";
-import { personaAvatarSrc } from "@/features/personas/avatar-url";
+import { useLlmConnections } from "@/features/api-queries/connections/queries";
+import { useCharacters } from "@/features/api-queries/characters/queries";
+import { usePersonas } from "@/features/api-queries/personas/queries";
+import { avatarSrc } from "@/lib/avatar-url";
 import { api } from "@/lib/api";
 import { ComposePost, PersonaPicker } from "./ComposePost";
 import { TwatterPersonaProvider, useTwatterPersona } from "./TwatterPersonaContext";
@@ -23,7 +23,7 @@ import { TwatterSettingsPanel } from "./TwatterSettingsPanel";
 import {
   useTwatterBootstrap,
   useTwatterAccountProfile,
-} from "./queries";
+} from "@/features/api-queries/twatter/queries";
 import classes from "./TwatterShell.module.css";
 
 const NAV_ITEMS = [
@@ -50,8 +50,8 @@ function TwatterShellInner() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const apiBase = String(api.defaults.baseURL);
-  const avatarSrc = personaAccount
-    ? personaAvatarSrc(personaAccount.avatar, apiBase)
+  const avatarUrl = personaAccount
+    ? avatarSrc(personaAccount.avatar, apiBase)
     : null;
   const avatarInitial = (personaAccount?.display_name || "?")
     .slice(0, 1)
@@ -219,10 +219,10 @@ function TwatterShellInner() {
               }
             }}
           >
-            {avatarSrc ? (
+            {avatarUrl ? (
               <img
                 className={classes.accountAvatar}
-                src={avatarSrc}
+                src={avatarUrl}
                 alt=""
                 width={40}
                 height={40}

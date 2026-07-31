@@ -8,9 +8,9 @@ import {
   type ReactNode,
 } from "react";
 import { countUnreadTwatterNotifications, type TwatterAccount } from "@ai-hub/shared";
-import { usePersonas } from "@/features/personas/queries";
-import { playAppSound } from "@/features/sounds";
-import { useTwatterBootstrap } from "./queries";
+import { usePersonas } from "@/features/api-queries/personas/queries";
+import { playAppSound } from "@/features/shared/sounds";
+import { useTwatterBootstrap } from "@/features/api-queries/twatter/queries";
 
 type TwatterPersonaContextValue = {
   personaId: string | null;

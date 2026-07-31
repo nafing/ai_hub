@@ -7,7 +7,7 @@ import {
   type TwatterTimelineTab,
 } from "@ai-hub/shared";
 import { Button, Select, Textarea, notifications } from "@/components/ui";
-import { useCreateTwatterPost } from "./queries";
+import { useCreateTwatterPost } from "@/features/api-queries/twatter/queries";
 import classes from "./TwatterFeed.module.css";
 
 type ComposePostProps = {

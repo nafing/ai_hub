@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { rgbToHsl, withAlpha } from "@/features/theme/colorUtils";
+import { rgbToHsl, withAlpha } from "@/features/shared/theme/colorUtils";
 
 export function isCssGradient(value: string | null | undefined): boolean {
   if (!value) return false;

@@ -8,8 +8,8 @@ import {
   type CreatePersonaInput,
 } from "@ai-hub/shared";
 import { Button, Modal, notifications } from "@/components/ui";
-import { createPersona } from "./api";
-import { personaKeys } from "./queries";
+import { createPersona } from "@/features/api-queries/personas/api";
+import { personaKeys } from "@/features/api-queries/personas/queries";
 import classes from "./ImportPersonaModal.module.css";
 
 type ImportPersonaModalProps = {

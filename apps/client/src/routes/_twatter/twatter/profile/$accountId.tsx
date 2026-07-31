@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { TwatterProfile } from "@/features/twatter/TwatterProfile";
-import { useTwatterPersona } from "@/features/twatter/TwatterPersonaContext";
+import { TwatterProfile } from "@/features/shared/twatter/TwatterProfile";
+import { useTwatterPersona } from "@/features/shared/twatter/TwatterPersonaContext";
 import {
   useTwatterAccountProfile,
   useTwatterBootstrap,
-} from "@/features/twatter/queries";
+} from "@/features/api-queries/twatter/queries";
 
 export const Route = createFileRoute("/_twatter/twatter/profile/$accountId")({
   component: RouteComponent,

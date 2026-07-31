@@ -7,14 +7,14 @@ import type {
   GenerateChatInput,
 } from "@ai-hub/shared";
 import { notifications } from "@/components/ui";
-import { playAppSound } from "@/features/sounds";
+import { playAppSound } from "@/features/shared/sounds";
 import { queryClient } from "@/lib/queryClient";
 import {
   PresetVariablesCancelledError,
   streamGenerate,
   streamRegenerate,
-} from "./api";
-import { chatKeys } from "./queries";
+} from "@/features/api-queries/chats/api";
+import { chatKeys } from "@/features/api-queries/chats/queries";
 
 export type StreamSpeaker = {
   character_id: string | null;

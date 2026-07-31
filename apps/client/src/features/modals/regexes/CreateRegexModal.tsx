@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { defaultRegexScript } from "@ai-hub/shared";
 import { Button, Modal, TextInput, notifications } from "@/components/ui";
-import { useCreateRegex } from "./queries";
+import { useCreateRegex } from "@/features/api-queries/regexes/queries";
 import classes from "./CreateRegexModal.module.css";
 
 type CreateRegexModalProps = {

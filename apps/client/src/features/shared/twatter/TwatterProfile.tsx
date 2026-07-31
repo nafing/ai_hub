@@ -1,15 +1,14 @@
 import { useMemo, useState } from "react";
 import type { TwatterAccount, TwatterInteraction } from "@ai-hub/shared";
 import { Button, TextInput, Textarea } from "@/components/ui";
-import { characterAvatarSrc } from "@/features/characters/avatar-url";
-import { personaAvatarSrc } from "@/features/personas/avatar-url";
+import { avatarSrc } from "@/lib/avatar-url";
 import { api } from "@/lib/api";
 import { PostCard } from "./PostCard";
 import {
   useSetTwatterFollow,
   useTwatterAccountProfile,
   useUpdateTwatterProfile,
-} from "./queries";
+} from "@/features/api-queries/twatter/queries";
 import classes from "./TwatterFeed.module.css";
 
 type TwatterProfileProps = {
@@ -40,13 +39,13 @@ export function TwatterProfile({
   const profile = profileQuery.data;
   const apiBase = String(api.defaults.baseURL);
 
-  const avatarSrc = useMemo(() => {
+  const avatarUrl = useMemo(() => {
     if (!profile) return null;
     if (profile.kind === "persona") {
-      return personaAvatarSrc(profile.avatar, apiBase);
+      return avatarSrc(profile.avatar, apiBase);
     }
     if (profile.kind === "character") {
-      return characterAvatarSrc(profile.avatar, apiBase);
+      return avatarSrc(profile.avatar, apiBase);
     }
     return null;
   }, [profile, apiBase]);
@@ -107,10 +106,10 @@ export function TwatterProfile({
 
       <div className={classes.profileHeader}>
         <div className={classes.profileTopRow}>
-          {avatarSrc ? (
+          {avatarUrl ? (
             <img
               className={classes.profileAvatar}
-              src={avatarSrc}
+              src={avatarUrl}
               alt=""
               width={88}
               height={88}

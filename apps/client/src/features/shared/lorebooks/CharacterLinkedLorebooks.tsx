@@ -7,7 +7,7 @@ import {
   type UpdateLorebookInput,
 } from "@ai-hub/shared";
 import { ActionIcon, Button, Select, notifications } from "@/components/ui";
-import { useLorebooks, useUpdateLorebook } from "./queries";
+import { useLorebooks, useUpdateLorebook } from "@/features/api-queries/lorebooks/queries";
 import classes from "./CharacterLinkedLorebooks.module.css";
 
 type LinkedLorebooksPanelProps = {

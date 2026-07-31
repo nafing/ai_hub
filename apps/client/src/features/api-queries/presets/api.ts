@@ -9,9 +9,9 @@ import type {
   UpdatePresetInput,
   WrapFormat,
 } from "@ai-hub/shared";
-import { promptPresetVariables } from "@/features/presets/PresetCommandBridge";
-import { extractNeedsPresetVariables } from "@/features/presets/needsPresetVariables";
-import { playAppSound } from "@/features/sounds";
+import { promptPresetVariables } from "@/features/shared/presets/PresetCommandBridge";
+import { extractNeedsPresetVariables } from "@/features/shared/presets/needsPresetVariables";
+import { playAppSound } from "@/features/shared/sounds";
 import { api } from "@/lib/api";
 
 export async function listPresets(): Promise<PresetListItem[]> {

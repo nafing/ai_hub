@@ -24,28 +24,28 @@ import {
   Switch,
   RuntimeText,
 } from "@/components/ui";
-import { characterAvatarSrc } from "@/features/characters/avatar-url";
-import { CharacterFolderQuickPick } from "@/features/characters/CharacterFolderQuickPick";
-import { useCharacterFolders } from "@/features/characters/foldersQueries";
-import { useAgents } from "@/features/agents/queries";
-import { useCharacters } from "@/features/characters/queries";
-import { useConnectionSelectOptions } from "@/features/connections/queries";
-import { usePersonas } from "@/features/personas/queries";
-import { SetupVariablesModal } from "@/features/presets/SetupVariablesModal";
+import { avatarSrc } from "@/lib/avatar-url";
+import { CharacterFolderQuickPick } from "@/features/shared/characters/CharacterFolderQuickPick";
+import { useCharacterFolders } from "@/features/api-queries/characters/foldersQueries";
+import { useAgents } from "@/features/api-queries/agents/queries";
+import { useCharacters } from "@/features/api-queries/characters/queries";
+import { useConnectionSelectOptions } from "@/features/api-queries/connections/queries";
+import { usePersonas } from "@/features/api-queries/personas/queries";
+import { SetupVariablesModal } from "@/features/modals/presets/SetupVariablesModal";
 import {
   useDefaultPreset,
   usePreset,
   usePresets,
-} from "@/features/presets/queries";
+} from "@/features/api-queries/presets/queries";
 import { ChatSettingsConversation } from "../conversation/ChatSettingsConversation";
-import { SummariesEditorModal } from "../conversation/SummariesEditorModal";
+import { SummariesEditorModal } from "@/features/modals/chats/SummariesEditorModal";
 import { ChatSettingsRoleplay } from "../roleplay/ChatSettingsRoleplay";
 import { api } from "@/lib/api";
 import { ChatBackgroundPicker } from "./ChatBackgroundPicker";
 import { ChatLorebooksSettings } from "./ChatLorebooksSettings";
 import { AdvancedParametersFields } from "./AdvancedParametersFields";
 import { Field, SettingsSection } from "./chatSettingsUi";
-import { useUpdateChat } from "./queries";
+import { useUpdateChat } from "@/features/api-queries/chats/queries";
 import classes from "./ChatSettingsPanel.module.css";
 import { ConnectedChatsSettings } from "./ConnectedChatsSettings";
 
@@ -508,7 +508,7 @@ export function ChatSettingsPanel({ chat }: ChatSettingsPanelProps) {
                     chat.settings,
                     character.id,
                   );
-                  const avatarUrl = characterAvatarSrc(
+                  const avatarUrl = avatarSrc(
                     character.avatar,
                     apiBase,
                   );

@@ -1,5 +1,5 @@
 import { Outlet, createRootRoute } from "@tanstack/react-router";
-import { CharacterImportJobsHost } from "@/features/characters/CharacterImportJobsHost";
+import { CharacterImportJobsHost } from "@/features/shared/characters/CharacterImportJobsHost";
 
 export const Route = createRootRoute({
   component: RootComponent,

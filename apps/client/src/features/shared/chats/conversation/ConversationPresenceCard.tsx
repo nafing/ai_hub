@@ -3,8 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Chat, ConversationPresenceStatus } from "@ai-hub/shared";
 import { Button, Select } from "@/components/ui";
 import { api } from "@/lib/api";
-import { CharacterScheduleEditorModal } from "./CharacterScheduleEditorModal";
-import { chatKeys } from "../shared/queries";
+import { CharacterScheduleEditorModal } from "@/features/modals/chats/CharacterScheduleEditorModal";
+import { chatKeys } from "@/features/api-queries/chats/queries";
 import classes from "./ConversationPresenceCard.module.css";
 
 type StatusEntry = {

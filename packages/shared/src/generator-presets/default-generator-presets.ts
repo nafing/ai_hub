@@ -29,7 +29,6 @@ A complete character card is a JSON object with exactly these fields:
   "creator_notes": "",
   "system_prompt": "",
   "post_history_instructions": "",
-  "tags": [],
   "alternate_greetings": []
 }
 
@@ -45,8 +44,8 @@ Field guidance:
 - creator_notes: OOC tips for the human player (not injected as lore).
 - system_prompt: optional extra in-character directives; empty string if none.
 - post_history_instructions: optional jailbreak/UJB-style reminders; empty if none.
-- tags: short genre/trope tags.
 - alternate_greetings: 0–3 alternate first messages.
+- Never invent, copy, or rely on character tags — omit them entirely.
 
 ${ROLEPLAY_FORMATTING_RULES}
 
@@ -106,7 +105,7 @@ const CHARACTER_REGENERATE = `Regenerate mode (scope={{regenerate_scope}}):
 - Return exactly {{cast_size}} objects in {"characters":[...]} — one per character, same order as the roster.
 {{if regenerate_scope == concept}}
 - Regenerate name, description, appearance, personality, relationships, and scenario for each.
-- Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.
+- Keep first_mes, mes_example, alternate_greetings, and advanced fields unless they contradict the new concepts.
 {{else}}
 - Rebuild each character card from scratch using the Generator Brief and reference cards.
 {{/if}}`;
@@ -115,13 +114,13 @@ const CHARACTER_REBUILD = `Rebuild mode (scope={{rebuild_scope}}):
 - Use Reference Characters / current card fields as the base to revise.
 {{if rebuild_scope == concept_batch}}
 - Regenerate name, description, appearance, personality, relationships, and scenario for ALL {{cast_size}} characters in one pass.
-- Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.
+- Keep first_mes, mes_example, alternate_greetings, and advanced fields unless they contradict the new concepts.
 - Preserve distinct identities and relationships; keep the same cast size and order.
 - Return exactly {{cast_size}} objects in {"characters":[...]} — same order as the roster.
 {{else}}
 {{if rebuild_scope == concept}}
 - Regenerate name, description, appearance, personality, relationships, and scenario for this character only.
-- Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concept.
+- Keep first_mes, mes_example, alternate_greetings, and advanced fields unless they contradict the new concept.
 - Return a one-item {"characters":[...]} array.
 {{else}}
 {{if rebuild_scope == all}}

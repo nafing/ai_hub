@@ -16,21 +16,21 @@ import {
   notifications,
   RuntimeText,
 } from "@/components/ui";
-import { useConnectionSelectOptions } from "@/features/connections/queries";
-import { createCharacter, getCharacter } from "@/features/characters/api";
-import { characterKeys, useCharacters } from "@/features/characters/queries";
-import { AlternateGreetingsEditor } from "@/features/characters/AlternateGreetingsEditor";
+import { useConnectionSelectOptions } from "@/features/api-queries/connections/queries";
+import { createCharacter, getCharacter } from "@/features/api-queries/characters/api";
+import { characterKeys, useCharacters } from "@/features/api-queries/characters/queries";
+import { AlternateGreetingsEditor } from "@/features/shared/characters/AlternateGreetingsEditor";
 import {
   extractFullCards,
   formatAlternateGreetingsForPrompt,
   resolvePresetVariables,
   stripCodeFence,
   type ExtractedCharacterCard,
-} from "@/features/characters/characterGenerateShared";
-import { getPersona } from "@/features/personas/api";
-import { usePersonas } from "@/features/personas/queries";
-import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
-import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
+} from "@/features/shared/characters/characterGenerateShared";
+import { getPersona } from "@/features/api-queries/personas/api";
+import { usePersonas } from "@/features/api-queries/personas/queries";
+import { useGeneratorJobsStore } from "@/features/shared/generators/generatorJobsStore";
+import { useGeneratorPresetSelection } from "@/features/shared/generator-presets/useGeneratorPresetSelection";
 import classes from "./CharacterGeneratePanel.module.css";
 
 export type CharacterCardGenerateField =
@@ -287,7 +287,6 @@ export function CharacterGeneratePanel({
             creator_notes: card.creator_notes ?? "",
             system_prompt: card.system_prompt ?? "",
             post_history_instructions: card.post_history_instructions ?? "",
-            tags: card.tags ?? [],
             alternate_greetings: card.alternate_greetings ?? [],
           },
         }),

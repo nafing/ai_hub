@@ -27,15 +27,15 @@ import {
   notifications,
   RuntimeText,
 } from "@/components/ui";
-import { useConnectionSelectOptions } from "@/features/connections/queries";
-import { getCharacter } from "@/features/characters/api";
-import { useCharacter, useCharacters } from "@/features/characters/queries";
-import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
-import { getLorebook } from "@/features/lorebooks/api";
-import { lorebookKeys, useLorebooks } from "@/features/lorebooks/queries";
-import { usePersona, usePersonas } from "@/features/personas/queries";
-import { useTestPreset } from "./queries";
-import type { TestPresetResult } from "./api";
+import { useConnectionSelectOptions } from "@/features/api-queries/connections/queries";
+import { getCharacter } from "@/features/api-queries/characters/api";
+import { useCharacter, useCharacters } from "@/features/api-queries/characters/queries";
+import { useGeneratorPresetSelection } from "@/features/shared/generator-presets/useGeneratorPresetSelection";
+import { getLorebook } from "@/features/api-queries/lorebooks/api";
+import { lorebookKeys, useLorebooks } from "@/features/api-queries/lorebooks/queries";
+import { usePersona, usePersonas } from "@/features/api-queries/personas/queries";
+import { useTestPreset } from "@/features/api-queries/presets/queries";
+import type { TestPresetResult } from "@/features/api-queries/presets/api";
 import classes from "./PresetTestPanel.module.css";
 
 type PresetTestPanelProps = {

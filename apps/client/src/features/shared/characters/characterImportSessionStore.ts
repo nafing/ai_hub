@@ -12,17 +12,17 @@ import {
   type Preset,
 } from "@ai-hub/shared";
 import { notifications } from "@/components/ui";
-import { getPersona } from "@/features/personas/api";
-import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
+import { getPersona } from "@/features/api-queries/personas/api";
+import { useGeneratorJobsStore } from "@/features/shared/generators/generatorJobsStore";
 import { queryClient } from "@/lib/queryClient";
-import { createCharacter, getCharacter, uploadCharacterAvatar } from "./api";
+import { createCharacter, getCharacter, uploadCharacterAvatar } from "@/features/api-queries/characters/api";
 import {
   extractFullCards,
   extractedToCardData,
   withImportedCardVariables,
 } from "./characterGenerateShared";
-import type { ImportAiReviewContext } from "./ImportAiReviewModal";
-import { characterKeys } from "./queries";
+import type { ImportAiReviewContext } from "@/features/modals/characters/ImportAiReviewModal";
+import { characterKeys } from "@/features/api-queries/characters/queries";
 
 export type CharacterImportPreview = {
   card: CharacterCardV2;
@@ -196,7 +196,7 @@ async function runAiImport(
     persona,
     referenceCharacterList: [{ data: baseData }, ...libraryReferences],
     variables: {
-      ...withImportedCardVariables(preset.variables, baseData),
+      ...withImportedCardVariables(preset.variables),
       generation_mode: "import",
       char: baseData.name.trim(),
       target_field: "all card fields",

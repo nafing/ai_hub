@@ -9,8 +9,8 @@ import {
   type CreatePresetInput,
 } from "@ai-hub/shared";
 import { Button, Modal, notifications } from "@/components/ui";
-import { createPreset } from "./api";
-import { presetKeys } from "./queries";
+import { createPreset } from "@/features/api-queries/presets/api";
+import { presetKeys } from "@/features/api-queries/presets/queries";
 import classes from "./ImportPresetModal.module.css";
 
 type ImportPresetModalProps = {

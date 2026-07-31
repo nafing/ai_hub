@@ -261,6 +261,8 @@ export class AgentsService implements OnModuleInit {
       category: agent.category,
       enabled_by_default: agent.enabled_by_default,
       default_tools: agent.default_tools,
+      default_settings: agent.default_settings,
+      prompt_templates: agent.prompt_templates,
       execution: agent.execution,
       is_built_in: agent.is_built_in,
     };

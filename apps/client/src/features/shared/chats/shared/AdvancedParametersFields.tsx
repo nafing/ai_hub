@@ -13,7 +13,7 @@ import { NumberInput, Select, Switch, Textarea } from "@/components/ui";
 import {
   useConnection,
   useDefaultConnection,
-} from "@/features/connections/queries";
+} from "@/features/api-queries/connections/queries";
 import { Field, type PatchChatSettings } from "./chatSettingsUi";
 import classes from "./AdvancedParametersFields.module.css";
 

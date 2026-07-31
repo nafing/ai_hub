@@ -3,7 +3,7 @@ import type { TwatterAccount, TwatterBootstrap } from "@ai-hub/shared";
 import { useNavigate } from "@tanstack/react-router";
 import { Button, TextInput } from "@/components/ui";
 import { PostCard } from "./PostCard";
-import { useTwatterSearch } from "./queries";
+import { useTwatterSearch } from "@/features/api-queries/twatter/queries";
 import classes from "./TwatterFeed.module.css";
 
 type TwatterSearchProps = {

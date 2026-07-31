@@ -15,7 +15,7 @@ import {
   NumberInput,
   Switch,
 } from "@/components/ui";
-import { useTools } from "@/features/tools/queries";
+import { useTools } from "@/features/api-queries/tools/queries";
 import classes from "./AgentForm.module.css";
 
 export type AgentFormValues = CreateAgentInput;

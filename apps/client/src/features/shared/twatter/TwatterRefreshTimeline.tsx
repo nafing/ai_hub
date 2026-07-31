@@ -1,7 +1,7 @@
 import { Button, notifications } from "@/components/ui";
-import { playAppSound } from "@/features/sounds";
+import { playAppSound } from "@/features/shared/sounds";
 import { useTwatterPersona } from "./TwatterPersonaContext";
-import { useRefreshTwatterTimeline, useTwatterBootstrap } from "./queries";
+import { useRefreshTwatterTimeline, useTwatterBootstrap } from "@/features/api-queries/twatter/queries";
 import classes from "./TwatterFeed.module.css";
 
 type TwatterRefreshTimelineProps = {

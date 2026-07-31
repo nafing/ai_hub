@@ -17,7 +17,6 @@ export type ExtractedCharacterCard = {
   creator_notes?: string;
   system_prompt?: string;
   post_history_instructions?: string;
-  tags?: string[];
   alternate_greetings?: string[];
 };
 
@@ -45,13 +44,6 @@ export function resolvePresetVariables(
   return out;
 }
 
-/** Tags from an imported source card for {{source_tags}}. */
-export function sourceTagsFromCard(
-  card: Pick<CharacterCardData, "tags">,
-): string {
-  return (card.tags ?? []).map((tag) => tag.trim()).filter(Boolean).join(", ");
-}
-
 /**
  * Value of the Genre → "Imported card" setup option, if present on the preset.
  */
@@ -69,20 +61,17 @@ export function importedCardGenreValue(variables: Variable[]): string | null {
 }
 
 /**
- * Setup Variables plus import-source locks: {{source_tags}} and Genre → Imported card.
+ * Setup Variables plus Genre → Imported card lock (infer genre from source card fields, never tags).
  */
 export function withImportedCardVariables(
   variables: Variable[],
-  card: Pick<CharacterCardData, "tags">,
 ): PresetVariableValues {
   const base = resolvePresetVariables(variables);
-  const source_tags = sourceTagsFromCard(card);
-  const values = { ...base, source_tags };
   const importedGenre = importedCardGenreValue(variables);
   return {
-    ...values,
+    ...base,
     ...(importedGenre
-      ? { genre: substituteVariables(importedGenre, values) }
+      ? { genre: substituteVariables(importedGenre, base) }
       : {}),
   };
 }
@@ -144,7 +133,6 @@ export function normalizeFullCard(
     creator_notes: asString(record.creator_notes),
     system_prompt: asString(record.system_prompt),
     post_history_instructions: asString(record.post_history_instructions),
-    tags: asStringArray(record.tags),
     alternate_greetings: asStringArray(record.alternate_greetings),
   };
 }
@@ -202,7 +190,6 @@ export function mergeExtractedIntoCardData(
     ...(ai.post_history_instructions != null
       ? { post_history_instructions: ai.post_history_instructions }
       : {}),
-    ...(ai.tags != null ? { tags: ai.tags } : {}),
     ...(ai.alternate_greetings != null
       ? { alternate_greetings: ai.alternate_greetings }
       : {}),
@@ -224,7 +211,6 @@ export function extractedToCardData(
     creator_notes: ai.creator_notes ?? "",
     system_prompt: ai.system_prompt ?? "",
     post_history_instructions: ai.post_history_instructions ?? "",
-    tags: ai.tags ?? [],
     alternate_greetings: ai.alternate_greetings ?? [],
   };
 }

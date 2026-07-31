@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import type { Character, CharacterGalleryImage } from "@ai-hub/shared";
-import { getCharacter } from "@/features/characters/api";
-import { characterAvatarSrc } from "@/features/characters/avatar-url";
-import { characterKeys } from "@/features/characters/queries";
+import { getCharacter } from "@/features/api-queries/characters/api";
+import { avatarSrc } from "@/lib/avatar-url";
+import { characterKeys } from "@/features/api-queries/characters/queries";
 import { api } from "@/lib/api";
 import classes from "./ChatBackgroundPicker.module.css";
 
@@ -102,7 +102,7 @@ export function ChatBackgroundPicker({
       <ul className={classes.grid}>
         {options.map((option) => {
           const selected = value === option.image.url;
-          const src = characterAvatarSrc(option.image.url, apiBase);
+          const src = avatarSrc(option.image.url, apiBase);
           return (
             <li key={option.key}>
               <button

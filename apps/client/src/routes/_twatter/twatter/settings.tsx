@@ -1,14 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { TwatterSubpageHeader } from "@/features/twatter/TwatterSubpageHeader";
-import { TwatterRefreshTimeline } from "@/features/twatter/TwatterRefreshTimeline";
-import { TwatterSettingsPanel } from "@/features/twatter/TwatterSettingsPanel";
-import { PersonaPicker } from "@/features/twatter/ComposePost";
-import { useTwatterPersona } from "@/features/twatter/TwatterPersonaContext";
-import { useLlmConnections } from "@/features/connections/queries";
-import { useCharacters } from "@/features/characters/queries";
-import { usePersonas } from "@/features/personas/queries";
-import { useTwatterBootstrap } from "@/features/twatter/queries";
-import classes from "@/features/twatter/TwatterFeed.module.css";
+import { TwatterSubpageHeader } from "@/features/shared/twatter/TwatterSubpageHeader";
+import { TwatterRefreshTimeline } from "@/features/shared/twatter/TwatterRefreshTimeline";
+import { TwatterSettingsPanel } from "@/features/shared/twatter/TwatterSettingsPanel";
+import { PersonaPicker } from "@/features/shared/twatter/ComposePost";
+import { useTwatterPersona } from "@/features/shared/twatter/TwatterPersonaContext";
+import { useLlmConnections } from "@/features/api-queries/connections/queries";
+import { useCharacters } from "@/features/api-queries/characters/queries";
+import { usePersonas } from "@/features/api-queries/personas/queries";
+import { useTwatterBootstrap } from "@/features/api-queries/twatter/queries";
+import classes from "@/features/shared/twatter/TwatterFeed.module.css";
 
 export const Route = createFileRoute("/_twatter/twatter/settings")({
   component: RouteComponent,

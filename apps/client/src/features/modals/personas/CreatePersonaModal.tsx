@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { defaultPersona } from "@ai-hub/shared";
 import { Button, Modal, TextInput, notifications, RuntimeText } from "@/components/ui";
-import { useCreatePersona } from "./queries";
+import { useCreatePersona } from "@/features/api-queries/personas/queries";
 import classes from "./CreatePersonaModal.module.css";
 
 type CreatePersonaModalProps = {

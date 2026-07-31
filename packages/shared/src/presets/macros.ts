@@ -123,11 +123,6 @@ export const PRESET_RUNTIME_VARIABLES: readonly PresetMacroEntry[] = [
       "Generator task mode: create, import, regenerate, rebuild (character generator).",
   },
   {
-    syntax: "{{source_tags}}",
-    description:
-      "Tags from an imported source card (character import). Used by the Genre → Imported card setup option.",
-  },
-  {
     syntax: "{{regenerate_scope}}",
     description: "concept or all when generation_mode is regenerate.",
   },

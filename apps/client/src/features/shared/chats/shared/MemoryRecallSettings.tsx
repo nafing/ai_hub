@@ -14,10 +14,10 @@ import {
   importChatMemories,
   rebuildChatMemories,
   updateChatMemoryChunk,
-} from "./api";
+} from "@/features/api-queries/chats/api";
 import type { PatchChatSettings } from "./chatSettingsUi";
 import { SettingsSection } from "./chatSettingsUi";
-import { chatKeys } from "./queries";
+import { chatKeys } from "@/features/api-queries/chats/queries";
 import classes from "./MemoryRecallSettings.module.css";
 
 type MemoryRecallSettingsProps = {

@@ -8,7 +8,7 @@ import {
   type GeneratorCategory,
 } from "@ai-hub/shared";
 import { Button, Modal, Select, TextInput, notifications } from "@/components/ui";
-import { useCreateGeneratorPreset } from "./queries";
+import { useCreateGeneratorPreset } from "@/features/api-queries/generator-presets/queries";
 import classes from "./CreateGeneratorPresetModal.module.css";
 
 type CreateGeneratorPresetModalProps = {

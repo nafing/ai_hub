@@ -402,6 +402,7 @@ export async function openRouterGenerateImage(
   ) {
     console.warn(
       `[openrouter] images 400 for ${input.model}; retrying with prompt-only body`,
+      raw.error?.message || raw.httpErrorText || "",
     );
     raw = await postOpenRouterImage(
       apiKey,
@@ -413,8 +414,13 @@ export async function openRouterGenerateImage(
     );
   }
 
-  if (raw.error?.message) {
-    throw new BadRequestException(`OpenRouter images error: ${raw.error.message}`);
+  if (raw.error?.message || raw.httpStatus) {
+    const detail =
+      raw.error?.message ||
+      raw.httpErrorText ||
+      `HTTP ${raw.httpStatus ?? "error"}`;
+    console.warn(`[openrouter] images failed for ${input.model}: ${detail}`);
+    throw new BadRequestException(`OpenRouter images error: ${detail}`);
   }
 
   const item = raw.data?.[0];

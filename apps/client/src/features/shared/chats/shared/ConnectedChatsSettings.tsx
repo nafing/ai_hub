@@ -6,7 +6,7 @@ import {
   SettingsSection,
   type PatchChatSettings,
 } from "./chatSettingsUi";
-import { useChats, useConnectChat, useDisconnectChat } from "./queries";
+import { useChats, useConnectChat, useDisconnectChat } from "@/features/api-queries/chats/queries";
 import classes from "./ConnectedChatsSettings.module.css";
 
 type ConnectedChatsSettingsProps = {

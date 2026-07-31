@@ -1,13 +1,13 @@
 import { IconRefresh } from "@tabler/icons-react";
 import { Button, Switch } from "@/components/ui";
-import { solidHexForPicker } from "@/features/characters/characterColors";
+import { solidHexForPicker } from "@/features/shared/characters/characterColors";
 import {
   DEFAULT_PRESET,
   THEME_PRESETS,
   type TextFormatColorKey,
   type ThemePresetId,
-} from "@/features/theme/presets";
-import { useThemeStore } from "@/features/theme/themeStore";
+} from "@/features/shared/theme/presets";
+import { useThemeStore } from "@/features/shared/theme/themeStore";
 import { useChatFormatStore } from "./chatFormatStore";
 import { formatChatText } from "./formatChatText";
 import { useChatTextFormat } from "./useChatTextFormat";

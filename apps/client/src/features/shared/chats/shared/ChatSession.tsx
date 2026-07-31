@@ -30,20 +30,19 @@ import {
   type SlashCommandAction,
 } from "@ai-hub/shared";
 import { ActionIcon, Button, Menu, Modal, Textarea, notifications } from "@/components/ui";
-import { useApplyRegex } from "@/features/regexes/use-apply-regex";
-import { characterAvatarSrc } from "@/features/characters/avatar-url";
-import { useCharacters } from "@/features/characters/queries";
-import { personaAvatarSrc } from "@/features/personas/avatar-url";
-import { usePersonas } from "@/features/personas/queries";
+import { useApplyRegex } from "@/features/shared/regexes/use-apply-regex";
+import { avatarSrc } from "@/lib/avatar-url";
+import { useCharacters } from "@/features/api-queries/characters/queries";
+import { usePersonas } from "@/features/api-queries/personas/queries";
 import { api } from "@/lib/api";
-import { addChatMessage, uploadChatAttachment } from "./api";
+import { addChatMessage, uploadChatAttachment } from "@/features/api-queries/chats/api";
 import {
   useChatGeneration,
   useChatGenerationStore,
 } from "./chatGenerationStore";
 import { ChatAgentPanel } from "./ChatAgentPanel";
 import { ChatMessageBubble } from "./ChatMessageBubble";
-import { PeekPromptModal } from "./PeekPromptModal";
+import { PeekPromptModal } from "@/features/modals/chats/PeekPromptModal";
 import { useAutonomousMessaging } from "../conversation/useAutonomousMessaging";
 import {
   chatKeys,
@@ -51,7 +50,7 @@ import {
   useGenerateChatImage,
   useGetOrCreateCharacterDm,
   useUpdateChatMessage,
-} from "./queries";
+} from "@/features/api-queries/chats/queries";
 import classes from "./ChatSession.module.css";
 
 const CHAT_INSERT_MACROS: Array<{ syntax: string; label: string }> = [
@@ -121,7 +120,7 @@ export function ChatSession({
   const characterAvatarById = useMemo(() => {
     const map = new Map<string, string | null>();
     for (const character of charactersQuery.data ?? []) {
-      map.set(character.id, characterAvatarSrc(character.avatar, apiBase));
+      map.set(character.id, avatarSrc(character.avatar, apiBase));
     }
     return map;
   }, [charactersQuery.data, apiBase]);
@@ -152,7 +151,7 @@ export function ChatSession({
       (personaId ? list.find((p) => p.id === personaId) : null) ??
       list.find((p) => p.is_default) ??
       null;
-    return personaAvatarSrc(persona?.avatar, apiBase);
+    return avatarSrc(persona?.avatar, apiBase);
   }, [chat.settings.persona_id, personasQuery.data, apiBase]);
 
   const personaName = useMemo(() => {
@@ -933,7 +932,7 @@ export function ChatSession({
   const deleteSwipeCount = deleteTarget?.swipes.length ?? 0;
   const deleteHasMultipleSwipes = deleteSwipeCount > 1;
 
-  const backgroundSrc = characterAvatarSrc(
+  const backgroundSrc = avatarSrc(
     chat.settings.background_image_url,
     apiBase,
   );

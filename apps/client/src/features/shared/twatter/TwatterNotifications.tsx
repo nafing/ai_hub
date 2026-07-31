@@ -1,11 +1,10 @@
 import type { TwatterAccount, TwatterBootstrap } from "@ai-hub/shared";
 import { useNavigate } from "@tanstack/react-router";
-import { characterAvatarSrc } from "@/features/characters/avatar-url";
-import { personaAvatarSrc } from "@/features/personas/avatar-url";
+import { avatarSrc } from "@/lib/avatar-url";
 import { api } from "@/lib/api";
 import {
   useTwatterNotifications,
-} from "./queries";
+} from "@/features/api-queries/twatter/queries";
 import classes from "./TwatterFeed.module.css";
 
 type TwatterNotificationsProps = {
@@ -19,10 +18,10 @@ function actorAvatar(
 ): string | null {
   if (!account) return null;
   if (account.kind === "persona") {
-    return personaAvatarSrc(account.avatar, apiBase);
+    return avatarSrc(account.avatar, apiBase);
   }
   if (account.kind === "character") {
-    return characterAvatarSrc(account.avatar, apiBase);
+    return avatarSrc(account.avatar, apiBase);
   }
   return null;
 }

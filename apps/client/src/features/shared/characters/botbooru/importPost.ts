@@ -7,14 +7,14 @@ import {
   type GeneratorPresetPromptFields,
   type Preset,
 } from "@ai-hub/shared";
-import { downloadBotbooruPng } from "./api";
+import { downloadBotbooruPng } from "@/features/api-queries/characters/botbooru/api";
 import { withBotbooruPostId } from "./imported";
 import { botbooruDisplayName } from "./types";
-import type { CharacterImportPreview } from "@/features/characters/characterImportSessionStore";
+import type { CharacterImportPreview } from "@/features/shared/characters/characterImportSessionStore";
 import {
   createCharacter,
   uploadCharacterAvatar,
-} from "@/features/characters/api";
+} from "@/features/api-queries/characters/api";
 
 export type BotbooruImportAiOptions = {
   connectionId: string;

@@ -12,13 +12,13 @@ import { Button,
   notifications,
   RuntimeText,
 } from "@/components/ui";
-import { useCharacters } from "@/features/characters/queries";
-import { useCharacterFolders } from "@/features/characters/foldersQueries";
-import { CharacterFolderQuickPick } from "@/features/characters/CharacterFolderQuickPick";
-import { useConnectionSelectOptions } from "@/features/connections/queries";
-import { usePersonas } from "@/features/personas/queries";
-import { useDefaultPreset, usePresets } from "@/features/presets/queries";
-import { useCreateChat } from "./queries";
+import { useCharacters } from "@/features/api-queries/characters/queries";
+import { useCharacterFolders } from "@/features/api-queries/characters/foldersQueries";
+import { CharacterFolderQuickPick } from "@/features/shared/characters/CharacterFolderQuickPick";
+import { useConnectionSelectOptions } from "@/features/api-queries/connections/queries";
+import { usePersonas } from "@/features/api-queries/personas/queries";
+import { useDefaultPreset, usePresets } from "@/features/api-queries/presets/queries";
+import { useCreateChat } from "@/features/api-queries/chats/queries";
 import classes from "./CreateChatModal.module.css";
 
 type CreateChatModalProps = {

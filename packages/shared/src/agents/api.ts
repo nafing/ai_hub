@@ -15,6 +15,8 @@ export type AgentListItem = Pick<
   | "category"
   | "enabled_by_default"
   | "default_tools"
+  | "default_settings"
+  | "prompt_templates"
   | "execution"
   | "is_built_in"
 >;
