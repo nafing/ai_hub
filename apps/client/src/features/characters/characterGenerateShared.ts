@@ -3,12 +3,14 @@ import type {
   PresetVariableValues,
   Variable,
 } from "@ai-hub/shared";
+import { substituteVariables } from "@ai-hub/shared";
 
 export type ExtractedCharacterCard = {
   name?: string;
   description?: string;
   appearance?: string;
   personality?: string;
+  relationships?: string[];
   scenario?: string;
   first_mes?: string;
   mes_example?: string;
@@ -41,6 +43,48 @@ export function resolvePresetVariables(
     out[name] = variable.multi_select ? resolved : resolved[0]!;
   }
   return out;
+}
+
+/** Tags from an imported source card for {{source_tags}}. */
+export function sourceTagsFromCard(
+  card: Pick<CharacterCardData, "tags">,
+): string {
+  return (card.tags ?? []).map((tag) => tag.trim()).filter(Boolean).join(", ");
+}
+
+/**
+ * Value of the Genre → "Imported card" setup option, if present on the preset.
+ */
+export function importedCardGenreValue(variables: Variable[]): string | null {
+  const genre = variables.find(
+    (variable) => variable.variable_name.trim() === "genre",
+  );
+  const option = genre?.options.find(
+    (entry) =>
+      entry.id.endsWith(":imported") ||
+      entry.id.includes(":genre:imported") ||
+      entry.label.trim().toLowerCase() === "imported card",
+  );
+  return option?.value?.trim() || null;
+}
+
+/**
+ * Setup Variables plus import-source locks: {{source_tags}} and Genre → Imported card.
+ */
+export function withImportedCardVariables(
+  variables: Variable[],
+  card: Pick<CharacterCardData, "tags">,
+): PresetVariableValues {
+  const base = resolvePresetVariables(variables);
+  const source_tags = sourceTagsFromCard(card);
+  const values = { ...base, source_tags };
+  const importedGenre = importedCardGenreValue(variables);
+  return {
+    ...values,
+    ...(importedGenre
+      ? { genre: substituteVariables(importedGenre, values) }
+      : {}),
+  };
 }
 
 export function stripCodeFence(text: string): string {
@@ -93,6 +137,7 @@ export function normalizeFullCard(
     description: asString(record.description),
     appearance: asString(record.appearance),
     personality: asString(record.personality),
+    relationships: asStringArray(record.relationships),
     scenario: asString(record.scenario),
     first_mes: asString(record.first_mes),
     mes_example: asString(record.mes_example),
@@ -148,6 +193,7 @@ export function mergeExtractedIntoCardData(
     ...(ai.description != null ? { description: ai.description } : {}),
     ...(ai.appearance != null ? { appearance: ai.appearance } : {}),
     ...(ai.personality != null ? { personality: ai.personality } : {}),
+    ...(ai.relationships != null ? { relationships: ai.relationships } : {}),
     ...(ai.scenario != null ? { scenario: ai.scenario } : {}),
     ...(ai.first_mes != null ? { first_mes: ai.first_mes } : {}),
     ...(ai.mes_example != null ? { mes_example: ai.mes_example } : {}),
@@ -171,6 +217,7 @@ export function extractedToCardData(
     description: ai.description ?? "",
     appearance: ai.appearance ?? "",
     personality: ai.personality ?? "",
+    relationships: ai.relationships ?? [],
     scenario: ai.scenario ?? "",
     first_mes: ai.first_mes ?? "",
     mes_example: ai.mes_example ?? "",

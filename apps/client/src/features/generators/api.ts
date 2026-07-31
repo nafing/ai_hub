@@ -14,6 +14,8 @@ export type RunGeneratorInput = {
   connectionId?: string;
   /** When omitted, the server uses the default preset for the category. */
   presetId?: string;
+  /** Injects Generator Preset prompt as `generator_prompt` marker. */
+  generatorPresetId?: string;
   variables?: PresetVariableValues;
   markers?: PresetMarkerContent;
   userMessage?: string;

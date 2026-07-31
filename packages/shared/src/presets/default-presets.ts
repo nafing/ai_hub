@@ -5,7 +5,6 @@ import {
   NSFW_CONTENT_RULES,
   NSFW_WRITING_RULES,
   ROLEPLAY_FORMATTING_RULES,
-  ROLEPLAY_FORMATTING_REMINDER,
 } from "./formatting-rules";
 
 export type DefaultPresetDefinition = CreatePresetInput & {
@@ -392,7 +391,7 @@ Anything goes in this chat; both {{userName || the user}} and you are confirmed 
     key: "character_generator",
     name: "Default Character Generator",
     description:
-      "Creates SillyTavern-compatible character card(s). Modes via generation_mode: create, import, regenerate, rebuild, or field generate (default).",
+      "Structural template for character cards: markers + output request. Mode rules live in the linked Generator Preset (create / import / regenerate / rebuild).",
     wrap_format: "xml",
     category: "character_generator" satisfies PresetCategory,
     is_default: true,
@@ -434,6 +433,12 @@ Anything goes in this chat; both {{userName || the user}} and you are confirmed 
             value: "Romance-forward character chemistry and emotional stakes.",
           },
           {
+            part: "imported",
+            label: "Imported card",
+            value:
+              "Match the imported source card's genre, setting, era, and world. Source tags: {{source_tags || (none — infer from source card fields)}}. Preserve history, background, lore, and relationships unless the Generator Brief explicitly asks to change them. Do not relocate the character into a different genre.",
+          },
+          {
             part: "any",
             label: "Any / follow brief",
             value: "Infer genre from the user's brief; do not force a setting.",
@@ -462,114 +467,14 @@ Anything goes in this chat; both {{userName || the user}} and you are confirmed 
       }),
     ],
     sections: [
-      section("character_generator", "system", {
-        kind: "prompt_block",
-        name: "Generator System",
+      section("character_generator", "generator_prompt", {
+        kind: "generator_prompt",
+        name: "Generator Prompt",
         role: "system",
         group: "instructions",
         position: "ordered",
-        content: `You are a character-card designer for interactive roleplay (SillyTavern / chara_card_v2 style).
-
-{{genre}}
-{{detail_level}}
-{{language}}
-
-A complete character card is a JSON object with exactly these fields:
-{
-  "name": "",
-  "description": "",
-  "appearance": "",
-  "personality": "",
-  "scenario": "",
-  "first_mes": "",
-  "mes_example": "",
-  "creator_notes": "",
-  "system_prompt": "",
-  "post_history_instructions": "",
-  "tags": [],
-  "alternate_greetings": []
-}
-
-Field guidance:
-- name: display name (may include titles).
-- description: background, role, presence, and durable facts the model should know (not a full visual inventory).
-- appearance: physical look and visual presentation — face, body, hair, clothing, distinctive details (useful for image prompts).
-- personality: traits, speech patterns, values, flaws, boundaries.
-- scenario: default scene setup with {{user}} and {{char}}.
-- first_mes: opening beat in-character (narration + quoted speech); may use {{user}} / {{char}}.
-- mes_example: 1–3 short exchanges; after {{user}}: / {{char}}: prefixes, use quoted dialogue and *italic* thoughts in the line body.
-- creator_notes: OOC tips for the human player (not injected as lore).
-- system_prompt: optional extra in-character directives; empty string if none.
-- post_history_instructions: optional jailbreak/UJB-style reminders; empty if none.
-- tags: short genre/trope tags.
-- alternate_greetings: 0–3 alternate first messages.
-
-${ROLEPLAY_FORMATTING_RULES}
-
-Use this markup in first_mes, mes_example, and every alternate_greetings entry.
-
-Multi-character detection (when generating full cards / all card fields):
-- Read the Generator Brief AND any Reference Characters section.
-- If either clearly describes TWO OR MORE distinct characters (duo, siblings, rivals, a named party, multiple proper names with separate identities, "X and Y", etc.), output one complete card per character.
-- Do NOT collapse multiple people into a single card.
-- If the source is about ONE character (or a single focus with unnamed extras), output exactly one card.
-- Shared world: keep scenarios and relationships consistent across related cards; each first_mes should work as that character's opening.
-
-Rules:
-- Output ONLY valid JSON. No markdown fences, no commentary.
-- Prefer original, specific details over generic tropes unless the brief demands them.
-- Keep each card consistent: personality must match first_mes and mes_example voice.
-- Use the Generator Brief as the primary concept; Persona is the player; Reference Characters are existing cards the new one(s) should fit with.
-- Generate exactly what {{target_field}} asks for.
-- Keep consistency with existing card fields that are not empty when editing a single character.
-
-{{if generation_mode == create}}
-Create mode:
-- There is no imported source card — invent the cast from the Generator Brief.
-- Reference Characters (if any) are existing library cards the new one(s) should fit with — do not copy them wholesale.
-{{if name_seed}}
-- Optional name seed for the primary / first character: "{{name_seed}}" (you may refine or rename if the brief implies otherwise).
-{{/if}}
-{{/if}}
-
-{{if generation_mode == import}}
-Import mode:
-- The Reference Characters section lists the imported source card first, then any selected library characters as context.
-- Output ONLY new card(s) for the imported source (characters being imported).
-- Do NOT output copies or “updated” cards of the selected library references — they are context only and must not become extra new characters.
-- Split or refine using the imported source (and brief). If TWO OR MORE distinct characters are present in the import, return one card each; if only one, return a one-item characters array.
-{{/if}}
-
-{{if generation_mode == regenerate}}
-Regenerate mode (scope={{regenerate_scope}}):
-- Targets are listed in Reference Characters and in the cast roster.
-- Preserve distinct identities and relationships; keep the same cast size and order.
-{{if regenerate_scope == concept}}
-- Regenerate name, description, appearance, personality, and scenario for each.
-- Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.
-{{else}}
-- Rebuild each character card from scratch using the Generator Brief and reference cards.
-{{/if}}
-{{/if}}
-
-{{if generation_mode == rebuild}}
-Rebuild mode (scope={{rebuild_scope}}):
-- Use Reference Characters / current card fields as the base to revise.
-{{if rebuild_notes}}
-- Extra direction: {{rebuild_notes}}
-{{/if}}
-{{/if}}
-
-Runtime variables:
-- Character name ({{char}}): {{char || (unnamed)}}
-- Target: {{target_field}}
-- Existing description: {{existing_description || (empty)}}
-- Existing appearance: {{existing_appearance || (empty)}}
-- Existing personality: {{existing_personality || (empty)}}
-- Existing scenario: {{existing_scenario || (empty)}}
-- Existing first_mes: {{existing_first_mes || (empty)}}
-- Existing mes_example: {{existing_mes_example || (empty)}}
-- Existing alternate_greetings: {{existing_alternate_greetings || (empty)}}`,
+        content:
+          "(No Generator Prompt was injected — select a Generator Preset.)",
       }),
       section("character_generator", "generator_brief", {
         kind: "generator_brief",
@@ -602,121 +507,9 @@ Runtime variables:
         role: "user",
         group: "instructions",
         position: "ordered",
-        content: `Generate "{{target_field}}".
+        content: `Generate "{{target_field}}" (mode={{generation_mode || field}}).
 
-{{if generation_mode == import}}
-IMPORT WITH AI.
-
-The Reference Characters section lists the imported source card first, then any selected library characters as context only.
-
-Return only NEW card(s) for the imported source in {"characters":[...]}.
-Do NOT return separate cards that duplicate or “update” the library reference characters.
-
-If the imported source or Generator Brief describes TWO OR MORE distinct characters (separate names/identities), return multiple objects — one card each.
-Do not collapse a duo/group into a single card.
-If only one distinct character is present, return a one-item characters array.
-
-Working name hint (may be one of several): {{char || (unnamed — may be one of several)}}
-Each array item must be a complete card:
-{ "name":"...", "description":"...", "appearance":"...", "personality":"...", "scenario":"...", "first_mes":"...", "mes_example":"...", "creator_notes":"...", "system_prompt":"", "post_history_instructions":"", "tags":[], "alternate_greetings":[] }
-{{else}}
-{{if generation_mode == create}}
-CREATE WITH AI.
-
-Build one or more new character cards from the Generator Brief (and optional Name seed).
-There is no imported source card — invent the cast from the brief.
-Reference Characters (if any) are existing library cards the new one(s) should fit with — do not copy them wholesale.
-
-If the brief describes TWO OR MORE distinct characters (separate names/identities), you MUST return multiple objects in {"characters":[...]} — one card each.
-Do not collapse a duo/group into a single card.
-If only one distinct character is requested, return a one-item characters array.
-
-{{if name_seed}}
-Optional name seed for the primary / first character: "{{name_seed}}" (you may refine or rename if the brief implies otherwise).
-{{/if}}
-
-Working name hint (may be one of several): {{char || (unnamed — invent from brief; may be one of several)}}
-Each array item must be a complete card:
-{ "name":"...", "description":"...", "appearance":"...", "personality":"...", "scenario":"...", "first_mes":"...", "mes_example":"...", "creator_notes":"...", "system_prompt":"", "post_history_instructions":"", "tags":[], "alternate_greetings":[] }
-{{else}}
-{{if generation_mode == regenerate}}
-{{if regenerate_scope == concept}}
-REGENERATE CONCEPT for ALL {{cast_size}} selected characters in one pass.
-Regenerate name, description, appearance, personality, and scenario for each.
-Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.
-{{else}}
-REGENERATE FULL CARD for ALL {{cast_size}} selected characters in one pass.
-Rebuild each character card from scratch using the Generator Brief and reference cards.
-{{/if}}
-Preserve distinct identities and relationships; keep the same cast size and order.
-Current roster (same order expected in output):
-{{cast_roster}}
-Return exactly {{cast_size}} objects in {"characters":[...]} — one per character, same order.
-{{else}}
-{{if generation_mode == rebuild}}
-{{if rebuild_scope == concept_batch}}
-REBUILD CONCEPT for ALL {{cast_size}} characters in one pass.
-Regenerate name, description, appearance, personality, and scenario for each.
-Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concepts.
-Preserve distinct identities and relationships between characters; keep the same cast size and order.
-Current roster (same order expected in output):
-{{cast_roster}}
-Return exactly {{cast_size}} objects in {"characters":[...]} — one per character, same order.
-{{else}}
-{{if rebuild_scope == concept}}
-REBUILD CONCEPT only for this character: regenerate name, description, appearance, personality, and scenario.
-Keep first_mes, mes_example, alternate_greetings, tags, and advanced fields unless they contradict the new concept.
-Return a one-item {"characters":[...]} array.
-{{else}}
-{{if rebuild_scope == all}}
-REBUILD this entire character card from scratch using the reference card(s) and brief.
-Return a one-item {"characters":[...]} array.
-{{else}}
-Rebuild only the "{{target_field}}" field for this character.
-{{/if}}
-{{/if}}
-{{/if}}
-{{if rebuild_notes}}
-Extra direction: {{rebuild_notes}}
-{{/if}}
-{{else}}
-{{if target_field == all card fields}}
-Inspect the Generator Brief and Reference Characters for how many distinct characters to create.
-
-If ONE character: return
-{"characters":[{ "name":"...", "description":"...", "appearance":"...", "personality":"...", "scenario":"...", "first_mes":"...", "mes_example":"...", "creator_notes":"...", "system_prompt":"", "post_history_instructions":"", "tags":[], "alternate_greetings":[] }]}
-
-If TWO OR MORE distinct characters (named separately in the brief or reference card): return one full card object per character — never merge them into one:
-{"characters":[ { /* character 1 */ }, { /* character 2 */ } ]}
-
-Working name hint (may be one of several): {{char || (unnamed)}}
-Each array item must be a complete card with all keys listed above.
-{{else}}
-{{if target_field == alternate_greetings}}
-Return JSON for the single character "{{char || (unnamed)}}" only:
-{"alternate_greetings":["greeting 1","greeting 2"]}
-${ROLEPLAY_FORMATTING_REMINDER}
-{{else}}
-{{if target_field == first_mes}}
-Return JSON for the single character "{{char || (unnamed)}}" only (one key):
-{ "{{target_field}}": "..." }
-${ROLEPLAY_FORMATTING_REMINDER}
-{{else}}
-{{if target_field == mes_example}}
-Return JSON for the single character "{{char || (unnamed)}}" only (one key):
-{ "{{target_field}}": "..." }
-${ROLEPLAY_FORMATTING_REMINDER}
-{{else}}
-Return JSON for the single character "{{char || (unnamed)}}" only (one key):
-{ "{{target_field}}": "..." }
-{{/if}}
-{{/if}}
-{{/if}}
-{{/if}}
-{{/if}}
-{{/if}}
-{{/if}}
-{{/if}}`,
+Follow the Generator Prompt output rules for this mode. Output only valid JSON.`,
       }),
     ],
   },
@@ -725,7 +518,7 @@ Return JSON for the single character "{{char || (unnamed)}}" only (one key):
     key: "persona_generator",
     name: "Default Persona Generator",
     description:
-      "Creates a player persona ({{user}}) profile field-by-field from a brief and optional reference characters.",
+      "Structural template for player personas: markers + output request. Writing rules live in the linked Generator Preset.",
     wrap_format: "xml",
     category: "persona_generator" satisfies PresetCategory,
     is_default: true,
@@ -765,38 +558,14 @@ Return JSON for the single character "{{char || (unnamed)}}" only (one key):
       }),
     ],
     sections: [
-      section("persona_generator", "system", {
-        kind: "prompt_block",
-        name: "Generator System",
+      section("persona_generator", "generator_prompt", {
+        kind: "generator_prompt",
+        name: "Generator Prompt",
         role: "system",
         group: "instructions",
         position: "ordered",
-        content: `You design player personas for interactive roleplay. The persona replaces {{user}} in chats — it is the human player character, not an NPC the AI puppets.
-
-{{persona_focus}}
-{{language}}
-
-Runtime variables (filled by the hub when generating):
-- Persona name: {{user || (unnamed)}}
-- Target field to write: {{target_field}}
-- Existing description: {{existing_description || (empty)}}
-- Existing appearance: {{existing_appearance || (empty)}}
-- Existing personality: {{existing_personality || (empty)}}
-
-Use the Generator Brief and Reference Characters marker sections below as primary context.
-
-Field meanings:
-- description: background, role, and durable facts other characters would notice (not a full visual inventory).
-- appearance: physical look and visual presentation — face, body, hair, clothing, distinctive details (useful for image prompts).
-- personality: traits, speech habits, goals, soft limits the player wants respected.
-
-Rules:
-- Generate exactly what {{target_field}} asks for (one field, or description+appearance+personality when requested together).
-- Keep consistency with any existing field that is not empty (overwrite only what was requested).
-- Write in second or third person about the player character, never as an AI assistant.
-- Do not invent NSFW content the brief did not imply.
-- Keep the persona playable: clear hooks, not a novel.
-- Output ONLY valid JSON. No markdown fences, no commentary.`,
+        content:
+          "(No Generator Prompt was injected — select a Generator Preset.)",
       }),
       section("persona_generator", "generator_brief", {
         kind: "generator_brief",
@@ -823,13 +592,7 @@ Rules:
         position: "ordered",
         content: `Generate "{{target_field}}" for persona "{{user || (unnamed)}}".
 
-{{if target_field == description, appearance, and personality}}
-Return JSON with these keys:
-{"description":"...","appearance":"...","personality":"..."}
-{{else}}
-Return JSON with only that key:
-{ "{{target_field}}": "..." }
-{{/if}}`,
+Follow the Generator Prompt output rules. Output only valid JSON.`,
       }),
     ],
   },
@@ -838,7 +601,7 @@ Return JSON with only that key:
     key: "lorebook_generator",
     name: "Default Lorebook Generator",
     description:
-      "Generates world-info / lorebook entries (keys + content) from a setting brief.",
+      "Structural template for lorebook JSON: markers + output request. Entry rules live in the linked Generator Preset.",
     wrap_format: "xml",
     category: "lorebook_generator" satisfies PresetCategory,
     is_default: true,
@@ -894,48 +657,14 @@ Return JSON with only that key:
       }),
     ],
     sections: [
-      section("lorebook_generator", "system", {
-        kind: "prompt_block",
-        name: "Generator System",
+      section("lorebook_generator", "generator_prompt", {
+        kind: "generator_prompt",
+        name: "Generator Prompt",
         role: "system",
         group: "instructions",
         position: "ordered",
-        content: `You are a lorebook / world-info author for interactive roleplay (character_book entry shape).
-
-{{entry_scope}}
-{{entry_depth}}
-{{language}}
-
-When the user describes a setting, faction, character roster, or lore dump, output a single JSON object:
-{
-  "name": "Lorebook title",
-  "description": "Short summary of what this book covers",
-  "entries": [
-    {
-      "keys": ["PrimaryKeyword", "Alias"],
-      "secondary_keys": [],
-      "content": "Facts injected when keys match.",
-      "comment": "Optional editor note",
-      "enabled": true,
-      "constant": false,
-      "selective": false,
-      "insertion_order": 100,
-      "position": "before_char",
-      "case_sensitive": false
-    }
-  ]
-}
-
-Rules:
-- Output ONLY valid JSON. No markdown fences, no commentary.
-- keys: 1–5 distinctive trigger phrases (names, places, items). Prefer specific proper nouns over generic words.
-- content: third-person encyclopedic facts. No player instructions. No {{user}}/{{char}} unless essential.
-- Use constant:true only for always-on world rules that must always inject.
-- Use selective:true with secondary_keys when an entry should fire only if a secondary cue also appears.
-- insertion_order: lower numbers insert earlier; keep related entries clustered (e.g. 100, 110, 120).
-- position: "before_char" for background lore, "after_char" for scene-local reminders.
-- Do not invent contradictory canon; if the brief is vague, invent coherent placeholders and stay consistent across entries.
-- Prefer the Generator Brief section as the setting dump; use Related Character when the book should orbit one card.`,
+        content:
+          "(No Generator Prompt was injected — select a Generator Preset.)",
       }),
       section("lorebook_generator", "generator_brief", {
         kind: "generator_brief",
@@ -959,7 +688,9 @@ Rules:
         role: "user",
         group: "instructions",
         position: "ordered",
-        content: `Create a lorebook JSON object from the Generator Brief (and Related Character if present). Output only the JSON object.`,
+        content: `Create the lorebook from the Generator Brief (and Related Character if present).
+
+Follow the Generator Prompt output rules. Output only valid JSON.`,
       }),
     ],
   },
@@ -968,7 +699,7 @@ Rules:
     key: "twatter_refresh",
     name: "Default Twatter Refresh",
     description:
-      "Generates one batch of fictional Twatter timeline activity (posts, replies, likes, reposts, follows) for invited characters.",
+      "Structural template for Twatter timeline batches: markers + output request. Site rules live in the linked Generator Preset.",
     wrap_format: "xml",
     category: "twatter_refresh" satisfies PresetCategory,
     is_default: true,
@@ -976,31 +707,14 @@ Rules:
     groups: ["instructions"],
     variables: [languageVariable("twatter_refresh")],
     sections: [
-      section("twatter_refresh", "system", {
-        kind: "prompt_block",
-        name: "Twatter System",
+      section("twatter_refresh", "generator_prompt", {
+        kind: "generator_prompt",
+        name: "Generator Prompt",
         role: "system",
         group: "instructions",
         position: "ordered",
-        content: `You write a fake social media timeline for AI Hub's in-app parody site called Twatter.
-
-{{language}}
-
-Rules:
-- Structured actions are limited to posts, polls, follows, likes, reposts, replies, and poll votes.
-- Generated interactions may target existing posts included in the Timeline Brief or posts you create in this response.
-- When a character responds to an existing post or to a post created earlier in this same JSON batch, use an interaction with type "reply" and non-empty content. Do NOT create a new top-level post for a reply.
-- To reply to a post you create in this batch, set targetTempId to that post's tempId and targetPostId to null.
-- To reply to an existing timeline post, set targetPostId to its exact postId from the Timeline Brief and targetTempId to null.
-- To respond directly to an existing comment, create a reply interaction for its post and set parentInteractionId to that comment's exact interactionId from the Timeline Brief.
-- Never generate posts, replies, likes, reposts, poll votes, or follows as a persona account. Personas may only be mentioned or targeted by other accounts.
-- Every persona account is a separate user identity.
-- Never reuse the same message text for more than one post or reply by the same account.
-- For each interaction, set either targetTempId or targetPostId and set the unused target field to null.
-- pollOptionIndex must be a zero-based integer for votes and null for every other interaction.
-- An exact @handle in post or reply text tags that active account.
-- Characters should post like real people online — funny, messy, petty, affectionate, or dramatic as fits their bio.
-- Return JSON only with keys: posts, interactions, follows, digests. No markdown fences or commentary.`,
+        content:
+          "(No Generator Prompt was injected — select a Generator Preset.)",
       }),
       section("twatter_refresh", "generator_brief", {
         kind: "generator_brief",
@@ -1018,8 +732,7 @@ Rules:
         position: "ordered",
         content: `Generate one batch of Twatter timeline activity from the Timeline Brief above.
 
-Output only a JSON object:
-{"posts":[{"tempId":"p1","authorHandle":"@name","content":"..."}],"interactions":[{"actorHandle":"@name","targetTempId":"p1","targetPostId":null,"type":"reply","content":"...","pollOptionIndex":null},{"actorHandle":"@name","targetPostId":"existing-post-id","targetTempId":null,"type":"like","pollOptionIndex":null}],"follows":[{"actorHandle":"@name","targetHandle":"@other"}],"digests":[{"accountEntityIds":["character-id"],"content":"short summary"}]}`,
+Follow the Generator Prompt output rules. Output only valid JSON.`,
       }),
     ],
   },
@@ -1081,7 +794,7 @@ Return only valid JSON:
     key: "image",
     name: "Default Image",
     description:
-      "Turns a brief (and optional character/persona context) into a detailed image-generation prompt.",
+      "Structural template for image prompts: markers + output request. Style rules live in the linked Generator Preset.",
     wrap_format: "xml",
     category: "image" satisfies PresetCategory,
     is_default: true,
@@ -1155,38 +868,14 @@ Return only valid JSON:
       }),
     ],
     sections: [
-      section("image", "system", {
-        kind: "prompt_block",
-        name: "Image Prompt System",
+      section("image", "generator_prompt", {
+        kind: "generator_prompt",
+        name: "Generator Prompt",
         role: "system",
         group: "instructions",
         position: "ordered",
-        content: `You write image-generation prompts for AI art models (OpenRouter / diffusion-style).
-
-{{image_style}}
-{{image_framing}}
-
-Primary visual subject sources (prefer these in order):
-1. Character Appearance: {{char_appearance || (not provided)}}
-2. Persona Appearance: {{user_appearance || (not provided)}}
-3. Image Brief (pose / scene). Character / Persona marker sections below only repeat Appearance — ignore any other card fields.
-
-Rules:
-- Produce ONE detailed English prompt suitable to send directly to an image model.
-- The Style line above is MANDATORY medium. If it asks for anime / illustration / painting / comic, the prompt MUST stay in that medium — never switch to photorealistic, DSLR, live-action, "real photo", or "authentic photography".
-- Words like selfie / phone photo in the brief mean pose and framing only, not medium — keep the Style medium.
-- When Character Appearance or Persona Appearance is provided, treat it as the ONLY ground truth for look (face, body, hair, clothing, distinctive details). Do not invent conflicting features.
-- Do NOT use description, personality, scenario, or other character-card lore. Appearance only.
-- Describe subject, appearance, pose, expression, clothing, setting, lighting, camera/composition, and mood.
-- Prefer concrete visual details over abstract personality talk.
-- Do not include meta instructions ("generate an image of…"), markdown, or commentary.
-- Do not mention artist names, logos, watermarks, or UI chrome.
-- Keep the prompt under ~120 words unless the brief demands more detail.
-- Respect NSFW only when the brief clearly asks for it; otherwise keep the image SFW.
-- Output ONLY valid JSON:
-{
-  "prompt": "single image prompt string"
-}`,
+        content:
+          "(No Generator Prompt was injected — select a Generator Preset.)",
       }),
       section("image", "generator_brief", {
         kind: "generator_brief",
@@ -1219,12 +908,9 @@ Rules:
         role: "user",
         group: "request",
         position: "ordered",
-        content: `Write the image prompt.
+        content: `Write the image prompt from the Image Brief and Appearance markers above.
 
-Ground the subject look ONLY in Character Appearance / Persona Appearance when present. Use the Image Brief for pose and scene. Obey Style/Framing exactly (medium from Style is non-negotiable). Do not pull description, personality, or scenario.
-
-Output only:
-{"prompt":"..."}`,
+Follow the Generator Prompt output rules. Output only valid JSON.`,
       }),
     ],
   },

@@ -6,7 +6,7 @@ import {
 } from "@tabler/icons-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { CharacterImportError, type CreateLorebookInput } from "@ai-hub/shared";
+import { CharacterImportError, type CreateLorebookInput, type Variable } from "@ai-hub/shared";
 import {
   ActionIcon,
   Button,
@@ -27,12 +27,11 @@ import {
 import { useCharacterImportSessionStore } from "@/features/characters/characterImportSessionStore";
 import { characterKeys, useCharacters } from "@/features/characters/queries";
 import { useConnectionSelectOptions } from "@/features/connections/queries";
+import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
 import { usePersonas } from "@/features/personas/queries";
-import {
-  useDefaultPreset,
-  usePreset,
-  usePresets,
-} from "@/features/presets/queries";
+import { SetupVariablesModal } from "@/features/presets/SetupVariablesModal";
+import { persistPresetVariableSelection } from "@/features/presets/persistPresetVariableSelection";
+import { presetKeys } from "@/features/presets/queries";
 import { ImportLorebookModal } from "@/features/lorebooks/ImportLorebookModal";
 import classes from "./index.module.css";
 
@@ -92,8 +91,7 @@ function RouteComponent() {
   const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
-  const presetsQuery = usePresets();
-  const defaultPresetQuery = useDefaultPreset("character_generator");
+  const generatorSelection = useGeneratorPresetSelection("character_generator");
   const startBackgroundImport = useCharacterImportSessionStore(
     (state) => state.startAiImport,
   );
@@ -101,13 +99,12 @@ function RouteComponent() {
   const [importWithAi, setImportWithAi] = useState(false);
   const [generatorBrief, setGeneratorBrief] = useState("");
   const [connectionId, setConnectionId] = useState<string | null>(null);
-  const [presetId, setPresetId] = useState<string | null>(null);
-  const [presetInitialized, setPresetInitialized] = useState(false);
   const [personaId, setPersonaId] = useState<string | null>(null);
   const [personaInitialized, setPersonaInitialized] = useState(false);
   const [referenceCharacterIds, setReferenceCharacterIds] = useState<string[]>(
     [],
   );
+  const [variablesOpen, setVariablesOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [pendingBook, setPendingBook] = useState<PendingBook | null>(null);
   const [thumbFailed, setThumbFailed] = useState(false);
@@ -116,55 +113,23 @@ function RouteComponent() {
   const defaultPersonaId =
     personasQuery.data?.find((persona) => persona.is_default)?.id ?? null;
   const resolvedConnectionId = connectionId ?? defaultConnectionId;
-  const presetDetailQuery = usePreset(presetId ?? undefined);
-
-  useEffect(() => {
-    if (presetInitialized) return;
-    if (defaultPresetQuery.data?.id) {
-      setPresetId(defaultPresetQuery.data.id);
-      setPresetInitialized(true);
-      return;
-    }
-    if (defaultPresetQuery.isError || defaultPresetQuery.isSuccess) {
-      const fallback = (presetsQuery.data ?? []).find(
-        (preset) => preset.category === "character_generator",
-      );
-      if (fallback) {
-        setPresetId(fallback.id);
-        setPresetInitialized(true);
-      } else if (presetsQuery.isSuccess || presetsQuery.isError) {
-        setPresetInitialized(true);
-      }
-    }
-  }, [
-    presetInitialized,
-    defaultPresetQuery.data,
-    defaultPresetQuery.isError,
-    defaultPresetQuery.isSuccess,
-    presetsQuery.data,
-    presetsQuery.isSuccess,
-    presetsQuery.isError,
-  ]);
+  const {
+    generatorPresetId,
+    setGeneratorPresetId,
+    generatorPreset,
+    generatorPresetOptions,
+    structuralPresetId,
+    structuralPreset: preset,
+    selectError: presetError,
+    isLoading: presetLoading,
+    isListLoading: generatorListLoading,
+  } = generatorSelection;
 
   useEffect(() => {
     if (personaInitialized || !personasQuery.data) return;
     if (defaultPersonaId) setPersonaId(defaultPersonaId);
     setPersonaInitialized(true);
   }, [personaInitialized, personasQuery.data, defaultPersonaId]);
-
-  const presetOptions = useMemo(() => {
-    const characterPresets = (presetsQuery.data ?? []).filter(
-      (preset) => preset.category === "character_generator",
-    );
-    const list =
-      characterPresets.length > 0
-        ? characterPresets
-        : (presetsQuery.data ?? []);
-    return list.map((preset) => ({
-      value: preset.id,
-      label: `${preset.name || "untitled"}${preset.is_default ? " (default)" : ""}${preset.category !== "character_generator" ? ` · ${preset.category}` : ""}`,
-    }));
-  }, [presetsQuery.data]);
 
   const characterOptions = useMemo(
     () =>
@@ -175,25 +140,47 @@ function RouteComponent() {
     [charactersQuery.data],
   );
 
+  const hasPresetVariables = Boolean(
+    preset?.variables.some((variable) => variable.variable_name.trim()),
+  );
+
+  async function handleApplyVariables(variables: Variable[]) {
+    if (!structuralPresetId) return;
+    try {
+      const saved = await persistPresetVariableSelection(
+        structuralPresetId,
+        variables,
+      );
+      queryClient.setQueryData(presetKeys.detail(saved.id), saved);
+      void queryClient.invalidateQueries({ queryKey: presetKeys.all });
+      setVariablesOpen(false);
+      notifications.show({
+        title: "Variables saved",
+        message: "Selected values are stored on this preset.",
+        color: "green",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "Save failed",
+        message: error instanceof Error ? error.message : "Unknown error",
+        color: "red",
+      });
+    }
+  }
+
   const aiReady =
     !importWithAi ||
     (Boolean(resolvedConnectionId) &&
-      Boolean(presetId) &&
-      Boolean(presetDetailQuery.data));
+      Boolean(generatorPresetId) &&
+      Boolean(generatorPreset) &&
+      Boolean(structuralPresetId) &&
+      Boolean(preset));
 
   const connectionError = connectionsQuery.isError
     ? "Failed to load connections"
     : !connectionsQuery.isLoading && !connectionsQuery.options.length
       ? "Create a connection first"
       : undefined;
-
-  const presetError = presetsQuery.isError
-    ? "Failed to load presets"
-    : presetDetailQuery.isError
-      ? "Failed to load preset details"
-      : !presetsQuery.isLoading && !presetOptions.length
-        ? "No presets available"
-        : undefined;
 
   const post = postQuery.data;
   const name = post ? botbooruDisplayName(post) : `Post #${cardId}`;
@@ -208,7 +195,7 @@ function RouteComponent() {
     if (importWithAi && !aiReady) {
       notifications.show({
         title: "AI import not ready",
-        message: "Select connection and Character Generator preset first.",
+        message: "Select connection and Character Generator Preset first.",
         color: "yellow",
       });
       return;
@@ -217,10 +204,17 @@ function RouteComponent() {
     setImporting(true);
     try {
       const ai =
-        importWithAi && resolvedConnectionId && presetDetailQuery.data
+        importWithAi &&
+        resolvedConnectionId &&
+        generatorPresetId &&
+        generatorPreset &&
+        structuralPresetId &&
+        preset
           ? {
               connectionId: resolvedConnectionId,
-              preset: presetDetailQuery.data,
+              preset,
+              generatorPresetId,
+              generatorPrompts: generatorPreset,
               personaId,
               referenceCharacterIds,
               generatorBrief: generatorBrief.trim(),
@@ -389,17 +383,24 @@ function RouteComponent() {
                       />
                     </Field>
                     <Field
-                      label="Preset"
-                      hint="Prefer Character Generator presets."
+                      label="Generator Preset"
+                      hint="Main prompt + linked structural Preset for Character Generator."
                       error={presetError}
                     >
                       <Select
-                        data={presetOptions}
-                        value={presetId ?? ""}
-                        onChange={(value) => setPresetId(value || null)}
+                        data={generatorPresetOptions}
+                        value={generatorPresetId ?? ""}
+                        onChange={(value) => setGeneratorPresetId(value || null)}
                         searchable
-                        disabled={importing || !presetOptions.length}
+                        disabled={
+                          importing || !generatorPresetOptions.length
+                        }
                         error={Boolean(presetError)}
+                        placeholder={
+                          generatorListLoading
+                            ? "Loading generator presets…"
+                            : "Select generator preset"
+                        }
                       />
                     </Field>
                     <Field
@@ -433,6 +434,22 @@ function RouteComponent() {
                       />
                     </Field>
                   </div>
+                  {hasPresetVariables ? (
+                    <div className={classes.variablesRow}>
+                      <Button
+                        type="button"
+                        variant="default"
+                        disabled={importing || !preset}
+                        onClick={() => setVariablesOpen(true)}
+                      >
+                        Setup Variables
+                      </Button>
+                      <span className={classes.aiFieldHint}>
+                        Genre, detail, language, and other values for this
+                        preset.
+                      </span>
+                    </div>
+                  ) : null}
                   <Field
                     label="Generator brief"
                     hint="Optional — fills the Generator Brief marker."
@@ -457,7 +474,7 @@ function RouteComponent() {
                 loading={importing}
                 disabled={
                   importing ||
-                  (importWithAi && (!aiReady || presetDetailQuery.isLoading))
+                  (importWithAi && (!aiReady || presetLoading))
                 }
                 leftSection={<IconDownload size={16} />}
                 onClick={() => void handleImport()}
@@ -544,6 +561,13 @@ function RouteComponent() {
           </div>
         </div>
       ) : null}
+
+      <SetupVariablesModal
+        opened={variablesOpen}
+        onClose={() => setVariablesOpen(false)}
+        variables={preset?.variables ?? []}
+        onApply={(variables) => void handleApplyVariables(variables)}
+      />
 
       <ImportLorebookModal
         opened={pendingBook != null}

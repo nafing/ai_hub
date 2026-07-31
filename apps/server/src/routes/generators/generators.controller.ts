@@ -14,6 +14,7 @@ export class GeneratorsController {
       category: body.category,
       connectionId: body.connectionId,
       presetId: body.presetId,
+      generatorPresetId: body.generatorPresetId,
       variables: body.variables,
       markers: body.markers as PresetMarkerContent | undefined,
       userMessage: body.userMessage,

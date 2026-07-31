@@ -31,6 +31,11 @@ export class CharacterCardDataDto implements CharacterCardData {
   @IsString()
   personality!: string;
 
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  relationships!: string[];
+
   @IsString()
   scenario!: string;
 

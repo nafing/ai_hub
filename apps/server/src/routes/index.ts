@@ -1,6 +1,7 @@
 export { ConnectionsModule } from "./connections/connections.module";
 export { PresetsModule } from "./presets/presets.module";
 export { GeneratorsModule } from "./generators/generators.module";
+export { GeneratorPresetsModule } from "./generator-presets/generator-presets.module";
 export { RegexesModule } from "./regexes/regexes.module";
 export { ToolsModule } from "./tools/tools.module";
 export { AgentsModule } from "./agents/agents.module";

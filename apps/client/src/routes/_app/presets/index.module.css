@@ -129,6 +129,27 @@
   color: var(--color-text);
 }
 
+.subGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.subGroupTitle {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.subGroupHint {
+  margin: 0 0 var(--space-xs);
+  font-size: 0.75rem;
+  color: var(--color-text-dimmed);
+  line-height: 1.35;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));

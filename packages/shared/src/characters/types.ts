@@ -51,6 +51,11 @@ export type CharacterCardData = {
   /** Physical look / visual presentation (hub field; useful for image prompts). */
   appearance: string;
   personality: string;
+  /**
+   * Ties to other people / {{user}} / the cast (hub field).
+   * One entry per relationship (who + how they relate).
+   */
+  relationships: string[];
   scenario: string;
   first_mes: string;
   mes_example: string;

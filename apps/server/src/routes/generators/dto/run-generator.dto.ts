@@ -14,6 +14,14 @@ export class RunGeneratorDto {
   @IsString()
   presetId?: string;
 
+  /**
+   * Generator Preset whose `prompt` is injected as `generator_prompt`.
+   * When set, also resolves linked `preset_id` if `presetId` is omitted.
+   */
+  @IsOptional()
+  @IsString()
+  generatorPresetId?: string;
+
   @IsOptional()
   @IsObject()
   variables?: Record<string, string | string[]>;

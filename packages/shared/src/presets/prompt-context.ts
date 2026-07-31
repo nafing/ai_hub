@@ -17,6 +17,13 @@ function joinBlocks(
     .join("\n\n");
 }
 
+function formatListField(items: string[] | undefined | null): string {
+  return (items ?? [])
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
 /** Text for the `character_info` marker section. */
 export function formatCharacterInfoMarker(
   character: Pick<Character, "data">,
@@ -54,6 +61,7 @@ export function formatCharacterInfoMarker(
       { label: "Description", value: data.description },
       { label: "Appearance", value: data.appearance },
       { label: "Personality", value: data.personality },
+      { label: "Relationships", value: formatListField(data.relationships) },
     ]);
   } else {
     const override = options.scenarioOverride?.trim();
@@ -62,6 +70,7 @@ export function formatCharacterInfoMarker(
       { label: "Description", value: data.description },
       { label: "Appearance", value: data.appearance },
       { label: "Personality", value: data.personality },
+      { label: "Relationships", value: formatListField(data.relationships) },
       {
         label: "Scenario",
         value: override || data.scenario,
@@ -158,6 +167,8 @@ export type BuildPresetPromptContextOptions = {
   variables?: PresetVariableValues;
   /** Injected into `generator_brief` marker. */
   generatorBrief?: string | null;
+  /** Injected into `generator_prompt` marker (from Generator Presets). */
+  generatorPrompt?: string | null;
   /** Injected into `reference_characters` marker (preformatted or via characters). */
   referenceCharacters?: string | null;
   referenceCharacterList?: Array<Pick<Character, "data">> | null;
@@ -305,6 +316,9 @@ export function buildPresetPromptContext(
 
   const brief = options.generatorBrief?.trim();
   if (brief) markers.generator_brief = brief;
+
+  const generatorPrompt = options.generatorPrompt?.trim();
+  if (generatorPrompt) markers.generator_prompt = generatorPrompt;
 
   const referenceFromExtras = extras.length
     ? formatReferenceCharactersMarker(extras, scenarioOpts)

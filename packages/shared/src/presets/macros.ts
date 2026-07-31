@@ -97,6 +97,11 @@ export const PRESET_RUNTIME_VARIABLES: readonly PresetMacroEntry[] = [
     description: "Current personality field (generators / rebuild).",
   },
   {
+    syntax: "{{existing_relationships}}",
+    description:
+      "Current relationships list as JSON array string (character generator).",
+  },
+  {
     syntax: "{{existing_scenario}}",
     description: "Current scenario field (character generator).",
   },
@@ -116,6 +121,11 @@ export const PRESET_RUNTIME_VARIABLES: readonly PresetMacroEntry[] = [
     syntax: "{{generation_mode}}",
     description:
       "Generator task mode: create, import, regenerate, rebuild (character generator).",
+  },
+  {
+    syntax: "{{source_tags}}",
+    description:
+      "Tags from an imported source card (character import). Used by the Genre → Imported card setup option.",
   },
   {
     syntax: "{{regenerate_scope}}",

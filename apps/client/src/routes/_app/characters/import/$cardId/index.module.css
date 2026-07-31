@@ -234,6 +234,13 @@
   gap: var(--space-sm);
 }
 
+.variablesRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
 .aiField {
   display: flex;
   flex-direction: column;

@@ -4,6 +4,7 @@ import {
   parseCharacterImportFile,
   type CharacterCardV2,
   type CreateLorebookInput,
+  type GeneratorPresetPromptFields,
   type Preset,
 } from "@ai-hub/shared";
 import { downloadBotbooruPng } from "./api";
@@ -18,6 +19,8 @@ import {
 export type BotbooruImportAiOptions = {
   connectionId: string;
   preset: Preset;
+  generatorPresetId: string;
+  generatorPrompts?: GeneratorPresetPromptFields;
   personaId: string | null;
   referenceCharacterIds: string[];
   generatorBrief: string;
@@ -25,6 +28,8 @@ export type BotbooruImportAiOptions = {
     preview: CharacterImportPreview;
     connectionId: string;
     preset: Preset;
+    generatorPresetId: string;
+    generatorPrompts?: GeneratorPresetPromptFields;
     personaId: string | null;
     referenceCharacterIds: string[];
     generatorBrief: string;
@@ -72,6 +77,8 @@ export async function importBotbooruPost(
       },
       connectionId: options.ai.connectionId,
       preset: options.ai.preset,
+      generatorPresetId: options.ai.generatorPresetId,
+      generatorPrompts: options.ai.generatorPrompts,
       personaId: options.ai.personaId,
       referenceCharacterIds: options.ai.referenceCharacterIds,
       generatorBrief: options.ai.generatorBrief,

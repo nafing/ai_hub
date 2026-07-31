@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   buildPresetPromptContext,
   nextCharacterVersionLabel,
+  resolveGeneratorPresetPrompt,
   type CharacterCardData,
 } from "@ai-hub/shared";
 import { Button, Textarea,
@@ -14,13 +15,9 @@ import { Button, Textarea,
 } from "@/components/ui";
 import { useConnectionSelectOptions } from "@/features/connections/queries";
 import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
+import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
 import { getPersona } from "@/features/personas/api";
 import { usePersonas } from "@/features/personas/queries";
-import {
-  useDefaultPreset,
-  usePreset,
-  usePresets,
-} from "@/features/presets/queries";
 import { getCharacter, updateCharacter } from "./api";
 import {
   extractFullCards,
@@ -42,6 +39,7 @@ const CONCEPT_FIELDS = [
   "description",
   "appearance",
   "personality",
+  "relationships",
   "scenario",
 ] as const;
 
@@ -101,15 +99,12 @@ export function RegenerateCharactersModal({
   const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
-  const presetsQuery = usePresets();
-  const defaultPresetQuery = useDefaultPreset("character_generator");
+  const generatorSelection = useGeneratorPresetSelection("character_generator");
 
   const [targetCharacterIds, setTargetCharacterIds] = useState<string[]>([]);
   const [generatorBrief, setGeneratorBrief] = useState("");
   const [scope, setScope] = useState<RegenerateScope>("concept");
   const [connectionId, setConnectionId] = useState<string | null>(null);
-  const [presetId, setPresetId] = useState<string | null>(null);
-  const [presetInitialized, setPresetInitialized] = useState(false);
   const [personaId, setPersonaId] = useState<string | null>(null);
   const [personaInitialized, setPersonaInitialized] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -126,53 +121,23 @@ export function RegenerateCharactersModal({
     personasQuery.data?.find((persona) => persona.is_default)?.id ?? null;
 
   useEffect(() => {
-    if (presetInitialized) return;
-    if (defaultPresetQuery.data?.id) {
-      setPresetId(defaultPresetQuery.data.id);
-      setPresetInitialized(true);
-      return;
-    }
-    if (defaultPresetQuery.isError || defaultPresetQuery.isSuccess) {
-      const fallback = (presetsQuery.data ?? []).find(
-        (preset) => preset.category === "character_generator",
-      );
-      if (fallback) {
-        setPresetId(fallback.id);
-        setPresetInitialized(true);
-      } else if (presetsQuery.isSuccess || presetsQuery.isError) {
-        setPresetInitialized(true);
-      }
-    }
-  }, [
-    presetInitialized,
-    defaultPresetQuery.data,
-    defaultPresetQuery.isError,
-    defaultPresetQuery.isSuccess,
-    presetsQuery.data,
-    presetsQuery.isSuccess,
-    presetsQuery.isError,
-  ]);
-
-  useEffect(() => {
     if (personaInitialized || !personasQuery.data) return;
     if (defaultPersonaId) setPersonaId(defaultPersonaId);
     setPersonaInitialized(true);
   }, [personaInitialized, personasQuery.data, defaultPersonaId]);
 
   const resolvedConnectionId = connectionId ?? defaultConnectionId;
-  const presetDetailQuery = usePreset(presetId ?? undefined);
-
-  const presetOptions = useMemo(() => {
-    const characterPresets = (presetsQuery.data ?? []).filter(
-      (preset) => preset.category === "character_generator",
-    );
-    const list =
-      characterPresets.length > 0 ? characterPresets : (presetsQuery.data ?? []);
-    return list.map((preset) => ({
-      value: preset.id,
-      label: `${preset.name || "untitled"}${preset.is_default ? " (default)" : ""}${preset.category !== "character_generator" ? ` · ${preset.category}` : ""}`,
-    }));
-  }, [presetsQuery.data]);
+  const {
+    generatorPresetId,
+    setGeneratorPresetId,
+    generatorPreset,
+    generatorPresetOptions,
+    structuralPresetId,
+    structuralPreset: preset,
+    selectError: presetFieldError,
+    isLoading: presetLoading,
+    isListLoading: generatorListLoading,
+  } = generatorSelection;
 
   const personaOptions = useMemo(
     () =>
@@ -206,15 +171,6 @@ export function RegenerateCharactersModal({
         ? "Create a connection first"
         : undefined;
 
-  const presetFieldError =
-    presetsQuery.isError
-      ? "Failed to load presets"
-      : presetDetailQuery.isError
-        ? "Failed to load preset details"
-        : !presetsQuery.isLoading && !presetOptions.length
-          ? "No presets available"
-          : undefined;
-
   const personaFieldError = personasQuery.isError
     ? "Failed to load personas"
     : undefined;
@@ -233,9 +189,6 @@ export function RegenerateCharactersModal({
     setScope("concept");
     setConnectionId(null);
     setPersonaId(defaultPersonaId);
-    if (defaultPresetQuery.data?.id) {
-      setPresetId(defaultPresetQuery.data.id);
-    }
     setGenerating(false);
     clearAiReview();
   }
@@ -253,9 +206,8 @@ export function RegenerateCharactersModal({
     if (!resolvedConnectionId) {
       throw new Error("Select a connection to regenerate with AI.");
     }
-    const preset = presetDetailQuery.data;
-    if (!presetId || !preset) {
-      throw new Error("Select a Character Generator preset.");
+    if (!generatorPresetId || !generatorPreset || !structuralPresetId || !preset) {
+      throw new Error("Select a Character Generator Preset.");
     }
 
     const brief = generatorBrief.trim();
@@ -282,6 +234,10 @@ export function RegenerateCharactersModal({
 
     const promptContext = buildPresetPromptContext({
       generatorBrief: brief,
+      generatorPrompt: resolveGeneratorPresetPrompt(
+        generatorPreset,
+        "regenerate",
+      ),
       persona,
       referenceCharacterList: targets,
       variables: {
@@ -298,6 +254,7 @@ export function RegenerateCharactersModal({
         existing_description: "",
         existing_appearance: "",
         existing_personality: "",
+        existing_relationships: "",
         existing_scenario: "",
         existing_first_mes: "",
         existing_mes_example: "",
@@ -315,7 +272,8 @@ export function RegenerateCharactersModal({
     const result = await useGeneratorJobsStore.getState().runTrackedGenerator({
       category: "character_generator",
       connectionId: resolvedConnectionId,
-      presetId: preset.id,
+      presetId: structuralPresetId,
+      generatorPresetId,
       variables: promptContext.variables,
       markers: promptContext.markers,
       title: `Regenerate ${scope} · ${castLabel}`,
@@ -344,16 +302,23 @@ export function RegenerateCharactersModal({
   async function handleGenerate() {
     setGenerating(true);
     try {
-      const preset = presetDetailQuery.data;
-      if (!resolvedConnectionId || !presetId || !preset) {
-        throw new Error("Select connection and Character Generator preset.");
+      if (
+        !resolvedConnectionId ||
+        !generatorPresetId ||
+        !generatorPreset ||
+        !structuralPresetId ||
+        !preset
+      ) {
+        throw new Error("Select connection and Character Generator Preset.");
       }
       const aiResult = await runAiRegenerate();
       setReviewTargetIds(aiResult.targetIds);
       setAiReviewCards(aiResult.cards);
       setAiReviewContext({
         connectionId: resolvedConnectionId,
-        presetId: preset.id,
+        presetId: structuralPresetId,
+        generatorPresetId,
+        generatorPrompts: generatorPreset,
         presetVariables: preset.variables,
         personaId,
         referenceCharacterIds: [],
@@ -433,13 +398,15 @@ export function RegenerateCharactersModal({
   const aiReady =
     targetCharacterIds.length > 0 &&
     Boolean(resolvedConnectionId) &&
-    Boolean(presetId) &&
-    Boolean(presetDetailQuery.data) &&
+    Boolean(generatorPresetId) &&
+    Boolean(generatorPreset) &&
+    Boolean(structuralPresetId) &&
+    Boolean(preset) &&
     Boolean(generatorBrief.trim());
 
   const busy = generating || confirmingAi || aiReviewOpen;
   const generateDisabled =
-    !aiReady || busy || generating || presetDetailQuery.isLoading;
+    !aiReady || busy || generating || presetLoading;
 
   return (
     <>
@@ -507,7 +474,7 @@ export function RegenerateCharactersModal({
             </div>
             <p className={classes.fieldHint}>
               {scope === "concept"
-                ? "Updates name, description, appearance, personality, and scenario."
+                ? "Updates name, description, appearance, personality, relationships, and scenario."
                 : "Rebuilds all main card fields from the brief."}
             </p>
           </Field>
@@ -534,19 +501,21 @@ export function RegenerateCharactersModal({
             </Field>
 
             <Field
-              label="Preset"
-              hint="Prefer Character Generator presets."
+              label="Generator Preset"
+              hint="Main prompt + linked structural Preset for Character Generator."
               error={presetFieldError}
             >
               <Select
                 searchable
-                data={presetOptions}
-                value={presetId ?? ""}
-                onChange={(value) => setPresetId(value || null)}
-                disabled={busy || !presetOptions.length}
+                data={generatorPresetOptions}
+                value={generatorPresetId ?? ""}
+                onChange={(value) => setGeneratorPresetId(value || null)}
+                disabled={busy || !generatorPresetOptions.length}
                 error={Boolean(presetFieldError)}
                 placeholder={
-                  presetsQuery.isLoading ? "Loading presets…" : "Select preset"
+                  generatorListLoading
+                    ? "Loading generator presets…"
+                    : "Select generator preset"
                 }
               />
             </Field>
@@ -602,7 +571,7 @@ export function RegenerateCharactersModal({
             disabled={generateDisabled}
             onClick={() => void handleGenerate()}
           >
-            {generating || presetDetailQuery.isLoading
+            {generating || presetLoading
               ? "Generating…"
               : "Generate with AI"}
           </Button>

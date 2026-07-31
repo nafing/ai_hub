@@ -155,6 +155,79 @@
   line-height: 1.2;
 }
 
+.navGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navGroupHeader {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+}
+
+.navGroupHeader .navLink {
+  flex: 1;
+  min-width: 0;
+  padding-right: 2rem;
+}
+
+.navChevronBtn {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: transparent;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.navChevronBtn:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface-hover) 70%, transparent);
+}
+
+.navChevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.navChevronEnd {
+  margin-left: auto;
+}
+
+.navChevronOpen {
+  transform: rotate(180deg);
+}
+
+.navChildren {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navLinkNested {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.navLinkNested .navLabel {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
 .navBadge {
   margin-left: auto;
   min-width: 1.15rem;

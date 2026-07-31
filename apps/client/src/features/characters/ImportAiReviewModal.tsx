@@ -3,7 +3,9 @@ import { IconRefresh, IconSparkles, IconTrash } from "@tabler/icons-react";
 import {
   buildPresetPromptContext,
   defaultCharacterCardData,
+  resolveGeneratorPresetPrompt,
   type CharacterCardData,
+  type GeneratorPresetPromptFields,
   type Variable,
 } from "@ai-hub/shared";
 import {
@@ -25,7 +27,7 @@ import {
   formatAlternateGreetingsForPrompt,
   mergeExtractedIntoCardData,
   normalizeFullCard,
-  resolvePresetVariables,
+  withImportedCardVariables,
   stripCodeFence,
   type ExtractedCharacterCard,
 } from "./characterGenerateShared";
@@ -35,6 +37,9 @@ import classes from "./ImportAiReviewModal.module.css";
 export type ImportAiReviewContext = {
   connectionId: string;
   presetId: string;
+  generatorPresetId: string;
+  /** Prompt pack used to resolve `generator_prompt` by generation_mode. */
+  generatorPrompts?: GeneratorPresetPromptFields;
   presetVariables: Variable[];
   personaId: string | null;
   /** Existing library characters to include in the Reference Characters marker. */
@@ -68,6 +73,7 @@ type RebuildKind =
   | "description"
   | "appearance"
   | "personality"
+  | "relationships"
   | "scenario"
   | "first_mes"
   | "mes_example"
@@ -78,6 +84,7 @@ const CONCEPT_FIELDS = [
   "description",
   "appearance",
   "personality",
+  "relationships",
   "scenario",
 ] as const;
 
@@ -92,12 +99,8 @@ function extractPartialCard(
       throw new Error("not object");
     }
     const record = parsed as Record<string, unknown>;
-    if (field === "alternate_greetings") {
-      const value = record.alternate_greetings;
-      if (Array.isArray(value) || typeof value === "string") {
-        return normalizeFullCard({ alternate_greetings: value });
-      }
-      return {};
+    if (field === "alternate_greetings" || field === "relationships") {
+      return normalizeFullCard({ [field]: record[field] });
     }
     const value = record[field];
     if (typeof value === "string" && value.trim()) {
@@ -105,7 +108,7 @@ function extractPartialCard(
     }
     return {};
   } catch {
-    if (field === "alternate_greetings") return {};
+    if (field === "alternate_greetings" || field === "relationships") return {};
     return { [field]: text };
   }
 }
@@ -213,6 +216,16 @@ export function ImportAiReviewModal({
 
       const promptContext = buildPresetPromptContext({
         generatorBrief: context.generatorBrief.trim() || null,
+        generatorPrompt: resolveGeneratorPresetPrompt(
+          context.generatorPrompts ?? {
+            prompt: "",
+            prompt_create: "",
+            prompt_import: "",
+            prompt_regenerate: "",
+            prompt_rebuild: "",
+          },
+          "rebuild",
+        ),
         persona,
         referenceCharacterList: [
           ...libraryReferences,
@@ -220,7 +233,10 @@ export function ImportAiReviewModal({
           ...cards.map((data) => ({ data })),
         ],
         variables: {
-          ...resolvePresetVariables(context.presetVariables),
+          ...withImportedCardVariables(
+            context.presetVariables,
+            context.sourceCard,
+          ),
           generation_mode: "rebuild",
           rebuild_scope: "concept_batch",
           rebuild_notes: note,
@@ -234,6 +250,7 @@ export function ImportAiReviewModal({
           existing_description: "",
           existing_appearance: "",
           existing_personality: "",
+          existing_relationships: "",
           existing_scenario: "",
           existing_first_mes: "",
           existing_mes_example: "",
@@ -245,6 +262,7 @@ export function ImportAiReviewModal({
         category: "character_generator",
         connectionId: context.connectionId,
         presetId: context.presetId,
+        generatorPresetId: context.generatorPresetId,
         variables: promptContext.variables,
         markers: promptContext.markers,
         title: `Rebuild concepts · ${cards.length} character${cards.length === 1 ? "" : "s"}`,
@@ -300,6 +318,16 @@ export function ImportAiReviewModal({
 
       const promptContext = buildPresetPromptContext({
         generatorBrief: context.generatorBrief.trim() || null,
+        generatorPrompt: resolveGeneratorPresetPrompt(
+          context.generatorPrompts ?? {
+            prompt: "",
+            prompt_create: "",
+            prompt_import: "",
+            prompt_regenerate: "",
+            prompt_rebuild: "",
+          },
+          "rebuild",
+        ),
         persona,
         referenceCharacterList: [
           ...libraryReferences,
@@ -307,7 +335,10 @@ export function ImportAiReviewModal({
           { data: card },
         ],
         variables: {
-          ...resolvePresetVariables(context.presetVariables),
+          ...withImportedCardVariables(
+            context.presetVariables,
+            context.sourceCard,
+          ),
           generation_mode: "rebuild",
           rebuild_scope: rebuildScope,
           rebuild_notes: note,
@@ -318,6 +349,9 @@ export function ImportAiReviewModal({
           existing_description: card.description.trim(),
           existing_appearance: card.appearance.trim(),
           existing_personality: card.personality.trim(),
+          existing_relationships: formatAlternateGreetingsForPrompt(
+            card.relationships,
+          ),
           existing_scenario: card.scenario.trim(),
           existing_first_mes: card.first_mes.trim(),
           existing_mes_example: card.mes_example.trim(),
@@ -333,6 +367,7 @@ export function ImportAiReviewModal({
         description: "description",
         appearance: "appearance",
         personality: "personality",
+        relationships: "relationships",
         scenario: "scenario",
         first_mes: "first message",
         mes_example: "example messages",
@@ -343,6 +378,7 @@ export function ImportAiReviewModal({
         category: "character_generator",
         connectionId: context.connectionId,
         presetId: context.presetId,
+        generatorPresetId: context.generatorPresetId,
         variables: promptContext.variables,
         markers: promptContext.markers,
         title: `Rebuild ${rebuildKindLabels[kind]} · ${card.name.trim() || "character"}`,
@@ -407,7 +443,7 @@ export function ImportAiReviewModal({
       <div className={classes.stack}>
         <p className={classes.muted}>
           Preview and edit generated cards before saving. Batch Rebuild Concept
-          refreshes name / description / appearance / personality / scenario for every card
+          refreshes name / description / appearance / personality / relationships / scenario for every card
           in one pass; per-card Rebuild concept / Rebuild all work on a single
           character.
         </p>
@@ -552,6 +588,29 @@ export function ImportAiReviewModal({
                         updateCard(index, { personality: value })
                       }
                       onRebuild={() => void rebuild(index, "personality")}
+                    />
+                    <AlternateGreetingsEditor
+                      label="Relationships"
+                      description="One entry per tie to people / the cast."
+                      emptyLabel="No relationships yet."
+                      value={card.relationships}
+                      disabled={busy}
+                      onChange={(value) =>
+                        updateCard(index, { relationships: value })
+                      }
+                      action={
+                        <Button
+                          variant="subtle"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void rebuild(index, "relationships")}
+                        >
+                          <IconRefresh size={14} />
+                          {pendingKey === `${index}:relationships`
+                            ? "Rebuilding…"
+                            : "Rebuild"}
+                        </Button>
+                      }
                     />
                     <FieldWithRebuild
                       label="Scenario"

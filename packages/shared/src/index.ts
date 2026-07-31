@@ -222,6 +222,29 @@ export type {
   AgentListItem,
 } from "./agents/api";
 export { DEFAULT_AGENTS } from "./agents/default-agents";
+export type {
+  GeneratorPreset,
+  GeneratorPresetPromptMode,
+} from "./generator-presets/types";
+export { GENERATOR_PRESET_PROMPT_MODES } from "./generator-presets/types";
+export type {
+  CreateGeneratorPresetInput,
+  UpdateGeneratorPresetInput,
+  GeneratorPresetListItem,
+} from "./generator-presets/api";
+export {
+  defaultGeneratorPreset,
+  defaultGeneratorPresetId,
+} from "./generator-presets/defaults";
+export {
+  DEFAULT_GENERATOR_PRESETS,
+  defaultGeneratorPresetIdForCategory,
+  type DefaultGeneratorPresetDefinition,
+} from "./generator-presets/default-generator-presets";
+export {
+  resolveGeneratorPresetPrompt,
+  type GeneratorPresetPromptFields,
+} from "./generator-presets/resolve-prompt";
 export {
   shouldRunAgentByInterval,
   countAssistantMessages,

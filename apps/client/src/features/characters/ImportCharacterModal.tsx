@@ -17,6 +17,7 @@ import {
   type CharacterCardData,
   type CharacterCardV2,
   type CreateLorebookInput,
+  type Variable,
 } from "@ai-hub/shared";
 import {
   Button,
@@ -29,15 +30,14 @@ import {
   RuntimeText,
 } from "@/components/ui";
 import { useConnectionSelectOptions } from "@/features/connections/queries";
+import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
 import { usePersonas } from "@/features/personas/queries";
+import { SetupVariablesModal } from "@/features/presets/SetupVariablesModal";
+import { persistPresetVariableSelection } from "@/features/presets/persistPresetVariableSelection";
+import { presetKeys } from "@/features/presets/queries";
 import { createCharacter, uploadCharacterAvatar } from "./api";
 import { useCharacterImportSessionStore } from "./characterImportSessionStore";
 import { characterKeys, useCharacters } from "./queries";
-import {
-  useDefaultPreset,
-  usePreset,
-  usePresets,
-} from "@/features/presets/queries";
 import { ImportLorebookModal } from "@/features/lorebooks/ImportLorebookModal";
 import classes from "./ImportCharacterModal.module.css";
 
@@ -106,8 +106,7 @@ export function ImportCharacterModal({
   const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
-  const presetsQuery = usePresets();
-  const defaultPresetQuery = useDefaultPreset("character_generator");
+  const generatorSelection = useGeneratorPresetSelection("character_generator");
 
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -116,13 +115,12 @@ export function ImportCharacterModal({
   const [importWithAi, setImportWithAi] = useState(false);
   const [generatorBrief, setGeneratorBrief] = useState("");
   const [connectionId, setConnectionId] = useState<string | null>(null);
-  const [presetId, setPresetId] = useState<string | null>(null);
-  const [presetInitialized, setPresetInitialized] = useState(false);
   const [personaId, setPersonaId] = useState<string | null>(null);
   const [personaInitialized, setPersonaInitialized] = useState(false);
   const [referenceCharacterIds, setReferenceCharacterIds] = useState<string[]>(
     [],
   );
+  const [variablesOpen, setVariablesOpen] = useState(false);
   const [pendingBook, setPendingBook] = useState<PendingCharacterBook | null>(
     null,
   );
@@ -136,55 +134,23 @@ export function ImportCharacterModal({
     personasQuery.data?.find((persona) => persona.is_default)?.id ?? null;
 
   useEffect(() => {
-    if (presetInitialized) return;
-    if (defaultPresetQuery.data?.id) {
-      setPresetId(defaultPresetQuery.data.id);
-      setPresetInitialized(true);
-      return;
-    }
-    if (defaultPresetQuery.isError || defaultPresetQuery.isSuccess) {
-      const fallback = (presetsQuery.data ?? []).find(
-        (preset) => preset.category === "character_generator",
-      );
-      if (fallback) {
-        setPresetId(fallback.id);
-        setPresetInitialized(true);
-      } else if (presetsQuery.isSuccess || presetsQuery.isError) {
-        setPresetInitialized(true);
-      }
-    }
-  }, [
-    presetInitialized,
-    defaultPresetQuery.data,
-    defaultPresetQuery.isError,
-    defaultPresetQuery.isSuccess,
-    presetsQuery.data,
-    presetsQuery.isSuccess,
-    presetsQuery.isError,
-  ]);
-
-  useEffect(() => {
     if (personaInitialized || !personasQuery.data) return;
     if (defaultPersonaId) setPersonaId(defaultPersonaId);
     setPersonaInitialized(true);
   }, [personaInitialized, personasQuery.data, defaultPersonaId]);
 
   const resolvedConnectionId = connectionId ?? defaultConnectionId;
-  const presetDetailQuery = usePreset(presetId ?? undefined);
-
-  const presetOptions = useMemo(() => {
-    const characterPresets = (presetsQuery.data ?? []).filter(
-      (preset) => preset.category === "character_generator",
-    );
-    const list =
-      characterPresets.length > 0
-        ? characterPresets
-        : (presetsQuery.data ?? []);
-    return list.map((preset) => ({
-      value: preset.id,
-      label: `${preset.name || "untitled"}${preset.is_default ? " (default)" : ""}${preset.category !== "character_generator" ? ` · ${preset.category}` : ""}`,
-    }));
-  }, [presetsQuery.data]);
+  const {
+    generatorPresetId,
+    setGeneratorPresetId,
+    generatorPreset,
+    generatorPresetOptions,
+    structuralPresetId,
+    structuralPreset: preset,
+    selectError: presetError,
+    isLoading: presetLoading,
+    isListLoading: generatorListLoading,
+  } = generatorSelection;
 
   const characterOptions = useMemo(
     () =>
@@ -193,6 +159,10 @@ export function ImportCharacterModal({
         label: character.name || character.id,
       })),
     [charactersQuery.data],
+  );
+
+  const hasPresetVariables = Boolean(
+    preset?.variables.some((variable) => variable.variable_name.trim()),
   );
 
   function clearPreview() {
@@ -208,8 +178,30 @@ export function ImportCharacterModal({
     setConnectionId(null);
     setPersonaId(defaultPersonaId);
     setReferenceCharacterIds([]);
-    if (defaultPresetQuery.data?.id) {
-      setPresetId(defaultPresetQuery.data.id);
+    setVariablesOpen(false);
+  }
+
+  async function handleApplyVariables(variables: Variable[]) {
+    if (!structuralPresetId) return;
+    try {
+      const saved = await persistPresetVariableSelection(
+        structuralPresetId,
+        variables,
+      );
+      queryClient.setQueryData(presetKeys.detail(saved.id), saved);
+      void queryClient.invalidateQueries({ queryKey: presetKeys.all });
+      setVariablesOpen(false);
+      notifications.show({
+        title: "Variables saved",
+        message: "Selected values are stored on this preset.",
+        color: "green",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "Save failed",
+        message: error instanceof Error ? error.message : "Unknown error",
+        color: "red",
+      });
     }
   }
 
@@ -334,14 +326,21 @@ export function ImportCharacterModal({
       const { character_book: _omit, ...dataWithoutBook } = preview.card.data;
 
       if (importWithAi) {
-        const preset = presetDetailQuery.data;
-        if (!resolvedConnectionId || !presetId || !preset) {
-          throw new Error("Select connection and Character Generator preset.");
+        if (
+          !resolvedConnectionId ||
+          !generatorPresetId ||
+          !generatorPreset ||
+          !structuralPresetId ||
+          !preset
+        ) {
+          throw new Error("Select connection and Character Generator Preset.");
         }
         startBackgroundImport({
           preview,
           connectionId: resolvedConnectionId,
           preset,
+          generatorPresetId,
+          generatorPrompts: generatorPreset,
           personaId,
           referenceCharacterIds,
           generatorBrief: generatorBrief.trim(),
@@ -366,22 +365,16 @@ export function ImportCharacterModal({
   const aiReady =
     !importWithAi ||
     (Boolean(resolvedConnectionId) &&
-      Boolean(presetId) &&
-      Boolean(presetDetailQuery.data));
+      Boolean(generatorPresetId) &&
+      Boolean(generatorPreset) &&
+      Boolean(structuralPresetId) &&
+      Boolean(preset));
 
   const connectionError = connectionsQuery.isError
     ? "Failed to load connections"
     : !connectionsQuery.isLoading && !connectionsQuery.options.length
       ? "Create a connection first"
       : undefined;
-
-  const presetError = presetsQuery.isError
-    ? "Failed to load presets"
-    : presetDetailQuery.isError
-      ? "Failed to load preset details"
-      : !presetsQuery.isLoading && !presetOptions.length
-        ? "No presets available"
-        : undefined;
 
   const personaError = personasQuery.isError
     ? "Failed to load personas"
@@ -392,7 +385,7 @@ export function ImportCharacterModal({
     : undefined;
 
   const primaryBusy =
-    importing || parsing || (importWithAi && presetDetailQuery.isLoading);
+    importing || parsing || (importWithAi && presetLoading);
 
   const primaryLabel = importing
     ? importWithAi
@@ -532,21 +525,21 @@ export function ImportCharacterModal({
                 </Field>
 
                 <Field
-                  label="Preset"
-                  hint="Prefer Character Generator presets."
+                  label="Generator Preset"
+                  hint="Main prompt + linked structural Preset for Character Generator."
                   error={presetError}
                 >
                   <Select
-                    data={presetOptions}
-                    value={presetId ?? ""}
-                    onChange={(value) => setPresetId(value || null)}
+                    data={generatorPresetOptions}
+                    value={generatorPresetId ?? ""}
+                    onChange={(value) => setGeneratorPresetId(value || null)}
                     placeholder={
-                      presetsQuery.isLoading
-                        ? "Loading presets…"
-                        : "Select preset"
+                      generatorListLoading
+                        ? "Loading generator presets…"
+                        : "Select generator preset"
                     }
                     searchable
-                    disabled={importing || !presetOptions.length}
+                    disabled={importing || !generatorPresetOptions.length}
                     error={Boolean(presetError)}
                   />
                 </Field>
@@ -598,6 +591,22 @@ export function ImportCharacterModal({
                 </Field>
               </div>
 
+              {hasPresetVariables ? (
+                <div className={classes.variablesRow}>
+                  <Button
+                    type="button"
+                    variant="default"
+                    disabled={importing || !preset}
+                    onClick={() => setVariablesOpen(true)}
+                  >
+                    Setup Variables
+                  </Button>
+                  <span className={classes.fieldHint}>
+                    Genre, detail, language, and other values for this preset.
+                  </span>
+                </div>
+              ) : null}
+
               <Field
                 label="Generator brief"
                 hint="Optional — fills the Generator Brief marker."
@@ -629,6 +638,13 @@ export function ImportCharacterModal({
           </Button>
         </div>
       </Modal>
+
+      <SetupVariablesModal
+        opened={variablesOpen}
+        onClose={() => setVariablesOpen(false)}
+        variables={preset?.variables ?? []}
+        onApply={(variables) => void handleApplyVariables(variables)}
+      />
 
       <ImportLorebookModal
         opened={pendingBook != null}

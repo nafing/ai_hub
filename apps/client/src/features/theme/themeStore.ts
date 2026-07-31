@@ -4,12 +4,30 @@ import { hexToHsl, hslToHex, hexToRgb, rgbToHex } from "./colorUtils";
 import {
   ACCENT_SWATCHES,
   DEFAULT_PRESET,
+  TEXT_FORMAT_COLOR_KEYS,
+  THEME_BASE_COLOR_KEYS,
   type BaseColorKey,
   type BaseColors,
+  type ThemeBaseColorKey,
   type ThemeMode,
   type ThemePresetId,
   THEME_PRESETS,
 } from "./presets";
+
+function preserveTextFormatColors(
+  current: BaseColors,
+  next: BaseColors,
+): BaseColors {
+  const merged = { ...next };
+  for (const key of TEXT_FORMAT_COLOR_KEYS) {
+    merged[key] = current[key];
+  }
+  return merged;
+}
+
+function isThemeBaseColorKey(key: string): key is ThemeBaseColorKey {
+  return (THEME_BASE_COLOR_KEYS as readonly string[]).includes(key);
+}
 
 export type AccentSource = "custom" | (typeof ACCENT_SWATCHES)[number];
 
@@ -21,7 +39,7 @@ interface ThemeState {
   accentS: number;
   accentL: number;
   baseColors: BaseColors;
-  editingKey: BaseColorKey;
+  editingKey: ThemeBaseColorKey;
   cornerRadius: number;
   fontScale: number;
   uiScale: number;
@@ -31,7 +49,7 @@ interface ThemeState {
   setAccentSwatch: (hex: (typeof ACCENT_SWATCHES)[number]) => void;
   setAccentCustom: () => void;
   setAccentHsl: (partial: { h?: number; s?: number; l?: number }) => void;
-  setEditingKey: (key: BaseColorKey) => void;
+  setEditingKey: (key: ThemeBaseColorKey) => void;
   setBaseColor: (key: BaseColorKey, hex: string) => void;
   setEditingHex: (hex: string) => void;
   setEditingRgb: (channel: "r" | "g" | "b", value: number) => void;
@@ -70,7 +88,8 @@ export const useThemeStore = create<ThemeState>()(
         const preset = THEME_PRESETS.find((p) => p.id === id) ?? DEFAULT_PRESET;
         set({
           presetId: preset.id,
-          baseColors: { ...preset.colors },
+          // Keep Text formats colors independent of theme presets.
+          baseColors: preserveTextFormatColors(get().baseColors, preset.colors),
           accentH: preset.accent.h,
           accentS: preset.accent.s,
           accentL: preset.accent.l,
@@ -209,9 +228,14 @@ export const useThemeStore = create<ThemeState>()(
       name: "ai-hub-theme",
       merge: (persisted, current) => {
         const stored = (persisted ?? {}) as Partial<ThemeState>;
+        const editingKey =
+          stored.editingKey && isThemeBaseColorKey(stored.editingKey)
+            ? stored.editingKey
+            : current.editingKey;
         return {
           ...current,
           ...stored,
+          editingKey,
           baseColors: {
             ...current.baseColors,
             ...stored.baseColors,

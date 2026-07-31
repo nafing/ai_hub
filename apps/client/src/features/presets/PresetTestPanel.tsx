@@ -6,8 +6,12 @@ import {
   buildPromptMessages,
   CHAT_PRESET_CATEGORIES,
   CHAT_SUMMARY_PRESET_CATEGORIES,
+  GENERATOR_CATEGORIES,
+  GENERATOR_PRESET_PROMPT_MODES,
   PRESET_CATEGORY_LABELS,
+  resolveGeneratorPresetPrompt,
   substituteVariables,
+  type GeneratorCategory,
   type LlmChatMessage,
   type CreatePresetInput,
   type PresetCategory,
@@ -26,6 +30,7 @@ import {
 import { useConnectionSelectOptions } from "@/features/connections/queries";
 import { getCharacter } from "@/features/characters/api";
 import { useCharacter, useCharacters } from "@/features/characters/queries";
+import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
 import { getLorebook } from "@/features/lorebooks/api";
 import { lorebookKeys, useLorebooks } from "@/features/lorebooks/queries";
 import { usePersona, usePersonas } from "@/features/personas/queries";
@@ -56,13 +61,8 @@ function usesChatHistoryMarkers(category: PresetCategory): boolean {
   return isChatCategory(category) || isChatSummaryCategory(category);
 }
 
-function isGeneratorCategory(category: PresetCategory): boolean {
-  return (
-    category === "character_generator" ||
-    category === "persona_generator" ||
-    category === "lorebook_generator" ||
-    category === "image"
-  );
+function isGeneratorCategory(category: PresetCategory): category is GeneratorCategory {
+  return (GENERATOR_CATEGORIES as readonly PresetCategory[]).includes(category);
 }
 
 function usesReferenceCharacters(category: PresetCategory): boolean {
@@ -76,6 +76,17 @@ function usesCharacterCard(category: PresetCategory): boolean {
     isChatCategory(category)
   );
 }
+
+const GENERATION_MODE_OPTIONS: Array<{
+  value: string;
+  label: string;
+}> = [
+    { value: "", label: "Field generate (main prompt only)" },
+    ...GENERATOR_PRESET_PROMPT_MODES.map((mode) => ({
+      value: mode,
+      label: mode,
+    })),
+  ];
 
 const PERSONA_TARGET_FIELDS = [
   {
@@ -92,6 +103,7 @@ const CHARACTER_TARGET_FIELDS = [
   { value: "description", label: "description" },
   { value: "appearance", label: "appearance" },
   { value: "personality", label: "personality" },
+  { value: "relationships", label: "relationships" },
   { value: "scenario", label: "scenario" },
   { value: "first_mes", label: "first_mes" },
   { value: "mes_example", label: "mes_example" },
@@ -132,11 +144,23 @@ export function PresetTestPanel({
   variableValues,
 }: PresetTestPanelProps) {
   const category = values.category;
+  const generatorCategory: GeneratorCategory = isGeneratorCategory(category)
+    ? category
+    : "character_generator";
   const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
   const lorebooksQuery = useLorebooks();
   const testMutation = useTestPreset(presetId);
+  const generatorSelection = useGeneratorPresetSelection(generatorCategory);
+  const {
+    generatorPresetId,
+    setGeneratorPresetId,
+    generatorPreset,
+    generatorPresetOptions,
+    selectError: generatorPresetError,
+    isListLoading: generatorListLoading,
+  } = generatorSelection;
 
   const defaultConnectionId = connectionsQuery.defaultId || null;
 
@@ -152,6 +176,7 @@ export function PresetTestPanel({
   );
   const [lorebookIds, setLorebookIds] = useState<string[]>([]);
   const [generatorBrief, setGeneratorBrief] = useState("");
+  const [generationMode, setGenerationMode] = useState<string>("");
   const [chatHistory, setChatHistory] = useState("");
   const [chatSummary, setChatSummary] = useState("");
   const [personaNameOverride, setPersonaNameOverride] = useState("");
@@ -162,6 +187,7 @@ export function PresetTestPanel({
   const [existingDescription, setExistingDescription] = useState("");
   const [existingAppearance, setExistingAppearance] = useState("");
   const [existingPersonality, setExistingPersonality] = useState("");
+  const [existingRelationships, setExistingRelationships] = useState("");
   const [existingScenario, setExistingScenario] = useState("");
   const [existingFirstMes, setExistingFirstMes] = useState("");
   const [existingMesExample, setExistingMesExample] = useState("");
@@ -172,6 +198,7 @@ export function PresetTestPanel({
 
   useEffect(() => {
     setTargetField(defaultTargetField(category));
+    setGenerationMode("");
   }, [category]);
 
   useEffect(() => {
@@ -236,9 +263,13 @@ export function PresetTestPanel({
         next.char = charNameOverride.trim();
       }
       if (targetField) next.target_field = targetField;
+      if (generationMode.trim()) {
+        next.generation_mode = generationMode.trim();
+      }
       next.existing_description = existingDescription.trim();
       next.existing_appearance = existingAppearance.trim();
       next.existing_personality = existingPersonality.trim();
+      next.existing_relationships = existingRelationships.trim();
       next.existing_scenario = existingScenario.trim();
       next.existing_first_mes = existingFirstMes.trim();
       next.existing_mes_example = existingMesExample.trim();
@@ -252,14 +283,24 @@ export function PresetTestPanel({
     personaNameOverride,
     charNameOverride,
     targetField,
+    generationMode,
     existingDescription,
     existingAppearance,
     existingPersonality,
+    existingRelationships,
     existingScenario,
     existingFirstMes,
     existingMesExample,
     existingAlternateGreetings,
   ]);
+
+  const resolvedGeneratorPrompt = useMemo(() => {
+    if (!isGeneratorCategory(category) || !generatorPreset) return null;
+    return resolveGeneratorPresetPrompt(
+      generatorPreset,
+      category === "character_generator" ? generationMode || null : null,
+    );
+  }, [category, generatorPreset, generationMode]);
 
   const promptContext = useMemo(
     () =>
@@ -274,6 +315,7 @@ export function PresetTestPanel({
         generatorBrief: isGeneratorCategory(category)
           ? generatorBrief || null
           : null,
+        generatorPrompt: resolvedGeneratorPrompt,
         referenceCharacterList: usesReferenceCharacters(category)
           ? referenceCharacters
           : null,
@@ -292,6 +334,7 @@ export function PresetTestPanel({
       personaQuery.data,
       runtimeVariables,
       generatorBrief,
+      resolvedGeneratorPrompt,
       referenceCharacters,
       lorebooks,
       chatHistory,
@@ -335,14 +378,14 @@ export function PresetTestPanel({
     } catch (error) {
       const message =
         error &&
-        typeof error === "object" &&
-        "response" in error &&
-        error.response &&
-        typeof error.response === "object" &&
-        "data" in error.response &&
-        error.response.data &&
-        typeof error.response.data === "object" &&
-        "message" in error.response.data
+          typeof error === "object" &&
+          "response" in error &&
+          error.response &&
+          typeof error.response === "object" &&
+          "data" in error.response &&
+          error.response.data &&
+          typeof error.response.data === "object" &&
+          "message" in error.response.data
           ? Array.isArray(error.response.data.message)
             ? error.response.data.message.join(", ")
             : String(error.response.data.message)
@@ -397,6 +440,46 @@ export function PresetTestPanel({
             error={Boolean(connectionError)}
           />
         </Field>
+
+        {isGeneratorCategory(category) ? (
+          <Field
+            label="Generator Prompt"
+            hint={
+              <RuntimeText text="Injects the selected Generator Preset into the generator_prompt marker." />
+            }
+            error={generatorPresetError}
+          >
+            <Select
+              placeholder={
+                generatorListLoading
+                  ? "Loading generator presets…"
+                  : "Select generator preset"
+              }
+              data={generatorPresetOptions}
+              value={generatorPresetId ?? ""}
+              onChange={(value) => setGeneratorPresetId(value || null)}
+              searchable
+              clearable
+              disabled={!generatorPresetOptions.length}
+              error={Boolean(generatorPresetError)}
+            />
+          </Field>
+        ) : null}
+
+        {category === "character_generator" ? (
+          <Field
+            label="Generation mode"
+            hint={
+              <RuntimeText text="Fills {{generation_mode}} and appends the matching mode prompt from the Generator Preset." />
+            }
+          >
+            <Select
+              data={GENERATION_MODE_OPTIONS}
+              value={generationMode}
+              onChange={(value) => setGenerationMode(value ?? "")}
+            />
+          </Field>
+        ) : null}
 
         {category === "persona_generator" ? (
           <Field label="Persona name" hint={<RuntimeText text="Fills {{user}}." />}>
@@ -674,6 +757,21 @@ export function PresetTestPanel({
                     />
                   </Field>
                   <Field
+                    label="Existing relationships"
+                    hint={
+                      <RuntimeText text="Fills {{existing_relationships}}." />
+                    }
+                  >
+                    <Textarea
+                      className={classes.textarea}
+                      value={existingRelationships}
+                      onChange={(event) =>
+                        setExistingRelationships(event.currentTarget.value)
+                      }
+                      placeholder="(none yet)"
+                    />
+                  </Field>
+                  <Field
                     label="Existing scenario"
                     hint={<RuntimeText text="Fills {{existing_scenario}}." />}
                   >
@@ -851,7 +949,7 @@ function MessageList({ messages }: { messages: LlmChatMessage[] }) {
             {message.role}
           </span>
           <pre className={classes.code}>
-            <RuntimeText as="span" text={message.content} />
+              <RuntimeText as="span" text={message.content} />
           </pre>
         </div>
       ))}

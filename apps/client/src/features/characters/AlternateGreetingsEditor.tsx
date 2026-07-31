@@ -6,6 +6,7 @@ import { ActionIcon, Button, Textarea } from "@/components/ui";
 type AlternateGreetingsEditorProps = {
   label?: string;
   description?: string;
+  emptyLabel?: string;
   value: string[];
   onChange: (value: string[]) => void;
   disabled?: boolean;
@@ -16,6 +17,7 @@ type AlternateGreetingsEditorProps = {
 export function AlternateGreetingsEditor({
   label = "Alternate greetings",
   description = "Extra opening messages (swipe alternatives to first_mes).",
+  emptyLabel = "No alternate greetings yet.",
   value,
   onChange,
   disabled = false,
@@ -62,7 +64,7 @@ export function AlternateGreetingsEditor({
       </div>
 
       {greetings.length === 0 ? (
-        <p className={classes.empty}>No alternate greetings yet.</p>
+        <p className={classes.empty}>{emptyLabel}</p>
       ) : (
         <div className={classes.list}>
           {greetings.map((greeting, index) => (

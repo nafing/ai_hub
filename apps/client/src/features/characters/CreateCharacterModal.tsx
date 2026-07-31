@@ -5,7 +5,9 @@ import {
   buildPresetPromptContext,
   defaultCharacter,
   defaultCharacterCardData,
+  resolveGeneratorPresetPrompt,
   type CharacterCardData,
+  type Variable,
 } from "@ai-hub/shared";
 import { Button, Textarea,
   Modal,
@@ -18,13 +20,12 @@ import { Button, Textarea,
 } from "@/components/ui";
 import { useConnectionSelectOptions } from "@/features/connections/queries";
 import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
+import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
 import { getPersona } from "@/features/personas/api";
 import { usePersonas } from "@/features/personas/queries";
-import {
-  useDefaultPreset,
-  usePreset,
-  usePresets,
-} from "@/features/presets/queries";
+import { SetupVariablesModal } from "@/features/presets/SetupVariablesModal";
+import { persistPresetVariableSelection } from "@/features/presets/persistPresetVariableSelection";
+import { presetKeys } from "@/features/presets/queries";
 import { createCharacter, getCharacter } from "./api";
 import {
   extractFullCards,
@@ -74,20 +75,18 @@ export function CreateCharacterModal({
   const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
-  const presetsQuery = usePresets();
-  const defaultPresetQuery = useDefaultPreset("character_generator");
+  const generatorSelection = useGeneratorPresetSelection("character_generator");
 
   const [name, setName] = useState("");
   const [createWithAi, setCreateWithAi] = useState(false);
   const [generatorBrief, setGeneratorBrief] = useState("");
   const [connectionId, setConnectionId] = useState<string | null>(null);
-  const [presetId, setPresetId] = useState<string | null>(null);
-  const [presetInitialized, setPresetInitialized] = useState(false);
   const [personaId, setPersonaId] = useState<string | null>(null);
   const [personaInitialized, setPersonaInitialized] = useState(false);
   const [referenceCharacterIds, setReferenceCharacterIds] = useState<string[]>(
     [],
   );
+  const [variablesOpen, setVariablesOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [aiReviewOpen, setAiReviewOpen] = useState(false);
   const [aiReviewCards, setAiReviewCards] = useState<CharacterCardData[]>([]);
@@ -101,55 +100,23 @@ export function CreateCharacterModal({
     personasQuery.data?.find((persona) => persona.is_default)?.id ?? null;
 
   useEffect(() => {
-    if (presetInitialized) return;
-    if (defaultPresetQuery.data?.id) {
-      setPresetId(defaultPresetQuery.data.id);
-      setPresetInitialized(true);
-      return;
-    }
-    if (defaultPresetQuery.isError || defaultPresetQuery.isSuccess) {
-      const fallback = (presetsQuery.data ?? []).find(
-        (preset) => preset.category === "character_generator",
-      );
-      if (fallback) {
-        setPresetId(fallback.id);
-        setPresetInitialized(true);
-      } else if (presetsQuery.isSuccess || presetsQuery.isError) {
-        setPresetInitialized(true);
-      }
-    }
-  }, [
-    presetInitialized,
-    defaultPresetQuery.data,
-    defaultPresetQuery.isError,
-    defaultPresetQuery.isSuccess,
-    presetsQuery.data,
-    presetsQuery.isSuccess,
-    presetsQuery.isError,
-  ]);
-
-  useEffect(() => {
     if (personaInitialized || !personasQuery.data) return;
     if (defaultPersonaId) setPersonaId(defaultPersonaId);
     setPersonaInitialized(true);
   }, [personaInitialized, personasQuery.data, defaultPersonaId]);
 
   const resolvedConnectionId = connectionId ?? defaultConnectionId;
-  const presetDetailQuery = usePreset(presetId ?? undefined);
-
-  const presetOptions = useMemo(() => {
-    const characterPresets = (presetsQuery.data ?? []).filter(
-      (preset) => preset.category === "character_generator",
-    );
-    const list =
-      characterPresets.length > 0
-        ? characterPresets
-        : (presetsQuery.data ?? []);
-    return list.map((preset) => ({
-      value: preset.id,
-      label: `${preset.name || "untitled"}${preset.is_default ? " (default)" : ""}${preset.category !== "character_generator" ? ` · ${preset.category}` : ""}`,
-    }));
-  }, [presetsQuery.data]);
+  const {
+    generatorPresetId,
+    setGeneratorPresetId,
+    generatorPreset,
+    generatorPresetOptions,
+    structuralPresetId,
+    structuralPreset: preset,
+    selectError: presetError,
+    isLoading: presetLoading,
+    isListLoading: generatorListLoading,
+  } = generatorSelection;
 
   const characterOptions = useMemo(
     () =>
@@ -158,6 +125,10 @@ export function CreateCharacterModal({
         label: character.name || character.id,
       })),
     [charactersQuery.data],
+  );
+
+  const hasPresetVariables = Boolean(
+    preset?.variables.some((variable) => variable.variable_name.trim()),
   );
 
   function clearAiReview() {
@@ -174,11 +145,33 @@ export function CreateCharacterModal({
     setConnectionId(null);
     setPersonaId(defaultPersonaId);
     setReferenceCharacterIds([]);
-    if (defaultPresetQuery.data?.id) {
-      setPresetId(defaultPresetQuery.data.id);
-    }
+    setVariablesOpen(false);
     setGenerating(false);
     clearAiReview();
+  }
+
+  async function handleApplyVariables(variables: Variable[]) {
+    if (!structuralPresetId) return;
+    try {
+      const saved = await persistPresetVariableSelection(
+        structuralPresetId,
+        variables,
+      );
+      queryClient.setQueryData(presetKeys.detail(saved.id), saved);
+      void queryClient.invalidateQueries({ queryKey: presetKeys.all });
+      setVariablesOpen(false);
+      notifications.show({
+        title: "Variables saved",
+        message: "Selected values are stored on this preset.",
+        color: "green",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "Save failed",
+        message: error instanceof Error ? error.message : "Unknown error",
+        color: "red",
+      });
+    }
   }
 
   function handleClose() {
@@ -224,9 +217,8 @@ export function CreateCharacterModal({
     if (!resolvedConnectionId) {
       throw new Error("Select a connection to create with AI.");
     }
-    const preset = presetDetailQuery.data;
-    if (!presetId || !preset) {
-      throw new Error("Select a Character Generator preset.");
+    if (!generatorPresetId || !generatorPreset || !structuralPresetId || !preset) {
+      throw new Error("Select a Character Generator Preset.");
     }
 
     const brief = generatorBrief.trim();
@@ -245,6 +237,7 @@ export function CreateCharacterModal({
     ]);
     const promptContext = buildPresetPromptContext({
       generatorBrief: brief,
+      generatorPrompt: resolveGeneratorPresetPrompt(generatorPreset, "create"),
       persona,
       referenceCharacterList: referenceCharacters,
       variables: {
@@ -256,6 +249,7 @@ export function CreateCharacterModal({
         existing_description: "",
         existing_appearance: "",
         existing_personality: "",
+        existing_relationships: "",
         existing_scenario: "",
         existing_first_mes: "",
         existing_mes_example: "",
@@ -266,7 +260,8 @@ export function CreateCharacterModal({
     const result = await useGeneratorJobsStore.getState().runTrackedGenerator({
       category: "character_generator",
       connectionId: resolvedConnectionId,
-      presetId: preset.id,
+      presetId: structuralPresetId,
+      generatorPresetId,
       variables: promptContext.variables,
       markers: promptContext.markers,
       title: `Create character with AI · ${seedName || "new character"}`,
@@ -310,15 +305,22 @@ export function CreateCharacterModal({
   async function handleGenerateWithAi() {
     setGenerating(true);
     try {
-      const preset = presetDetailQuery.data;
-      if (!resolvedConnectionId || !presetId || !preset) {
-        throw new Error("Select connection and Character Generator preset.");
+      if (
+        !resolvedConnectionId ||
+        !generatorPresetId ||
+        !generatorPreset ||
+        !structuralPresetId ||
+        !preset
+      ) {
+        throw new Error("Select connection and Character Generator Preset.");
       }
       const aiResult = await runAiCreate();
       setAiReviewCards(aiResult.cards);
       setAiReviewContext({
         connectionId: resolvedConnectionId,
-        presetId: preset.id,
+        presetId: structuralPresetId,
+        generatorPresetId,
+        generatorPrompts: generatorPreset,
         presetVariables: preset.variables,
         personaId,
         referenceCharacterIds,
@@ -355,8 +357,10 @@ export function CreateCharacterModal({
 
   const aiReady =
     Boolean(resolvedConnectionId) &&
-    Boolean(presetId) &&
-    Boolean(presetDetailQuery.data) &&
+    Boolean(generatorPresetId) &&
+    Boolean(generatorPreset) &&
+    Boolean(structuralPresetId) &&
+    Boolean(preset) &&
     Boolean(generatorBrief.trim());
 
   const busy =
@@ -367,14 +371,6 @@ export function CreateCharacterModal({
     : !connectionsQuery.isLoading && !connectionsQuery.options.length
       ? "Create a connection first"
       : undefined;
-
-  const presetError = presetsQuery.isError
-    ? "Failed to load presets"
-    : presetDetailQuery.isError
-      ? "Failed to load preset details"
-      : !presetsQuery.isLoading && !presetOptions.length
-        ? "No presets available"
-        : undefined;
 
   const personaError = personasQuery.isError
     ? "Failed to load personas"
@@ -451,21 +447,21 @@ export function CreateCharacterModal({
                 </Field>
 
                 <Field
-                  label="Preset"
-                  hint="Prefer Character Generator presets."
+                  label="Generator Preset"
+                  hint="Main prompt + linked structural Preset for Character Generator."
                   error={presetError}
                 >
                   <Select
                     placeholder={
-                      presetsQuery.isLoading
-                        ? "Loading presets…"
-                        : "Select preset"
+                      generatorListLoading
+                        ? "Loading generator presets…"
+                        : "Select generator preset"
                     }
-                    data={presetOptions}
-                    value={presetId ?? ""}
-                    onChange={(value) => setPresetId(value || null)}
+                    data={generatorPresetOptions}
+                    value={generatorPresetId ?? ""}
+                    onChange={(value) => setGeneratorPresetId(value || null)}
                     searchable
-                    disabled={busy || !presetOptions.length}
+                    disabled={busy || !generatorPresetOptions.length}
                     error={Boolean(presetError)}
                   />
                 </Field>
@@ -520,6 +516,22 @@ export function CreateCharacterModal({
                 </Field>
               </div>
 
+              {hasPresetVariables ? (
+                <div className={classes.variablesRow}>
+                  <Button
+                    type="button"
+                    variant="default"
+                    disabled={busy || !preset}
+                    onClick={() => setVariablesOpen(true)}
+                  >
+                    Setup Variables
+                  </Button>
+                  <span className={classes.fieldHint}>
+                    Genre, detail, language, and other values for this preset.
+                  </span>
+                </div>
+              ) : null}
+
               <Field
                 label="Generator brief"
                 hint="Required — fills the Generator Brief marker (concept / cast / tone)."
@@ -546,9 +558,9 @@ export function CreateCharacterModal({
           {createWithAi ? (
             <Button variant="primary" type="button"
               onClick={() => void handleGenerateWithAi()}
-              disabled={!aiReady || busy || presetDetailQuery.isLoading}
+              disabled={!aiReady || busy || presetLoading}
             >
-              {generating || presetDetailQuery.isLoading
+              {generating || presetLoading
                 ? "Generating…"
                 : "Generate with AI"}
             </Button>
@@ -562,6 +574,13 @@ export function CreateCharacterModal({
           )}
         </div>
       </Modal>
+
+      <SetupVariablesModal
+        opened={variablesOpen}
+        onClose={() => setVariablesOpen(false)}
+        variables={preset?.variables ?? []}
+        onApply={(variables) => void handleApplyVariables(variables)}
+      />
 
       {aiReviewContext ? (
         <ImportAiReviewModal

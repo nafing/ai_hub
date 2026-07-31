@@ -4,7 +4,7 @@ import { solidHexForPicker } from "@/features/characters/characterColors";
 import {
   DEFAULT_PRESET,
   THEME_PRESETS,
-  type BaseColorKey,
+  type TextFormatColorKey,
   type ThemePresetId,
 } from "@/features/theme/presets";
 import { useThemeStore } from "@/features/theme/themeStore";
@@ -14,7 +14,7 @@ import { useChatTextFormat } from "./useChatTextFormat";
 import classes from "./TextFormatsSettings.module.css";
 
 const FORMAT_COLORS: Array<{
-  key: BaseColorKey;
+  key: TextFormatColorKey;
   label: string;
   sample: string;
   hint: string;

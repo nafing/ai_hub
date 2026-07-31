@@ -326,6 +326,13 @@ export function CharacterForm({
                 }
               />
             </Field>
+            <AlternateGreetingsEditor
+              label="Relationships"
+              description="One entry per tie — {{user}}, other characters, family, rivals, history and dynamics."
+              emptyLabel="No relationships yet."
+              value={values.data.relationships}
+              onChange={(next) => setDataField("relationships", next)}
+            />
             <Field label="Scenario">
               <Textarea
                 className={classes.textarea}
@@ -469,6 +476,7 @@ export function CharacterForm({
             description={values.data.description}
             appearance={values.data.appearance}
             personality={values.data.personality}
+            relationships={values.data.relationships}
             scenario={values.data.scenario}
             first_mes={values.data.first_mes}
             mes_example={values.data.mes_example}
@@ -477,6 +485,9 @@ export function CharacterForm({
             onDescriptionChange={(value) => setDataField("description", value)}
             onAppearanceChange={(value) => setDataField("appearance", value)}
             onPersonalityChange={(value) => setDataField("personality", value)}
+            onRelationshipsChange={(value) =>
+              setDataField("relationships", value)
+            }
             onScenarioChange={(value) => setDataField("scenario", value)}
             onFirstMesChange={(value) => setDataField("first_mes", value)}
             onMesExampleChange={(value) => setDataField("mes_example", value)}

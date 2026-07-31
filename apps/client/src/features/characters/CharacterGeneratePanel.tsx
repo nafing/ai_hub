@@ -3,6 +3,7 @@ import { IconSparkles } from "@tabler/icons-react";
 import {
   buildPresetPromptContext,
   defaultCharacter,
+  resolveGeneratorPresetPrompt,
   type PresetVariableValues,
   type Variable,
 } from "@ai-hub/shared";
@@ -29,17 +30,14 @@ import {
 import { getPersona } from "@/features/personas/api";
 import { usePersonas } from "@/features/personas/queries";
 import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
-import {
-  useDefaultPreset,
-  usePreset,
-  usePresets,
-} from "@/features/presets/queries";
+import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
 import classes from "./CharacterGeneratePanel.module.css";
 
 export type CharacterCardGenerateField =
   | "description"
   | "appearance"
   | "personality"
+  | "relationships"
   | "scenario"
   | "first_mes"
   | "mes_example"
@@ -64,6 +62,7 @@ type CharacterGeneratePanelProps = {
   description: string;
   appearance: string;
   personality: string;
+  relationships: string[];
   scenario: string;
   first_mes: string;
   mes_example: string;
@@ -72,6 +71,7 @@ type CharacterGeneratePanelProps = {
   onDescriptionChange: (value: string) => void;
   onAppearanceChange: (value: string) => void;
   onPersonalityChange: (value: string) => void;
+  onRelationshipsChange: (value: string[]) => void;
   onScenarioChange: (value: string) => void;
   onFirstMesChange: (value: string) => void;
   onMesExampleChange: (value: string) => void;
@@ -141,10 +141,14 @@ function extractGeneratedCard(
       const greetings = asStringArray(record.alternate_greetings);
       return greetings ? { alternate_greetings: greetings } : {};
     }
+    if (field === "relationships") {
+      const items = asStringArray(record.relationships);
+      return items ? { relationships: items } : {};
+    }
     const value = asString(record[field]);
     return value ? { [field]: value } : {};
   } catch {
-    if (field === "alternate_greetings") return {};
+    if (field === "alternate_greetings" || field === "relationships") return {};
     return { [field]: text };
   }
 }
@@ -155,6 +159,7 @@ function buildGeneratorVariables(options: {
   description: string;
   appearance: string;
   personality: string;
+  relationships: string[];
   scenario: string;
   first_mes: string;
   mes_example: string;
@@ -168,6 +173,9 @@ function buildGeneratorVariables(options: {
     existing_description: options.description.trim(),
     existing_appearance: options.appearance.trim(),
     existing_personality: options.personality.trim(),
+    existing_relationships: formatAlternateGreetingsForPrompt(
+      options.relationships,
+    ),
     existing_scenario: options.scenario.trim(),
     existing_first_mes: options.first_mes.trim(),
     existing_mes_example: options.mes_example.trim(),
@@ -182,6 +190,7 @@ export function CharacterGeneratePanel({
   description,
   appearance,
   personality,
+  relationships,
   scenario,
   first_mes,
   mes_example,
@@ -190,6 +199,7 @@ export function CharacterGeneratePanel({
   onDescriptionChange,
   onAppearanceChange,
   onPersonalityChange,
+  onRelationshipsChange,
   onScenarioChange,
   onFirstMesChange,
   onMesExampleChange,
@@ -199,8 +209,7 @@ export function CharacterGeneratePanel({
   const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
   const personasQuery = usePersonas();
-  const presetsQuery = usePresets();
-  const defaultPresetQuery = useDefaultPreset("character_generator");
+  const generatorSelection = useGeneratorPresetSelection("character_generator");
 
   const defaultConnectionId = connectionsQuery.defaultId || null;
 
@@ -208,8 +217,6 @@ export function CharacterGeneratePanel({
     personasQuery.data?.find((persona) => persona.is_default)?.id ?? null;
 
   const [connectionId, setConnectionId] = useState<string | null>(null);
-  const [presetId, setPresetId] = useState<string | null>(null);
-  const [presetInitialized, setPresetInitialized] = useState(false);
   const [personaId, setPersonaId] = useState<string | null>(null);
   const [personaInitialized, setPersonaInitialized] = useState(false);
   const [referenceCharacterIds, setReferenceCharacterIds] = useState<string[]>(
@@ -220,55 +227,23 @@ export function CharacterGeneratePanel({
     useState<CharacterCardGenerateField | null>(null);
 
   useEffect(() => {
-    if (presetInitialized) return;
-    if (defaultPresetQuery.data?.id) {
-      setPresetId(defaultPresetQuery.data.id);
-      setPresetInitialized(true);
-      return;
-    }
-    if (defaultPresetQuery.isError || defaultPresetQuery.isSuccess) {
-      const fallback = (presetsQuery.data ?? []).find(
-        (preset) => preset.category === "character_generator",
-      );
-      if (fallback) {
-        setPresetId(fallback.id);
-        setPresetInitialized(true);
-      } else if (presetsQuery.isSuccess || presetsQuery.isError) {
-        setPresetInitialized(true);
-      }
-    }
-  }, [
-    presetInitialized,
-    defaultPresetQuery.data,
-    defaultPresetQuery.isError,
-    defaultPresetQuery.isSuccess,
-    presetsQuery.data,
-    presetsQuery.isSuccess,
-    presetsQuery.isError,
-  ]);
-
-  useEffect(() => {
     if (personaInitialized || !personasQuery.data) return;
     if (defaultPersonaId) setPersonaId(defaultPersonaId);
     setPersonaInitialized(true);
   }, [personaInitialized, personasQuery.data, defaultPersonaId]);
 
   const resolvedConnectionId = connectionId ?? defaultConnectionId;
-  const presetDetailQuery = usePreset(presetId ?? undefined);
-
-  const presetOptions = useMemo(() => {
-    const characterPresets = (presetsQuery.data ?? []).filter(
-      (preset) => preset.category === "character_generator",
-    );
-    const list =
-      characterPresets.length > 0
-        ? characterPresets
-        : (presetsQuery.data ?? []);
-    return list.map((preset) => ({
-      value: preset.id,
-      label: `${preset.name || "untitled"}${preset.is_default ? " (default)" : ""}${preset.category !== "character_generator" ? ` · ${preset.category}` : ""}`,
-    }));
-  }, [presetsQuery.data]);
+  const {
+    generatorPresetId,
+    setGeneratorPresetId,
+    generatorPreset,
+    generatorPresetOptions,
+    structuralPresetId,
+    structuralPreset: preset,
+    selectError: presetError,
+    isLoading: presetLoading,
+    isListLoading: generatorListLoading,
+  } = generatorSelection;
 
   const characterOptions = useMemo(
     () =>
@@ -284,6 +259,7 @@ export function CharacterGeneratePanel({
     if (extracted.description) onDescriptionChange(extracted.description);
     if (extracted.appearance) onAppearanceChange(extracted.appearance);
     if (extracted.personality) onPersonalityChange(extracted.personality);
+    if (extracted.relationships) onRelationshipsChange(extracted.relationships);
     if (extracted.scenario) onScenarioChange(extracted.scenario);
     if (extracted.first_mes) onFirstMesChange(extracted.first_mes);
     if (extracted.mes_example) onMesExampleChange(extracted.mes_example);
@@ -304,6 +280,7 @@ export function CharacterGeneratePanel({
             description: card.description ?? "",
             appearance: card.appearance ?? "",
             personality: card.personality ?? "",
+            relationships: card.relationships ?? [],
             scenario: card.scenario ?? "",
             first_mes: card.first_mes ?? "",
             mes_example: card.mes_example ?? "",
@@ -331,11 +308,10 @@ export function CharacterGeneratePanel({
       return;
     }
 
-    const preset = presetDetailQuery.data;
-    if (!presetId || !preset) {
+    if (!generatorPresetId || !generatorPreset || !structuralPresetId || !preset) {
       notifications.show({
-        title: "No preset",
-        message: "Select a Character Generator preset first.",
+        title: "No generator preset",
+        message: "Select a Character Generator Preset first.",
         color: "red",
       });
       return;
@@ -349,6 +325,7 @@ export function CharacterGeneratePanel({
       ]);
       const promptContext = buildPresetPromptContext({
         generatorBrief: brief.trim() || null,
+        generatorPrompt: resolveGeneratorPresetPrompt(generatorPreset, null),
         persona,
         referenceCharacterList: referenceCharacters,
         variables: buildGeneratorVariables({
@@ -357,6 +334,7 @@ export function CharacterGeneratePanel({
           description,
           appearance,
           personality,
+          relationships,
           scenario,
           first_mes,
           mes_example,
@@ -370,6 +348,7 @@ export function CharacterGeneratePanel({
         description: "description",
         appearance: "appearance",
         personality: "personality",
+        relationships: "relationships",
         scenario: "scenario",
         first_mes: "first message",
         mes_example: "example messages",
@@ -380,7 +359,8 @@ export function CharacterGeneratePanel({
       const result = await useGeneratorJobsStore.getState().runTrackedGenerator({
         category: "character_generator",
         connectionId: resolvedConnectionId,
-        presetId: preset.id,
+        presetId: structuralPresetId,
+        generatorPresetId,
         variables: promptContext.variables,
         markers: promptContext.markers,
         title: `Generate ${fieldLabels[field]} · ${displayName}`,
@@ -409,16 +389,22 @@ export function CharacterGeneratePanel({
             color: "green",
           });
         }
-      } else if (field === "alternate_greetings") {
+      } else if (field === "alternate_greetings" || field === "relationships") {
         const extracted = extractGeneratedCard(raw, field);
-        if (!extracted.alternate_greetings?.length) {
+        const list =
+          field === "alternate_greetings"
+            ? extracted.alternate_greetings
+            : extracted.relationships;
+        if (!list?.length) {
           throw new Error("Model returned an empty result");
         }
         applyExtracted(extracted);
         notifications.show({
           title: "Generated",
           message:
-            "Alternate greetings updated — save the character to keep it.",
+            field === "alternate_greetings"
+              ? "Alternate greetings updated — save the character to keep it."
+              : "Relationships updated — save the character to keep it.",
           color: "green",
         });
       } else {
@@ -427,7 +413,10 @@ export function CharacterGeneratePanel({
         if (!value) throw new Error("Model returned an empty result");
         applyExtracted({ [field]: value });
         const labels: Record<
-          Exclude<CharacterCardGenerateField, "all">,
+          Exclude<
+            CharacterCardGenerateField,
+            "all" | "alternate_greetings" | "relationships"
+          >,
           string
         > = {
           description: "Description",
@@ -436,7 +425,6 @@ export function CharacterGeneratePanel({
           scenario: "Scenario",
           first_mes: "First message",
           mes_example: "Example messages",
-          alternate_greetings: "Alternate greetings",
         };
         notifications.show({
           title: "Generated",
@@ -458,22 +446,15 @@ export function CharacterGeneratePanel({
   const generateDisabled =
     pendingField != null ||
     !resolvedConnectionId ||
-    !presetId ||
-    presetDetailQuery.isLoading;
+    !generatorPresetId ||
+    !structuralPresetId ||
+    presetLoading;
 
   const connectionError = connectionsQuery.isError
     ? "Failed to load connections"
     : !connectionsQuery.isLoading && !connectionsQuery.options.length
       ? "Create a connection first"
       : undefined;
-
-  const presetError = presetsQuery.isError
-    ? "Failed to load presets"
-    : presetDetailQuery.isError
-      ? "Failed to load preset details"
-      : !presetsQuery.isLoading && !presetOptions.length
-        ? "No presets available"
-        : undefined;
 
   const fieldRows: Array<{
     field: StringCardField;
@@ -529,10 +510,11 @@ export function CharacterGeneratePanel({
   return (
     <div className={classes.stack}>
       <p className={classes.muted}>
-        Uses the selected Character Generator preset. If the brief describes
-        multiple distinct characters, Generate all card fields applies the first
-        to this form and creates the rest as new characters. Remember to Save
-        the current form after generating.
+        Uses the selected Character Generator Preset (prompt injected into its
+        linked Preset). If the brief describes multiple distinct characters,
+        Generate all card fields applies the first to this form and creates the
+        rest as new characters. Remember to Save the current form after
+        generating.
       </p>
 
       <div className={`${classes.grid} ${classes.grid2}`}>
@@ -556,19 +538,21 @@ export function CharacterGeneratePanel({
           />
         </Field>
         <Field
-          label="Preset"
-          hint="Prefer presets in the Character Generator category."
+          label="Generator Preset"
+          hint="Main prompt + linked structural Preset for Character Generator."
           error={presetError}
         >
           <Select
             placeholder={
-              presetsQuery.isLoading ? "Loading presets…" : "Select preset"
+              generatorListLoading
+                ? "Loading generator presets…"
+                : "Select generator preset"
             }
-            data={presetOptions}
-            value={presetId ?? ""}
-            onChange={(value) => setPresetId(value || null)}
+            data={generatorPresetOptions}
+            value={generatorPresetId ?? ""}
+            onChange={(value) => setGeneratorPresetId(value || null)}
             searchable
-            disabled={!presetOptions.length}
+            disabled={!generatorPresetOptions.length}
             error={Boolean(presetError)}
           />
         </Field>
@@ -670,6 +654,27 @@ export function CharacterGeneratePanel({
           />
         </div>
       ))}
+
+      <AlternateGreetingsEditor
+        label="Relationships"
+        description="One entry per tie — same field as Card."
+        emptyLabel="No relationships yet."
+        value={relationships}
+        onChange={onRelationshipsChange}
+        action={
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            loading={pendingField === "relationships"}
+            disabled={generateDisabled}
+            leftSection={<IconSparkles size={14} />}
+            onClick={() => void handleGenerate("relationships")}
+          >
+            Generate
+          </Button>
+        }
+      />
 
       <AlternateGreetingsEditor
         value={alternateGreetings}

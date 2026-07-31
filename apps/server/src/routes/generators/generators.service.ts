@@ -4,6 +4,7 @@ import {
   characterCardTargetNeedsProseMarkup,
   GENERATOR_CATEGORIES,
   NEEDS_PRESET_VARIABLES_CODE,
+  resolveGeneratorPresetPrompt,
   substituteVariables,
   unresolvedPresetVariables,
   type GeneratorCategory,
@@ -15,12 +16,14 @@ import {
   type CompleteWithConnectionResult,
 } from "../../utils/openrouter";
 import { ConnectionsService } from "../connections/connections.service";
+import { GeneratorPresetsService } from "../generator-presets/generator-presets.service";
 import { PresetsService } from "../presets/presets.service";
 
 export type RunGeneratorInput = {
   category: GeneratorCategory;
   connectionId?: string;
   presetId?: string;
+  generatorPresetId?: string;
   variables?: PresetVariableValues;
   markers?: PresetMarkerContent;
   userMessage?: string;
@@ -30,6 +33,7 @@ export type RunGeneratorInput = {
 export class GeneratorsService {
   constructor(
     private readonly presets: PresetsService,
+    private readonly generatorPresets: GeneratorPresetsService,
     private readonly connections: ConnectionsService,
   ) {}
 
@@ -47,8 +51,32 @@ export class GeneratorsService {
       );
     }
 
-    const preset = input.presetId
-      ? await this.presets.findOne(input.presetId)
+    let generatorPrompt: string | undefined;
+    let linkedPresetId: string | null | undefined;
+
+    if (input.generatorPresetId) {
+      const generatorPreset = await this.generatorPresets.findOne(
+        input.generatorPresetId,
+      );
+      if (generatorPreset.category !== input.category) {
+        throw new BadRequestException(
+          `Generator preset "${generatorPreset.id}" is category "${generatorPreset.category}", expected "${input.category}"`,
+        );
+      }
+      generatorPrompt = resolveGeneratorPresetPrompt(
+        generatorPreset,
+        typeof input.variables?.generation_mode === "string"
+          ? input.variables.generation_mode
+          : null,
+      );
+      linkedPresetId = generatorPreset.preset_id;
+    }
+
+    const resolvedPresetId =
+      input.presetId ?? linkedPresetId ?? undefined;
+
+    const preset = resolvedPresetId
+      ? await this.presets.findOne(resolvedPresetId)
       : await this.presets.findDefault(input.category);
 
     if (preset.category !== input.category) {
@@ -107,10 +135,15 @@ export class GeneratorsService {
       });
     }
 
+    const markers: PresetMarkerContent = { ...(input.markers ?? {}) };
+    if (generatorPrompt !== undefined) {
+      markers.generator_prompt = generatorPrompt;
+    }
+
     const result = await completeWithConnectionAndPreset(connection, preset, {
       prompt: {
         variables: input.variables,
-        markers: input.markers,
+        markers,
       },
       appendMessages: appendMessages.length ? appendMessages : undefined,
     });

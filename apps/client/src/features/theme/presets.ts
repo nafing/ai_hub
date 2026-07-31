@@ -47,7 +47,28 @@ export const ACCENT_SWATCHES = [
   "#ec4899",
 ] as const;
 
-export const BASE_COLOR_META: { key: BaseColorKey; label: string }[] = [
+/** UI theme colors editable in Settings → Theme. */
+export const THEME_BASE_COLOR_KEYS = [
+  "primary",
+  "secondary",
+  "background",
+  "text",
+  "danger",
+  "success",
+  "warning",
+] as const satisfies ReadonlyArray<BaseColorKey>;
+
+/** Roleplay markup colors editable in Settings → Text formats. */
+export const TEXT_FORMAT_COLOR_KEYS = [
+  "speech",
+  "thoughts",
+  "emphasis",
+] as const satisfies ReadonlyArray<BaseColorKey>;
+
+export type ThemeBaseColorKey = (typeof THEME_BASE_COLOR_KEYS)[number];
+export type TextFormatColorKey = (typeof TEXT_FORMAT_COLOR_KEYS)[number];
+
+export const BASE_COLOR_META: { key: ThemeBaseColorKey; label: string }[] = [
   { key: "primary", label: "Primary" },
   { key: "secondary", label: "Secondary" },
   { key: "background", label: "Background" },
@@ -55,9 +76,6 @@ export const BASE_COLOR_META: { key: BaseColorKey; label: string }[] = [
   { key: "danger", label: "Danger" },
   { key: "success", label: "Success" },
   { key: "warning", label: "Warning" },
-  { key: "speech", label: 'Speech ("…")' },
-  { key: "thoughts", label: "Thoughts (*…*)" },
-  { key: "emphasis", label: "Emphasis (**…**)" },
 ];
 
 export const THEME_PRESETS: ThemePreset[] = [

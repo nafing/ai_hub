@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   PRESET_CATEGORIES,
@@ -13,20 +13,28 @@ import classes from "./CreatePresetModal.module.css";
 type CreatePresetModalProps = {
   opened: boolean;
   onClose: () => void;
+  defaultCategory?: PresetCategory;
 };
 
 export function CreatePresetModal({
   opened,
   onClose,
+  defaultCategory = "roleplay",
 }: CreatePresetModalProps) {
   const navigate = useNavigate();
   const createMutation = useCreatePreset();
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<PresetCategory>("roleplay");
+  const [category, setCategory] = useState<PresetCategory>(defaultCategory);
+
+  useEffect(() => {
+    if (!opened) return;
+    setName("");
+    setCategory(defaultCategory);
+  }, [opened, defaultCategory]);
 
   function handleClose() {
     setName("");
-    setCategory("roleplay");
+    setCategory(defaultCategory);
     onClose();
   }
 
@@ -97,12 +105,14 @@ export function CreatePresetModal({
           />
         </div>
         <div className={classes.actions}>
-          <Button variant="default" type="button"
-            onClick={handleClose}>
+          <Button variant="default" type="button" onClick={handleClose}>
             Cancel
           </Button>
-          <Button variant="primary" type="submit"
-            disabled={!name.trim() || createMutation.isPending}>
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={!name.trim() || createMutation.isPending}
+          >
             {createMutation.isPending ? "Creating…" : "Create"}
           </Button>
         </div>

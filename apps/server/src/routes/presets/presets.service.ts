@@ -66,11 +66,11 @@ export class PresetsService implements OnModuleInit {
 
   /**
    * Insert missing built-in presets (`default:*`) and refresh their prompt
-   * sections from code so built-in instruction updates (e.g. import mode)
-   * apply on restart. Variables / is_default are left alone when the row exists
-   * so Setup Variables selections survive — except option labels/values are
-   * synced from code when option ids match (keeps anime "NOT photorealistic"
-   * wording without wiping selected).
+   * sections from code so built-in instruction updates (e.g. import mode /
+   * generator_prompt split) apply on restart. Variables / is_default are left
+   * alone when the row exists so Setup Variables selections survive — except
+   * option labels/values are synced from code when option ids match (keeps
+   * anime "NOT photorealistic" wording without wiping selected).
    */
   async seedDefaultPresets(): Promise<void> {
     let created = 0;
@@ -376,6 +376,11 @@ export class PresetsService implements OnModuleInit {
           value: next.value,
         };
       });
+      for (const option of def.options) {
+        if (!options.some((entry) => entry.id === option.id)) {
+          options.push({ ...option });
+        }
+      }
       // If nothing was ever selected, adopt code defaults (e.g. anime).
       const selected =
         Array.isArray(variable.selected) && variable.selected.length > 0

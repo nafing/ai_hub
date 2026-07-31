@@ -24,6 +24,7 @@ export class SectionDto {
     "lorebook_after",
     "dialogue_examples",
     "generator_brief",
+    "generator_prompt",
     "reference_characters",
   ])
   kind!:
@@ -37,6 +38,7 @@ export class SectionDto {
     | "lorebook_after"
     | "dialogue_examples"
     | "generator_brief"
+    | "generator_prompt"
     | "reference_characters";
 
   @IsString()

@@ -40,6 +40,7 @@ import { Route as AppCharactersImportIndexRouteImport } from './routes/_app/char
 import { Route as AppCharactersCharacterIdIndexRouteImport } from './routes/_app/characters/$characterId/index'
 import { Route as AppAgentsAgentIdIndexRouteImport } from './routes/_app/agents/$agentId/index'
 import { Route as TwatterTwatterProfileAccountIdRouteImport } from './routes/_twatter/twatter/profile/$accountId'
+import { Route as AppPresetsGeneratorGeneratorPresetIdIndexRouteImport } from './routes/_app/presets/generator/$generatorPresetId/index'
 import { Route as AppCharactersImportCardIdIndexRouteImport } from './routes/_app/characters/import/$cardId/index'
 
 const TwatterRouteRoute = TwatterRouteRouteImport.update({
@@ -202,6 +203,12 @@ const TwatterTwatterProfileAccountIdRoute =
     path: '/twatter/profile/$accountId',
     getParentRoute: () => TwatterRouteRoute,
   } as any)
+const AppPresetsGeneratorGeneratorPresetIdIndexRoute =
+  AppPresetsGeneratorGeneratorPresetIdIndexRouteImport.update({
+    id: '/presets/generator/$generatorPresetId/',
+    path: '/presets/generator/$generatorPresetId/',
+    getParentRoute: () => AppRouteRoute,
+  } as any)
 const AppCharactersImportCardIdIndexRoute =
   AppCharactersImportCardIdIndexRouteImport.update({
     id: '/characters/import/$cardId/',
@@ -239,6 +246,7 @@ export interface FileRoutesByFullPath {
   '/chats/$chatId/': typeof ChatChatsChatIdIndexRoute
   '/twatter/profile/': typeof TwatterTwatterProfileIndexRoute
   '/characters/import/$cardId/': typeof AppCharactersImportCardIdIndexRoute
+  '/presets/generator/$generatorPresetId/': typeof AppPresetsGeneratorGeneratorPresetIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
@@ -270,6 +278,7 @@ export interface FileRoutesByTo {
   '/chats/$chatId': typeof ChatChatsChatIdIndexRoute
   '/twatter/profile': typeof TwatterTwatterProfileIndexRoute
   '/characters/import/$cardId': typeof AppCharactersImportCardIdIndexRoute
+  '/presets/generator/$generatorPresetId': typeof AppPresetsGeneratorGeneratorPresetIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -305,6 +314,7 @@ export interface FileRoutesById {
   '/_chat/chats/$chatId/': typeof ChatChatsChatIdIndexRoute
   '/_twatter/twatter/profile/': typeof TwatterTwatterProfileIndexRoute
   '/_app/characters/import/$cardId/': typeof AppCharactersImportCardIdIndexRoute
+  '/_app/presets/generator/$generatorPresetId/': typeof AppPresetsGeneratorGeneratorPresetIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -338,6 +348,7 @@ export interface FileRouteTypes {
     | '/chats/$chatId/'
     | '/twatter/profile/'
     | '/characters/import/$cardId/'
+    | '/presets/generator/$generatorPresetId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -369,6 +380,7 @@ export interface FileRouteTypes {
     | '/chats/$chatId'
     | '/twatter/profile'
     | '/characters/import/$cardId'
+    | '/presets/generator/$generatorPresetId'
   id:
     | '__root__'
     | '/_app'
@@ -403,6 +415,7 @@ export interface FileRouteTypes {
     | '/_chat/chats/$chatId/'
     | '/_twatter/twatter/profile/'
     | '/_app/characters/import/$cardId/'
+    | '/_app/presets/generator/$generatorPresetId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -630,6 +643,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TwatterTwatterProfileAccountIdRouteImport
       parentRoute: typeof TwatterRouteRoute
     }
+    '/_app/presets/generator/$generatorPresetId/': {
+      id: '/_app/presets/generator/$generatorPresetId/'
+      path: '/presets/generator/$generatorPresetId'
+      fullPath: '/presets/generator/$generatorPresetId/'
+      preLoaderRoute: typeof AppPresetsGeneratorGeneratorPresetIdIndexRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/_app/characters/import/$cardId/': {
       id: '/_app/characters/import/$cardId/'
       path: '/characters/import/$cardId'
@@ -663,6 +683,7 @@ interface AppRouteRouteChildren {
   AppRegexesRegexIdIndexRoute: typeof AppRegexesRegexIdIndexRoute
   AppToolsToolIdIndexRoute: typeof AppToolsToolIdIndexRoute
   AppCharactersImportCardIdIndexRoute: typeof AppCharactersImportCardIdIndexRoute
+  AppPresetsGeneratorGeneratorPresetIdIndexRoute: typeof AppPresetsGeneratorGeneratorPresetIdIndexRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
@@ -688,6 +709,8 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppRegexesRegexIdIndexRoute: AppRegexesRegexIdIndexRoute,
   AppToolsToolIdIndexRoute: AppToolsToolIdIndexRoute,
   AppCharactersImportCardIdIndexRoute: AppCharactersImportCardIdIndexRoute,
+  AppPresetsGeneratorGeneratorPresetIdIndexRoute:
+    AppPresetsGeneratorGeneratorPresetIdIndexRoute,
 }
 
 const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(

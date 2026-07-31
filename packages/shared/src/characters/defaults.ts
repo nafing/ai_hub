@@ -127,6 +127,7 @@ export function defaultCharacterCardData(
     description: "",
     appearance: "",
     personality: "",
+    relationships: [],
     scenario: "",
     first_mes: "",
     mes_example: "",
@@ -216,6 +217,12 @@ export function normalizeCharacterCardData(
       typeof input.personality === "string"
         ? input.personality
         : base.personality,
+    relationships: normalizeAlternateGreetings(
+      input.relationships !== undefined
+        ? input.relationships
+        : legacyExtensions?.relationships,
+      base.relationships,
+    ),
     scenario:
       typeof input.scenario === "string" ? input.scenario : base.scenario,
     first_mes:

@@ -59,6 +59,7 @@ export const SECTION_KINDS = [
   "lorebook_after",
   "dialogue_examples",
   "generator_brief",
+  "generator_prompt",
   "reference_characters",
 ] as const;
 
@@ -75,6 +76,7 @@ export const SECTION_KIND_LABELS: Record<SectionKind, string> = {
   lorebook_after: "Lorebook Marker (After)",
   dialogue_examples: "Dialogue Examples",
   generator_brief: "Generator Brief",
+  generator_prompt: "Generator Prompt",
   reference_characters: "Reference Characters",
 };
 
@@ -89,6 +91,7 @@ export const SECTION_MARKER_KINDS = [
   "lorebook_after",
   "dialogue_examples",
   "generator_brief",
+  "generator_prompt",
   "reference_characters",
 ] as const satisfies readonly SectionKind[];
 

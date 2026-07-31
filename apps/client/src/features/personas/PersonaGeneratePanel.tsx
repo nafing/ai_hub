@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { IconSparkles } from "@tabler/icons-react";
 import {
   buildPresetPromptContext,
+  resolveGeneratorPresetPrompt,
   type PresetVariableValues,
   type Variable,
 } from "@ai-hub/shared";
@@ -16,11 +17,7 @@ import { useConnectionSelectOptions } from "@/features/connections/queries";
 import { getCharacter } from "@/features/characters/api";
 import { useCharacters } from "@/features/characters/queries";
 import { useGeneratorJobsStore } from "@/features/generators/generatorJobsStore";
-import {
-  useDefaultPreset,
-  usePreset,
-  usePresets,
-} from "@/features/presets/queries";
+import { useGeneratorPresetSelection } from "@/features/generator-presets/useGeneratorPresetSelection";
 import classes from "./PersonaGeneratePanel.module.css";
 
 type PersonaGeneratePanelProps = {
@@ -160,48 +157,27 @@ export function PersonaGeneratePanel({
 }: PersonaGeneratePanelProps) {
   const connectionsQuery = useConnectionSelectOptions("llm");
   const charactersQuery = useCharacters();
-  const presetsQuery = usePresets();
-  const defaultPresetQuery = useDefaultPreset("persona_generator");
+  const generatorSelection = useGeneratorPresetSelection("persona_generator");
 
   const defaultConnectionId = connectionsQuery.defaultId || null;
 
   const [connectionId, setConnectionId] = useState<string | null>(null);
-  const [presetId, setPresetId] = useState<string | null>(null);
-  const [presetInitialized, setPresetInitialized] = useState(false);
   const [characterIds, setCharacterIds] = useState<string[]>([]);
   const [brief, setBrief] = useState("");
   const [pendingField, setPendingField] = useState<GenerateField | null>(null);
 
-  useEffect(() => {
-    if (presetInitialized) return;
-    if (defaultPresetQuery.data?.id) {
-      setPresetId(defaultPresetQuery.data.id);
-      setPresetInitialized(true);
-      return;
-    }
-    if (defaultPresetQuery.isError || defaultPresetQuery.isSuccess) {
-      const fallback = (presetsQuery.data ?? []).find(
-        (preset) => preset.category === "persona_generator",
-      );
-      if (fallback) {
-        setPresetId(fallback.id);
-        setPresetInitialized(true);
-      } else if (presetsQuery.isSuccess || presetsQuery.isError) {
-        setPresetInitialized(true);
-      }
-    }
-  }, [
-    presetInitialized,
-    defaultPresetQuery.data,
-    defaultPresetQuery.isError,
-    defaultPresetQuery.isSuccess,
-    presetsQuery.data,
-    presetsQuery.isSuccess,
-    presetsQuery.isError,
-  ]);
-
   const resolvedConnectionId = connectionId ?? defaultConnectionId;
-  const presetDetailQuery = usePreset(presetId ?? undefined);
+  const {
+    generatorPresetId,
+    setGeneratorPresetId,
+    generatorPreset,
+    generatorPresetOptions,
+    structuralPresetId,
+    structuralPreset: preset,
+    selectError: presetError,
+    isLoading: presetLoading,
+    isListLoading: generatorListLoading,
+  } = generatorSelection;
 
   const characterOptions = useMemo(
     () =>
@@ -211,18 +187,6 @@ export function PersonaGeneratePanel({
       })),
     [charactersQuery.data],
   );
-
-  const presetOptions = useMemo(() => {
-    const personaPresets = (presetsQuery.data ?? []).filter(
-      (preset) => preset.category === "persona_generator",
-    );
-    const list =
-      personaPresets.length > 0 ? personaPresets : (presetsQuery.data ?? []);
-    return list.map((preset) => ({
-      value: preset.id,
-      label: `${preset.name || "untitled"}${preset.is_default ? " (default)" : ""}${preset.category !== "persona_generator" ? ` · ${preset.category}` : ""}`,
-    }));
-  }, [presetsQuery.data]);
 
   async function handleGenerate(field: GenerateField) {
     if (!resolvedConnectionId) {
@@ -234,11 +198,10 @@ export function PersonaGeneratePanel({
       return;
     }
 
-    const preset = presetDetailQuery.data;
-    if (!presetId || !preset) {
+    if (!generatorPresetId || !generatorPreset || !structuralPresetId || !preset) {
       notifications.show({
-        title: "No preset",
-        message: "Select a Persona Generator preset first.",
+        title: "No generator preset",
+        message: "Select a Persona Generator Preset first.",
         color: "red",
       });
       return;
@@ -251,6 +214,7 @@ export function PersonaGeneratePanel({
       );
       const promptContext = buildPresetPromptContext({
         generatorBrief: brief.trim() || null,
+        generatorPrompt: resolveGeneratorPresetPrompt(generatorPreset, null),
         referenceCharacterList: characters,
         variables: buildGeneratorVariables({
           field,
@@ -273,7 +237,8 @@ export function PersonaGeneratePanel({
       const result = await useGeneratorJobsStore.getState().runTrackedGenerator({
         category: "persona_generator",
         connectionId: resolvedConnectionId,
-        presetId: preset.id,
+        presetId: structuralPresetId,
+        generatorPresetId,
         variables: promptContext.variables,
         markers: promptContext.markers,
         title: `Generate ${fieldLabels[field]} · ${displayName}`,
@@ -334,8 +299,9 @@ export function PersonaGeneratePanel({
   const generateDisabled =
     pendingField != null ||
     !resolvedConnectionId ||
-    !presetId ||
-    presetDetailQuery.isLoading;
+    !generatorPresetId ||
+    !structuralPresetId ||
+    presetLoading;
 
   const connectionError = connectionsQuery.isError
     ? "Failed to load connections"
@@ -343,20 +309,13 @@ export function PersonaGeneratePanel({
       ? "Create a connection first"
       : undefined;
 
-  const presetError = presetsQuery.isError
-    ? "Failed to load presets"
-    : presetDetailQuery.isError
-      ? "Failed to load preset details"
-      : !presetsQuery.isLoading && !presetOptions.length
-        ? "No presets available"
-        : undefined;
-
   return (
     <div className={classes.stack}>
       <p className={classes.muted}>
-        Uses the selected Persona Generator preset. Brief and reference
-        characters fill marker sections; target field and existing card values
-        are preset variables. Remember to Save after generating.
+        Uses the selected Persona Generator Preset (prompt injected into its
+        linked Preset). Brief and reference characters fill marker sections;
+        target field and existing card values are preset variables. Remember to
+        Save after generating.
       </p>
 
       <div className={`${classes.grid} ${classes.grid2}`}>
@@ -380,19 +339,21 @@ export function PersonaGeneratePanel({
           />
         </Field>
         <Field
-          label="Preset"
-          hint="Prefer presets in the Persona Generator category."
+          label="Generator Preset"
+          hint="Main prompt + linked structural Preset for Persona Generator."
           error={presetError}
         >
           <Select
             placeholder={
-              presetsQuery.isLoading ? "Loading presets…" : "Select preset"
+              generatorListLoading
+                ? "Loading generator presets…"
+                : "Select generator preset"
             }
-            data={presetOptions}
-            value={presetId ?? ""}
-            onChange={(value) => setPresetId(value || null)}
+            data={generatorPresetOptions}
+            value={generatorPresetId ?? ""}
+            onChange={(value) => setGeneratorPresetId(value || null)}
             searchable
-            disabled={!presetOptions.length}
+            disabled={!generatorPresetOptions.length}
             error={Boolean(presetError)}
           />
         </Field>

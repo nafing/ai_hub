@@ -60,6 +60,8 @@ export type SectionKind =
   | "dialogue_examples"
   /** Creator brief / concept for generator presets. */
   | "generator_brief"
+  /** Main generator instruction prompt (from Generator Presets). */
+  | "generator_prompt"
   /** One or more reference character cards for generators. */
   | "reference_characters";
 
